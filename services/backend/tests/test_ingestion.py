@@ -5,7 +5,7 @@ from io import BytesIO
 import httpx
 import pytest
 from openpyxl import Workbook
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 
 from medical_box_api.catalog.fetcher import PublicDataFetcher, SourceResponseError
 from medical_box_api.catalog.sources import SourceDefinition, official_sources
@@ -731,3 +731,42 @@ def test_initial_dur_bootstrap_commits_inactive_batches_and_resumes() -> None:
             == 11
         )
         assert database.scalar(select(func.count()).select_from(DurRule)) == 11
+
+
+def test_product_sync_prefetches_each_page_in_one_query() -> None:
+    reset_database()
+    product_selects = 0
+
+    def count_product_selects(
+        connection: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        del connection, cursor, parameters, context, executemany
+        nonlocal product_selects
+        if "FROM drug_products" in statement:
+            product_selects += 1
+
+    event.listen(engine, "before_cursor_execute", count_product_selects)
+    try:
+        with SessionLocal() as database:
+            sync_source(
+                database,
+                source(),
+                RecordFetcher(
+                    [
+                        {
+                            "itemSeq": str(index),
+                            "itemName": f"Medicine {index}",
+                        }
+                        for index in range(50)
+                    ]
+                ),
+            )
+    finally:
+        event.remove(engine, "before_cursor_execute", count_product_selects)
+
+    assert product_selects == 1
