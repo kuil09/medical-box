@@ -666,3 +666,68 @@ def test_partial_failure_and_count_collapse_preserve_last_catalog() -> None:
             )
             == 100
         )
+
+
+def test_initial_dur_bootstrap_commits_inactive_batches_and_resumes() -> None:
+    class DurBootstrapFetcher(PublicDataFetcher):
+        def __init__(self, *, fail_after_page: int | None = None) -> None:
+            super().__init__("test", page_size=1)
+            self.fail_after_page = fail_after_page
+
+        def pages(
+            self,
+            source: SourceDefinition,
+        ) -> Iterator[tuple[int, list[dict[str, object]], int]]:
+            for page in range(1, 12):
+                if self.fail_after_page == page:
+                    raise SourceResponseError(f"page {page} failed")
+                yield (
+                    page,
+                    [{"DUR_SEQ": f"DUR-{page}", "ITEM_SEQ": str(page)}],
+                    11,
+                )
+
+    reset_database()
+    dur_source = replace(
+        source(),
+        code="dur-bootstrap",
+        kind="dur",
+        record_key_fields=("DUR_SEQ",),
+        rule_type="concomitant_contraindication",
+    )
+    with SessionLocal() as database:
+        with pytest.raises(SourceResponseError, match="page 11 failed"):
+            sync_source(
+                database,
+                dur_source,
+                DurBootstrapFetcher(fail_after_page=11),
+            )
+
+        assert (
+            database.scalar(select(func.count()).select_from(SourceRecord)) == 10
+        )
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(SourceRecord)
+                .where(SourceRecord.active.is_(True))
+            )
+            == 0
+        )
+
+        run = sync_source(database, dur_source, DurBootstrapFetcher())
+
+        assert run.status == "succeeded"
+        assert run.record_count == 11
+        assert (
+            database.scalar(select(func.count()).select_from(SourceRecord)) == 11
+        )
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(SourceRecord)
+                .where(SourceRecord.active.is_(True))
+            )
+            == 11
+        )
+        assert database.scalar(select(func.count()).select_from(DurRule)) == 11

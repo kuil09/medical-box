@@ -32,6 +32,8 @@ from .sources import SourceDefinition, official_sources
 
 app = typer.Typer(no_args_is_help=True)
 
+BOOTSTRAP_DUR_COMMIT_INTERVAL_PAGES = 10
+
 
 def canonical_hash(payload: dict[str, Any]) -> str:
     encoded = json.dumps(
@@ -525,6 +527,7 @@ def _sync_source_locked(
             )
             is None
         )
+        batch_dur_bootstrap = source.kind == "dur" and previous_count is None
         identification_variants_are_absent = source.kind == "identification" and (
             db.scalar(
                 select(DrugIdentificationVariant.id)
@@ -572,6 +575,7 @@ def _sync_source_locked(
                         record_key=key,
                         content_hash=digest,
                         payload=payload,
+                        active=not batch_dur_bootstrap,
                         last_seen_run_id=run.id,
                     )
                     db.add(existing)
@@ -579,7 +583,7 @@ def _sync_source_locked(
                     unchanged = existing.content_hash == digest
                     existing.content_hash = digest
                     existing.payload = payload
-                    existing.active = True
+                    existing.active = not batch_dur_bootstrap
                     existing.last_seen_run_id = run.id
                     existing.last_seen_at = datetime.now(UTC)
                 if is_new or not unchanged or source.kind == "identification":
@@ -602,12 +606,26 @@ def _sync_source_locked(
                 checkpoint.content_hash = file_content_hash
                 checkpoint.source_updated_at = file_updated_at
             db.flush()
+            if (
+                batch_dur_bootstrap
+                and page % BOOTSTRAP_DUR_COMMIT_INTERVAL_PAGES == 0
+            ):
+                db.commit()
             if page * fetcher.page_size >= total:
                 break
 
         if previous_count and previous_count >= 100 and count < previous_count * 0.5:
             raise RuntimeError(
                 f"Record count collapsed from {previous_count} to {count}; keeping prior snapshot."
+            )
+        if batch_dur_bootstrap:
+            db.execute(
+                update(SourceRecord)
+                .where(
+                    SourceRecord.source_code == source.code,
+                    SourceRecord.last_seen_run_id == run.id,
+                )
+                .values(active=True)
             )
         db.execute(
             update(SourceRecord)
