@@ -44,6 +44,60 @@ Normalized catalog tables should reference the owning raw record instead of
 copying the complete JSON payload. Removing the DUR payload copy is the
 highest-value schema-level optimization.
 
+## Implemented compact snapshot
+
+The normalized payload columns were replaced with non-null foreign keys to
+`source_records`. DUR API responses now load their official wording from the
+linked raw record. The migration refuses to remove a payload column if any
+normalized row cannot be mapped to its source record.
+
+The original database remained read-only. A separate
+`korean_drug_catalog_compact.db` copy was migrated, vacuumed, and checked with
+`scripts/verify_catalog_compaction.py`.
+
+| Verification | Result |
+| --- | ---: |
+| Original file | 10,697,076,736 bytes |
+| Compact file | 7,338,266,624 bytes |
+| Reduction | 31.40% |
+| Raw records | 1,109,256 in both files |
+| DUR rules | 863,599 in both files |
+| Identification representatives | 25,332 in both files |
+| Identification variants | 25,349 in both files |
+| Raw identity digest | `942310634a0da346a6f17807dc57c44779c393676d1f64c084fdb48d3a12dc87` |
+| SQLite integrity check | `ok` |
+| Foreign-key failures | 0 |
+
+The compact SQLite file is still 6.83 GiB. This confirms that duplicate
+normalized payload removal is necessary but not sufficient for a strict 5 GiB
+uncompressed storage boundary. PostgreSQL JSONB TOAST compression or explicit
+raw-payload compression must be measured before the production catalog import.
+
+## PostgreSQL 18 storage benchmark
+
+The complete 1,109,256-row `source_records` table was copied into an isolated
+local PostgreSQL 18 instance with JSONB LZ4 TOAST compression. The benchmark
+included the primary key, source identity unique index, active-source index,
+and sync-run index.
+
+| PostgreSQL object | Measured size |
+| --- | ---: |
+| Main heap | 1,869,086,720 bytes |
+| TOAST relation | 985,423,872 bytes |
+| Indexes | 163,389,440 bytes |
+| Total raw-record relation | 3,018,383,360 bytes (2.81 GiB) |
+
+Adding the entire non-`source_records` portion of the compact SQLite database
+without assuming any further PostgreSQL savings produces a conservative
+catalog estimate of about 3.26 GiB. The existing Railway production volume
+used about 153 MB when inspected, so the expected combined footprint remains
+below the current 5 GB volume boundary with roughly 1.6 GiB of margin.
+
+Migration `20260726_0004` explicitly sets LZ4 compression on
+`source_records.payload` in PostgreSQL so this result does not depend on the
+server's default TOAST compression setting. The production import must still
+be preceded by a staging import and a live `pg_total_relation_size` check.
+
 ## Compression evidence
 
 Representative UTF-8 JSON samples were compressed independently per row with
@@ -72,14 +126,11 @@ deduplication for this source.
 
 ## Recommended implementation order
 
-1. Add a raw-record foreign key to normalized payload-bearing tables.
-2. Remove duplicate JSON columns from `dur_rules`,
-   `drug_identification_variants`, and other normalized source projections.
-3. Benchmark PostgreSQL JSONB TOAST compression against application-level
-   Zstandard-compressed `bytea` storage using a representative staging import.
-4. Keep content hashes and source attribution in PostgreSQL even if raw bodies
+1. Run the complete compact import in Railway staging and confirm relation,
+   database, and volume sizes stay below the 5 GB boundary.
+2. Keep content hashes and source attribution in PostgreSQL even if raw bodies
    move to compressed archival storage.
-5. Re-run the complete acquisition into a new database, validate counts and
+3. Re-run the complete acquisition into a new database, validate counts and
    hashes, and switch only after the new snapshot passes every invariant.
 
 Do not rewrite or delete the only complete local snapshot in place. Keep the

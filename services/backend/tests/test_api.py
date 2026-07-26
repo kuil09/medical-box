@@ -12,6 +12,7 @@ from medical_box_api.models import (
     DrugIngredient,
     DrugProduct,
     DurRule,
+    SourceRecord,
     SourceRegistry,
     User,
 )
@@ -126,20 +127,61 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             use_method="제품 설명서를 확인하세요.",
         )
         db.add(product)
+        pill_source_record = SourceRecord(
+            source_code="mfds_pill",
+            record_key="200000001|primary",
+            content_hash="pill-hash",
+            payload={},
+            last_seen_run_id=uuid.uuid4(),
+        )
+        pregnancy_source_record = SourceRecord(
+            source_code="mfds_dur_product_pregnancy",
+            record_key="pregnancy-1",
+            content_hash="pregnancy-hash",
+            payload={
+                "TYPE_NAME": "임부금기",
+                "INGR_NAME": "테스트성분",
+                "PROHBT_CONTENT": "공식 금기 내용",
+                "NOTIFICATION_DATE": "20260725",
+            },
+            last_seen_run_id=uuid.uuid4(),
+        )
+        concomitant_source_record = SourceRecord(
+            source_code="mfds_dur_product_concomitant",
+            record_key="concomitant-1",
+            content_hash="concomitant-hash",
+            payload={
+                "TYPE_NAME": "병용금기",
+                "INGR_KOR_NAME": "테스트성분",
+                "MIXTURE_ITEM_SEQ": "200000002",
+                "MIXTURE_ITEM_NAME": "상대 의약품",
+                "MIXTURE_INGR_KOR_NAME": "상대성분",
+                "PROHBT_CONTENT": "함께 사용하지 않음",
+            },
+            last_seen_run_id=uuid.uuid4(),
+        )
+        db.add_all(
+            [
+                pill_source_record,
+                pregnancy_source_record,
+                concomitant_source_record,
+            ]
+        )
         db.add(
             DrugIdentification(
                 item_seq="200000001",
+                source_record=pill_source_record,
                 shape="장방형",
                 color="하양",
                 imprint_front="TEST 500",
                 imprint_back=None,
                 image_url="https://example.test/official-pill.jpg",
-                payload={},
             )
         )
         db.add(
             DrugIdentificationVariant(
                 item_seq="200000001",
+                source_record=pill_source_record,
                 source_code="mfds_pill",
                 variant_key="200000001|primary",
                 shape="장방형",
@@ -147,7 +189,6 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
                 imprint_front="TEST 500",
                 imprint_back=None,
                 image_url="https://example.test/official-pill.jpg",
-                payload={},
             )
         )
         db.add(
@@ -166,26 +207,14 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
                     source_code="mfds_dur_product_pregnancy",
                     rule_key="pregnancy-1",
                     rule_type="pregnancy_contraindication",
-                    payload={
-                        "TYPE_NAME": "임부금기",
-                        "INGR_NAME": "테스트성분",
-                        "PROHBT_CONTENT": "공식 금기 내용",
-                        "NOTIFICATION_DATE": "20260725",
-                    },
+                    source_record=pregnancy_source_record,
                 ),
                 DurRule(
                     item_seq="200000001",
                     source_code="mfds_dur_product_concomitant",
                     rule_key="concomitant-1",
                     rule_type="concomitant_contraindication",
-                    payload={
-                        "TYPE_NAME": "병용금기",
-                        "INGR_KOR_NAME": "테스트성분",
-                        "MIXTURE_ITEM_SEQ": "200000002",
-                        "MIXTURE_ITEM_NAME": "상대 의약품",
-                        "MIXTURE_INGR_KOR_NAME": "상대성분",
-                        "PROHBT_CONTENT": "함께 사용하지 않음",
-                    },
+                    source_record=concomitant_source_record,
                 ),
             ]
         )

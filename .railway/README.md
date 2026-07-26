@@ -5,13 +5,17 @@ graph is rendered separately for the `staging` and `production` environments.
 
 ## Deployment boundary
 
-- `api` serves product pages, legal pages, account authentication, the
+- `medical-box` is the production API service and serves product pages, legal
+  pages, account authentication, the
   permission-gated catalog API, health checks, and both app-link manifests.
 - `catalog-sync` runs at `18:10 UTC` every day and exits when all configured
   official-source synchronizations finish.
-- `postgres` stores only account/authentication data and the public catalog.
+- `Postgres` stores only account/authentication data and the public catalog.
 - All compute and PostgreSQL resources are placed in Railway's Singapore region.
-- The custom domain belongs to `api`. No separate API subdomain is declared.
+- The custom domain belongs to `medical-box`. No separate API subdomain is
+  declared.
+- Railway's beta TypeScript IaC cannot register custom domains, so domain
+  attachment remains an approval-gated dashboard operation.
 
 ## Required shared variables
 
@@ -39,14 +43,15 @@ official public-data resource and redistribution terms before setting them.
 
 1. Create the `medical-box` Railway project with `staging` and `production`.
 2. Link this repository and select one environment.
-3. Add the required environment-specific shared variables.
-4. Run `railway config plan` and review the exact resource changes.
-5. Apply only after explicit approval of that plan.
-6. Run `CREATE EXTENSION IF NOT EXISTS pg_trgm;` once in each database.
-7. Configure Railway daily/weekly/monthly backups and perform a staging restore.
-8. Add the Railway-provided CNAME targets at the DNS provider for
+3. Run `npm ci` at the repository root to install the pinned Railway IaC SDK.
+4. Add the required environment-specific shared variables.
+5. Run `railway config plan` and review the exact resource changes.
+6. Apply only after explicit approval of that plan.
+7. Run `CREATE EXTENSION IF NOT EXISTS pg_trgm;` once in each database.
+8. Configure Railway daily/weekly/monthly backups and perform a staging restore.
+9. Add the Railway-provided CNAME targets at the DNS provider for
    `medicalbox.outoftokens.ai` and `staging.medicalbox.outoftokens.ai`.
-9. Verify automatic TLS, health checks, HSTS, host filtering, and both app-link
+10. Verify automatic TLS, health checks, HSTS, host filtering, and both app-link
    manifests before distributing an internal build.
 
 Grant or revoke an existing account by exact user ID from an API service shell:
