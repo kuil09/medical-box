@@ -25,7 +25,7 @@ export default defineRailway((ctx) => {
     ? "medicalbox.outoftokens.ai"
     : "staging.medicalbox.outoftokens.ai";
 
-  const database = postgres("postgres", { region: SINGAPORE });
+  const database = postgres("Postgres", { region: SINGAPORE });
 
   const sharedRuntimeEnv = {
     APP_ENV: production ? "production" : "staging",
@@ -56,7 +56,7 @@ export default defineRailway((ctx) => {
       : {}),
   };
 
-  const api = service("api", {
+  const api = service("medical-box", {
     rootDirectory: BACKEND_ROOT,
     build: {
       builder: "DOCKERFILE",
@@ -72,7 +72,6 @@ export default defineRailway((ctx) => {
     healthcheck: "/api/health/ready",
     healthcheckTimeout: 300,
     replicas: { [SINGAPORE]: 1 },
-    domains: [{ domain, port: 8080 }],
     deploy: {
       restartPolicyType: "ON_FAILURE",
       restartPolicyMaxRetries: 5,

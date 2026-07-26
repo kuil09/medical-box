@@ -293,7 +293,11 @@ def test_dur_hash_identity_deduplicates_and_replaces_current_rules() -> None:
         )
         rules = database.scalars(select(DurRule)).all()
         assert len(rules) == 1
-        assert rules[0].payload["PROHBT_CONTENT"] == "Updated wording"
+        assert (
+            rules[0].source_record.payload["PROHBT_CONTENT"]
+            == "Updated wording"
+        )
+        assert rules[0].source_record_id is not None
 
 
 def test_pill_variants_are_preserved_and_representative_is_latest() -> None:
@@ -339,6 +343,7 @@ def test_pill_variants_are_preserved_and_representative_is_latest() -> None:
         assert representative is not None
         assert representative.color == "Blue"
         assert representative.image_url == "http://example.test/latest.jpg"
+        assert representative.source_record_id is not None
 
         sync_source(database, pill_source, RecordFetcher([first_payload]))
         assert (
