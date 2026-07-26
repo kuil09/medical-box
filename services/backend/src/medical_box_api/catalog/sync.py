@@ -292,6 +292,11 @@ def normalize(
     identification_variants_are_absent: bool = False,
     product_cache: dict[str, DrugProduct] | None = None,
     ingredient_cache: dict[tuple[str, str], DrugIngredient] | None = None,
+    consumer_info_cache: dict[str, DrugConsumerInfo] | None = None,
+    identification_cache: dict[str, DrugIdentification] | None = None,
+    identification_variant_cache: (
+        dict[tuple[str, str], DrugIdentificationVariant] | None
+    ) = None,
 ) -> None:
     key = source_record.record_key
     product = (
@@ -310,20 +315,25 @@ def normalize(
             ingredient_cache,
         )
     elif source.kind == "consumer" and sequence:
-        info = next(
-            (
-                pending
-                for pending in db.new
-                if isinstance(pending, DrugConsumerInfo)
-                and pending.item_seq == sequence
-            ),
-            None,
-        )
-        if info is None:
-            info = db.get(DrugConsumerInfo, sequence)
+        if consumer_info_cache is not None:
+            info = consumer_info_cache.get(sequence)
+        else:
+            info = next(
+                (
+                    pending
+                    for pending in db.new
+                    if isinstance(pending, DrugConsumerInfo)
+                    and pending.item_seq == sequence
+                ),
+                None,
+            )
+            if info is None:
+                info = db.get(DrugConsumerInfo, sequence)
         if info is None:
             info = DrugConsumerInfo(item_seq=sequence)
             db.add(info)
+            if consumer_info_cache is not None:
+                consumer_info_cache[sequence] = info
         info.efficacy = _string(first_value(payload, "efcyQesitm"))
         info.use_method = _string(first_value(payload, "useMethodQesitm"))
         info.warning = _string(first_value(payload, "atpnWarnQesitm"))
@@ -339,14 +349,17 @@ def normalize(
         imprint_back = _string(first_value(payload, "PRINT_BACK", "printBack"))
         image_url = _string(first_value(payload, "ITEM_IMAGE", "itemImage"))
 
-        variant = None
-        if not identification_variants_are_absent:
-            variant = db.scalar(
-                select(DrugIdentificationVariant).where(
-                    DrugIdentificationVariant.source_code == source.code,
-                    DrugIdentificationVariant.variant_key == key,
+        if identification_variant_cache is not None:
+            variant = identification_variant_cache.get((source.code, key))
+        else:
+            variant = None
+            if not identification_variants_are_absent:
+                variant = db.scalar(
+                    select(DrugIdentificationVariant).where(
+                        DrugIdentificationVariant.source_code == source.code,
+                        DrugIdentificationVariant.variant_key == key,
+                    )
                 )
-            )
         if variant is None:
             variant = DrugIdentificationVariant(
                 item_seq=sequence,
@@ -355,6 +368,8 @@ def normalize(
                 source_record=source_record,
             )
             db.add(variant)
+            if identification_variant_cache is not None:
+                identification_variant_cache[(source.code, key)] = variant
         variant.shape = shape
         variant.color = color
         variant.imprint_front = imprint_front
@@ -362,23 +377,28 @@ def normalize(
         variant.image_url = image_url
         variant.source_record = source_record
 
-        identification = next(
-            (
-                pending
-                for pending in db.new
-                if isinstance(pending, DrugIdentification)
-                and pending.item_seq == sequence
-            ),
-            None,
-        )
-        if identification is None:
-            identification = db.get(DrugIdentification, sequence)
+        if identification_cache is not None:
+            identification = identification_cache.get(sequence)
+        else:
+            identification = next(
+                (
+                    pending
+                    for pending in db.new
+                    if isinstance(pending, DrugIdentification)
+                    and pending.item_seq == sequence
+                ),
+                None,
+            )
+            if identification is None:
+                identification = db.get(DrugIdentification, sequence)
         if identification is None:
             identification = DrugIdentification(
                 item_seq=sequence,
                 source_record=source_record,
             )
             db.add(identification)
+            if identification_cache is not None:
+                identification_cache[sequence] = identification
         current_payload = (
             identification.source_record.payload
             if identification.source_record is not None
@@ -572,6 +592,11 @@ def _sync_source_locked(
             ingredient_cache: (
                 dict[tuple[str, str], DrugIngredient] | None
             ) = None
+            consumer_info_cache: dict[str, DrugConsumerInfo] | None = None
+            identification_cache: dict[str, DrugIdentification] | None = None
+            identification_variant_cache: (
+                dict[tuple[str, str], DrugIdentificationVariant] | None
+            ) = None
             if source.kind != "dur":
                 page_item_sequences = {
                     sequence
@@ -597,6 +622,48 @@ def _sync_source_locked(
                             )
                         ).all()
                     }
+                elif source.kind == "consumer":
+                    consumer_info_cache = {
+                        info.item_seq: info
+                        for info in db.scalars(
+                            select(DrugConsumerInfo).where(
+                                DrugConsumerInfo.item_seq.in_(
+                                    page_item_sequences
+                                )
+                            )
+                        ).all()
+                    }
+                elif source.kind == "identification":
+                    identification_cache = {
+                        identification.item_seq: identification
+                        for identification in db.scalars(
+                            select(DrugIdentification).where(
+                                DrugIdentification.item_seq.in_(
+                                    page_item_sequences
+                                )
+                            )
+                        ).all()
+                    }
+                    if not identification_variants_are_absent:
+                        page_variant_keys = {
+                            record_key(source, payload)
+                            for payload in records
+                            if has_required_record_key(source, payload)
+                        }
+                        identification_variant_cache = {
+                            (variant.source_code, variant.variant_key): variant
+                            for variant in db.scalars(
+                                select(DrugIdentificationVariant).where(
+                                    DrugIdentificationVariant.source_code
+                                    == source.code,
+                                    DrugIdentificationVariant.variant_key.in_(
+                                        page_variant_keys
+                                    ),
+                                )
+                            ).all()
+                        }
+                    else:
+                        identification_variant_cache = {}
             for payload in records:
                 if not has_required_record_key(source, payload):
                     raise RuntimeError(
@@ -655,6 +722,11 @@ def _sync_source_locked(
                         ),
                         product_cache=product_cache,
                         ingredient_cache=ingredient_cache,
+                        consumer_info_cache=consumer_info_cache,
+                        identification_cache=identification_cache,
+                        identification_variant_cache=(
+                            identification_variant_cache
+                        ),
                     )
                 count += 1
             if checkpoint is None:

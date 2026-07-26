@@ -831,3 +831,82 @@ def test_ingredient_sync_prefetches_each_page_in_one_query() -> None:
         event.remove(engine, "before_cursor_execute", count_ingredient_selects)
 
     assert ingredient_selects == 1
+
+
+def test_consumer_and_identification_sync_prefetch_each_page() -> None:
+    reset_database()
+    products = [
+        {
+            "itemSeq": str(index),
+            "itemName": f"Medicine {index}",
+        }
+        for index in range(50)
+    ]
+    with SessionLocal() as database:
+        sync_source(database, source(), RecordFetcher(products))
+
+    consumer_selects = 0
+    identification_selects = 0
+
+    def count_normalized_selects(
+        connection: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        del connection, cursor, parameters, context, executemany
+        nonlocal consumer_selects, identification_selects
+        if "FROM drug_consumer_info" in statement:
+            consumer_selects += 1
+        if "FROM drug_identification " in statement:
+            identification_selects += 1
+
+    event.listen(engine, "before_cursor_execute", count_normalized_selects)
+    try:
+        consumer_source = replace(
+            source(),
+            code="consumer-prefetch",
+            kind="consumer",
+        )
+        identification_source = replace(
+            source(),
+            code="identification-prefetch",
+            kind="identification",
+            composite_key_fields=("itemSeq", "itemImage"),
+            hash_record_key=True,
+        )
+        with SessionLocal() as database:
+            sync_source(
+                database,
+                consumer_source,
+                RecordFetcher(
+                    [
+                        {
+                            "itemSeq": str(index),
+                            "efcyQesitm": f"Efficacy {index}",
+                        }
+                        for index in range(50)
+                    ]
+                ),
+            )
+            sync_source(
+                database,
+                identification_source,
+                RecordFetcher(
+                    [
+                        {
+                            "itemSeq": str(index),
+                            "itemImage": f"https://example.test/{index}.jpg",
+                            "DRUG_SHAPE": "Round",
+                        }
+                        for index in range(50)
+                    ]
+                ),
+            )
+    finally:
+        event.remove(engine, "before_cursor_execute", count_normalized_selects)
+
+    assert consumer_selects == 1
+    assert identification_selects == 1
