@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Medical Box Design QA</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 32px;
+        background: #e9e6e1;
+        color: #302c27;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+
+      main {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 32px;
+      }
+
+      figure {
+        margin: 0;
+      }
+
+      figcaption {
+        margin-bottom: 10px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .viewport {
+        width: 393px;
+        height: 852px;
+        overflow: hidden;
+        border: 1px solid #c9c1b7;
+        background: white;
+        box-shadow: 0 16px 36px rgba(49, 41, 32, 0.14);
+      }
+
+      .reference {
+        width: 393px;
+        height: 852px;
+        display: block;
+      }
+
+      .implementation {
+        width: 1400px;
+        height: 1200px;
+        display: block;
+        transform: translate(-504px, -174px);
+        transform-origin: top left;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <figure>
+        <figcaption>Selected reference · normalized to 393 × 852</figcaption>
+        <div class="viewport">
+          <img class="reference" src="/assets/prototype/reference.png" alt="Selected design reference" />
+        </div>
+      </figure>
+      <figure>
+        <figcaption>Prototype · 393 × 852 app viewport</figcaption>
+        <div class="viewport">
+          <img class="implementation" src="/assets/prototype/implementation-preview.png" alt="Prototype capture" />
+        </div>
+      </figure>
+    </main>
+  </body>
+</html>
