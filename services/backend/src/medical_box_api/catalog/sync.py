@@ -617,12 +617,12 @@ def _sync_source_locked(
             )
             .values(active=False)
         )
-        if source.kind == "dur":
+        if source.kind == "dur" and not dur_rules_are_absent:
             active_source_record = (
                 select(SourceRecord.id)
                 .where(
+                    SourceRecord.id == DurRule.source_record_id,
                     SourceRecord.source_code == source.code,
-                    SourceRecord.record_key == DurRule.rule_key,
                     SourceRecord.active.is_(True),
                 )
                 .exists()
