@@ -618,19 +618,14 @@ def _sync_source_locked(
             .values(active=False)
         )
         if source.kind == "dur" and not dur_rules_are_absent:
-            active_source_record = (
-                select(SourceRecord.id)
-                .where(
-                    SourceRecord.id == DurRule.source_record_id,
-                    SourceRecord.source_code == source.code,
-                    SourceRecord.active.is_(True),
-                )
-                .exists()
+            inactive_source_records = select(SourceRecord.id).where(
+                SourceRecord.source_code == source.code,
+                SourceRecord.active.is_(False),
             )
             db.execute(
                 delete(DurRule).where(
                     DurRule.source_code == source.code,
-                    ~active_source_record,
+                    DurRule.source_record_id.in_(inactive_source_records),
                 )
             )
         if source.kind == "identification":
