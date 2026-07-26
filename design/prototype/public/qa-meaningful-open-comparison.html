@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Meaningful medicine chest opening design QA</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 32px;
+        background: #ebe7e0;
+        color: #403b35;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+
+      main {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 28px;
+      }
+
+      figure {
+        width: 393px;
+        margin: 0;
+      }
+
+      figcaption {
+        margin-bottom: 10px;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      img {
+        display: block;
+        width: 393px;
+        height: 852px;
+        border-radius: 28px;
+        box-shadow: 0 18px 52px rgba(64, 59, 53, 0.18);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <figure>
+        <figcaption>Selected open-chest reference</figcaption>
+        <img src="/qa/interactive-reference.png" alt="Selected open medicine chest reference" />
+      </figure>
+      <figure>
+        <figcaption>Inventory-backed open state</figcaption>
+        <img src="/qa/meaningful-open-after.png" alt="Open medicine chest with actual inventory" />
+      </figure>
+    </main>
+  </body>
+</html>

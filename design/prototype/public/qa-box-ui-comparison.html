@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Medicine chest UI component design QA</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 28px;
+        background: #ebe7e0;
+        color: #403b35;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+
+      main {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 22px;
+      }
+
+      figure {
+        width: 393px;
+        margin: 0;
+      }
+
+      figcaption {
+        margin-bottom: 9px;
+        font-size: 13px;
+        font-weight: 750;
+        letter-spacing: 0.02em;
+      }
+
+      img {
+        display: block;
+        width: 393px;
+        height: 852px;
+        border-radius: 28px;
+        box-shadow: 0 18px 52px rgba(64, 59, 53, 0.18);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <figure>
+        <figcaption>Physical organizer reference</figcaption>
+        <img src="/qa/interactive-reference.png" alt="Physical medicine organizer reference" />
+      </figure>
+      <figure>
+        <figcaption>Earlier WebGL object scene</figcaption>
+        <img src="/qa/box-ui-before.png" alt="Earlier rough WebGL medicine box scene" />
+      </figure>
+      <figure>
+        <figcaption>Layered interactive UI component</figcaption>
+        <img src="/qa/box-ui-after.png" alt="Layered interactive medicine chest UI component" />
+      </figure>
+    </main>
+  </body>
+</html>

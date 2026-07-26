@@ -1,0 +1,44 @@
+# Security and privacy controls
+
+## On-device storage
+
+- SQLite uses the `sqlite3mc` native source selected through Dart build hooks.
+- A random 256-bit database key is stored with Android Keystore-backed secure
+  storage and iOS Keychain `first_unlock_this_device` accessibility.
+- The database is marked as excluded from iOS backup.
+- Android Auto Backup and device-transfer extraction are disabled.
+- Foreign keys and secure delete are enabled.
+- Local notification content is generic by default and does not expose medicine
+  names on the lock screen.
+
+## Portable backups
+
+`.medicalbox` files are versioned JSON envelopes. The private snapshot is
+encrypted with XChaCha20-Poly1305 using a key derived by Argon2id with 19 MiB of
+memory, two iterations, and one lane. Authentication tokens are not part of the
+database snapshot. Imports authenticate and validate the full envelope before a
+transaction replaces local data.
+
+## Server account security
+
+- Identities are keyed by provider and provider subject.
+- Email addresses never trigger automatic identity merging.
+- Provider tokens are verified and never persisted.
+- Access tokens live for 15 minutes.
+- Refresh tokens rotate, live for 30 days, and are stored only as hashes.
+- Reuse revokes the refresh-token family.
+- Account deletion requires a provider reauthentication grant valid for five
+  minutes.
+- Catalog search, detail, metadata, and DUR endpoints require both a valid
+  access token and the database-backed `catalog:read` entitlement.
+- Entitlements are checked from the user row on every request, so revocation
+  takes effect immediately even when an access token has not expired.
+- Production and staging use different issuers, audiences, signing keys, and
+  PostgreSQL environments.
+
+## Logging boundary
+
+The production container disables Uvicorn access logs. Application code does
+not log catalog search query strings, request bodies, or response bodies.
+Proxy-level verification before release must still demonstrate that private
+household fields never leave the device.
