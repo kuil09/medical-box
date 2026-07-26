@@ -245,30 +245,37 @@ def normalize_ingredient_record(
     db: Session,
     product: DrugProduct,
     payload: dict[str, Any],
+    ingredient_cache: dict[tuple[str, str], DrugIngredient] | None = None,
 ) -> None:
     name = _string(first_value(payload, "MTRAL_NM", "materialName", "INGR_NAME"))
     if not name:
         return
-    ingredient = next(
-        (
-            pending
-            for pending in db.new
-            if isinstance(pending, DrugIngredient)
-            and pending.item_seq == product.item_seq
-            and pending.name == name
-        ),
-        None,
-    )
-    if ingredient is None:
-        ingredient = db.scalar(
-            select(DrugIngredient).where(
-                DrugIngredient.item_seq == product.item_seq,
-                DrugIngredient.name == name,
-            )
+    cache_key = (product.item_seq, name)
+    if ingredient_cache is not None:
+        ingredient = ingredient_cache.get(cache_key)
+    else:
+        ingredient = next(
+            (
+                pending
+                for pending in db.new
+                if isinstance(pending, DrugIngredient)
+                and pending.item_seq == product.item_seq
+                and pending.name == name
+            ),
+            None,
         )
+        if ingredient is None:
+            ingredient = db.scalar(
+                select(DrugIngredient).where(
+                    DrugIngredient.item_seq == product.item_seq,
+                    DrugIngredient.name == name,
+                )
+            )
     if ingredient is None:
         ingredient = DrugIngredient(item_seq=product.item_seq, name=name)
         db.add(ingredient)
+        if ingredient_cache is not None:
+            ingredient_cache[cache_key] = ingredient
     ingredient.amount = _string(first_value(payload, "QNT", "INGR_QTY", "ingrQty"))
     ingredient.unit = _string(
         first_value(payload, "INGD_UNIT_CD", "INGR_UNIT", "ingrUnit")
@@ -284,6 +291,7 @@ def normalize(
     dur_rules_are_absent: bool = False,
     identification_variants_are_absent: bool = False,
     product_cache: dict[str, DrugProduct] | None = None,
+    ingredient_cache: dict[tuple[str, str], DrugIngredient] | None = None,
 ) -> None:
     key = source_record.record_key
     product = (
@@ -295,7 +303,12 @@ def normalize(
     if source.kind == "product" and product:
         normalize_ingredients(db, product, payload)
     elif source.kind == "product_ingredient" and product:
-        normalize_ingredient_record(db, product, payload)
+        normalize_ingredient_record(
+            db,
+            product,
+            payload,
+            ingredient_cache,
+        )
     elif source.kind == "consumer" and sequence:
         info = next(
             (
@@ -556,6 +569,9 @@ def _sync_source_locked(
         for page, records, total in page_stream:
             pages = page
             product_cache: dict[str, DrugProduct] | None = None
+            ingredient_cache: (
+                dict[tuple[str, str], DrugIngredient] | None
+            ) = None
             if source.kind != "dur":
                 page_item_sequences = {
                     sequence
@@ -570,6 +586,17 @@ def _sync_source_locked(
                         )
                     ).all()
                 }
+                if source.kind == "product_ingredient":
+                    ingredient_cache = {
+                        (ingredient.item_seq, ingredient.name): ingredient
+                        for ingredient in db.scalars(
+                            select(DrugIngredient).where(
+                                DrugIngredient.item_seq.in_(
+                                    page_item_sequences
+                                )
+                            )
+                        ).all()
+                    }
             for payload in records:
                 if not has_required_record_key(source, payload):
                     raise RuntimeError(
@@ -627,6 +654,7 @@ def _sync_source_locked(
                             identification_variants_are_absent
                         ),
                         product_cache=product_cache,
+                        ingredient_cache=ingredient_cache,
                     )
                 count += 1
             if checkpoint is None:

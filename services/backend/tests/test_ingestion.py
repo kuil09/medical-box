@@ -770,3 +770,64 @@ def test_product_sync_prefetches_each_page_in_one_query() -> None:
         event.remove(engine, "before_cursor_execute", count_product_selects)
 
     assert product_selects == 1
+
+
+def test_ingredient_sync_prefetches_each_page_in_one_query() -> None:
+    reset_database()
+    ingredient_source = replace(
+        source(),
+        code="ingredient-prefetch",
+        kind="product_ingredient",
+        composite_key_fields=("ITEM_SEQ", "MTRAL_SN"),
+    )
+    ingredients = [
+        {
+            "ITEM_SEQ": str(index),
+            "MTRAL_SN": "1",
+            "MTRAL_NM": f"Ingredient {index}",
+        }
+        for index in range(50)
+    ]
+
+    with SessionLocal() as database:
+        sync_source(
+            database,
+            source(),
+            RecordFetcher(
+                [
+                    {
+                        "itemSeq": str(index),
+                        "itemName": f"Medicine {index}",
+                    }
+                    for index in range(50)
+                ]
+            ),
+        )
+
+    ingredient_selects = 0
+
+    def count_ingredient_selects(
+        connection: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        del connection, cursor, parameters, context, executemany
+        nonlocal ingredient_selects
+        if "FROM drug_ingredients" in statement:
+            ingredient_selects += 1
+
+    event.listen(engine, "before_cursor_execute", count_ingredient_selects)
+    try:
+        with SessionLocal() as database:
+            sync_source(
+                database,
+                ingredient_source,
+                RecordFetcher(ingredients),
+            )
+    finally:
+        event.remove(engine, "before_cursor_execute", count_ingredient_selects)
+
+    assert ingredient_selects == 1
