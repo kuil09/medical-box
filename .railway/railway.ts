@@ -1,6 +1,5 @@
 import {
   defineRailway,
-  github,
   group,
   postgres,
   project,
@@ -25,6 +24,11 @@ export default defineRailway((ctx) => {
   const domain = production
     ? "medicalbox.outoftokens.ai"
     : "staging.medicalbox.outoftokens.ai";
+  const allowedHosts = [
+    domain,
+    "medical-box.railway.internal",
+    "healthcheck.railway.app",
+  ].join(",");
 
   const database = postgres(production ? "Postgres" : "Postgres-staging", {
     region: SINGAPORE,
@@ -34,7 +38,7 @@ export default defineRailway((ctx) => {
     APP_ENV: production ? "production" : "staging",
     DATABASE_URL: database.env.DATABASE_URL,
     PUBLIC_ORIGIN: publicOrigin,
-    ALLOWED_HOSTS: domain,
+    ALLOWED_HOSTS: allowedHosts,
     JWT_ISSUER: production
       ? "https://medicalbox.outoftokens.ai"
       : "https://staging.medicalbox.outoftokens.ai",
@@ -60,7 +64,6 @@ export default defineRailway((ctx) => {
   };
 
   const api = service("medical-box", {
-    source: github("kuil09/medical-box", { branch: "main" }),
     rootDirectory: BACKEND_ROOT,
     build: {
       builder: "DOCKERFILE",
@@ -89,7 +92,6 @@ export default defineRailway((ctx) => {
   });
 
   const catalogSync = service("catalog-sync", {
-    source: github("kuil09/medical-box", { branch: "main" }),
     rootDirectory: BACKEND_ROOT,
     build: {
       builder: "DOCKERFILE",
@@ -100,9 +102,9 @@ export default defineRailway((ctx) => {
       ],
     },
     start: "uv run --no-sync medical-box-sync all-sources",
+    replicas: { [SINGAPORE]: 1 },
     deploy: {
       cronSchedule: "10 18 * * *",
-      region: SINGAPORE,
       restartPolicyType: "NEVER",
     },
     env: sharedRuntimeEnv,

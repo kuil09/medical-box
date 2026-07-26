@@ -10,7 +10,11 @@ graph is rendered separately for the `staging` and `production` environments.
   permission-gated catalog API, health checks, and both app-link manifests.
 - `catalog-sync` runs at `18:10 UTC` every day and exits when all configured
   official-source synchronizations finish.
-- The code services deploy the `main` branch of `kuil09/medical-box`.
+- The code services deploy from the repository root through Railway CLI until
+  the Railway GitHub app is installed for `kuil09/medical-box`.
+- `.railway/railway.ts` is the sole Railway configuration model; a service-level
+  `railway.json` must not be reintroduced because it would override cron
+  settings during local uploads.
 - Production uses `Postgres`; staging uses the project-level
   `Postgres-staging` service so the environments cannot share a volume.
 - PostgreSQL stores only account/authentication data and the public catalog.
