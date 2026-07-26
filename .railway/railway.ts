@@ -1,5 +1,6 @@
 import {
   defineRailway,
+  github,
   group,
   postgres,
   project,
@@ -25,7 +26,9 @@ export default defineRailway((ctx) => {
     ? "medicalbox.outoftokens.ai"
     : "staging.medicalbox.outoftokens.ai";
 
-  const database = postgres("Postgres", { region: SINGAPORE });
+  const database = postgres(production ? "Postgres" : "Postgres-staging", {
+    region: SINGAPORE,
+  });
 
   const sharedRuntimeEnv = {
     APP_ENV: production ? "production" : "staging",
@@ -57,6 +60,7 @@ export default defineRailway((ctx) => {
   };
 
   const api = service("medical-box", {
+    source: github("kuil09/medical-box", { branch: "main" }),
     rootDirectory: BACKEND_ROOT,
     build: {
       builder: "DOCKERFILE",
@@ -85,6 +89,7 @@ export default defineRailway((ctx) => {
   });
 
   const catalogSync = service("catalog-sync", {
+    source: github("kuil09/medical-box", { branch: "main" }),
     rootDirectory: BACKEND_ROOT,
     build: {
       builder: "DOCKERFILE",
