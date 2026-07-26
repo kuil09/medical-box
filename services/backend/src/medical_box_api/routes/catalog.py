@@ -88,7 +88,7 @@ def _payload_string(payload: dict[str, object], *keys: str) -> str | None:
 
 
 def _safety_rule(rule: DurRule) -> DrugSafetyRule:
-    payload = rule.payload
+    payload = rule.source_record.payload
     return DrugSafetyRule(
         rule_type=rule.rule_type or "unknown",
         type_name=_payload_string(payload, "TYPE_NAME", "typeName"),
@@ -206,6 +206,7 @@ def get_drug_safety_rules(
 
     statement = (
         select(DurRule)
+        .options(selectinload(DurRule.source_record))
         .where(
             DurRule.item_seq == item_seq,
             DurRule.rule_type.in_(SAFETY_RULE_TYPES),

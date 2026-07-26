@@ -1,0 +1,12 @@
+{
+  "name": "medical-box-infrastructure",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check:railway": "tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 .railway/railway.ts"
+  },
+  "devDependencies": {
+    "railway": "3.6.0",
+    "typescript": "5.8.3"
+  }
+}

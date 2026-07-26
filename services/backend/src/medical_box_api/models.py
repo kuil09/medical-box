@@ -223,12 +223,21 @@ class DrugIdentification(Base):
     __tablename__ = "drug_identification"
 
     item_seq: Mapped[str] = mapped_column(String(40), primary_key=True)
+    source_record_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "source_records.id",
+            name="fk_drug_identification_source_record",
+            ondelete="CASCADE",
+        ),
+        index=True,
+    )
     shape: Mapped[str | None] = mapped_column(String(120))
     color: Mapped[str | None] = mapped_column(String(120))
     imprint_front: Mapped[str | None] = mapped_column(String(180))
     imprint_back: Mapped[str | None] = mapped_column(String(180))
     image_url: Mapped[str | None] = mapped_column(String(1000))
-    payload: Mapped[dict[str, object]] = mapped_column(json_type)
+
+    source_record: Mapped[SourceRecord] = relationship()
 
 
 class DrugIdentificationVariant(Base):
@@ -239,6 +248,14 @@ class DrugIdentificationVariant(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_record_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "source_records.id",
+            name="fk_drug_identification_variants_source_record",
+            ondelete="CASCADE",
+        ),
+        index=True,
+    )
     item_seq: Mapped[str] = mapped_column(String(40))
     source_code: Mapped[str] = mapped_column(String(80))
     variant_key: Mapped[str] = mapped_column(String(255))
@@ -247,7 +264,8 @@ class DrugIdentificationVariant(Base):
     imprint_front: Mapped[str | None] = mapped_column(String(180))
     imprint_back: Mapped[str | None] = mapped_column(String(180))
     image_url: Mapped[str | None] = mapped_column(String(1000))
-    payload: Mapped[dict[str, object]] = mapped_column(json_type)
+
+    source_record: Mapped[SourceRecord] = relationship()
 
 
 class DrugCode(Base):
@@ -255,23 +273,41 @@ class DrugCode(Base):
     __table_args__ = (UniqueConstraint("code_type", "code"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_record_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "source_records.id",
+            name="fk_drug_codes_source_record",
+            ondelete="CASCADE",
+        ),
+        index=True,
+    )
     item_seq: Mapped[str | None] = mapped_column(String(40), index=True)
     code_type: Mapped[str] = mapped_column(String(80))
     code: Mapped[str] = mapped_column(String(120))
     valid_from: Mapped[date | None] = mapped_column(Date)
     valid_to: Mapped[date | None] = mapped_column(Date)
-    payload: Mapped[dict[str, object]] = mapped_column(json_type)
+
+    source_record: Mapped[SourceRecord] = relationship()
 
 
 class DrugPrice(Base):
     __tablename__ = "drug_prices"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_record_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "source_records.id",
+            name="fk_drug_prices_source_record",
+            ondelete="CASCADE",
+        ),
+        index=True,
+    )
     item_seq: Mapped[str | None] = mapped_column(String(40), index=True)
     insurance_code: Mapped[str | None] = mapped_column(String(120), index=True)
     amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     effective_date: Mapped[date | None] = mapped_column(Date)
-    payload: Mapped[dict[str, object]] = mapped_column(json_type)
+
+    source_record: Mapped[SourceRecord] = relationship()
 
 
 class DurRule(Base):
@@ -279,11 +315,20 @@ class DurRule(Base):
     __table_args__ = (UniqueConstraint("source_code", "rule_key"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_record_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "source_records.id",
+            name="fk_dur_rules_source_record",
+            ondelete="CASCADE",
+        ),
+        index=True,
+    )
     item_seq: Mapped[str | None] = mapped_column(String(40), index=True)
     source_code: Mapped[str] = mapped_column(String(80))
     rule_key: Mapped[str] = mapped_column(String(255))
     rule_type: Mapped[str | None] = mapped_column(String(120))
-    payload: Mapped[dict[str, object]] = mapped_column(json_type)
+
+    source_record: Mapped[SourceRecord] = relationship()
 
 
 class DrugStatusEvent(Base):
@@ -291,10 +336,19 @@ class DrugStatusEvent(Base):
     __table_args__ = (UniqueConstraint("source_code", "event_key"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_record_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "source_records.id",
+            name="fk_drug_status_events_source_record",
+            ondelete="CASCADE",
+        ),
+        index=True,
+    )
     item_seq: Mapped[str | None] = mapped_column(String(40), index=True)
     source_code: Mapped[str] = mapped_column(String(80))
     event_key: Mapped[str] = mapped_column(String(255))
     event_type: Mapped[str] = mapped_column(String(120))
     started_on: Mapped[date | None] = mapped_column(Date)
     ended_on: Mapped[date | None] = mapped_column(Date)
-    payload: Mapped[dict[str, object]] = mapped_column(json_type)
+
+    source_record: Mapped[SourceRecord] = relationship()

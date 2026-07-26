@@ -266,12 +266,13 @@ def normalize_ingredient_record(
 def normalize(
     db: Session,
     source: SourceDefinition,
-    key: str,
+    source_record: SourceRecord,
     payload: dict[str, Any],
     *,
     dur_rules_are_absent: bool = False,
     identification_variants_are_absent: bool = False,
 ) -> None:
+    key = source_record.record_key
     product = None if source.kind == "dur" else ensure_product(db, payload)
     sequence = product.item_seq if product else item_seq(payload)
     if source.kind == "product" and product:
@@ -321,7 +322,7 @@ def normalize(
                 item_seq=sequence,
                 source_code=source.code,
                 variant_key=key,
-                payload=payload,
+                source_record=source_record,
             )
             db.add(variant)
         variant.shape = shape
@@ -329,7 +330,7 @@ def normalize(
         variant.imprint_front = imprint_front
         variant.imprint_back = imprint_back
         variant.image_url = image_url
-        variant.payload = payload
+        variant.source_record = source_record
 
         identification = next(
             (
@@ -343,19 +344,27 @@ def normalize(
         if identification is None:
             identification = db.get(DrugIdentification, sequence)
         if identification is None:
-            identification = DrugIdentification(item_seq=sequence, payload=payload)
+            identification = DrugIdentification(
+                item_seq=sequence,
+                source_record=source_record,
+            )
             db.add(identification)
+        current_payload = (
+            identification.source_record.payload
+            if identification.source_record is not None
+            else None
+        )
         if (
-            identification.payload is None
+            current_payload is None
             or _identification_rank(payload)
-            >= _identification_rank(identification.payload)
+            >= _identification_rank(current_payload)
         ):
             identification.shape = shape
             identification.color = color
             identification.imprint_front = imprint_front
             identification.imprint_back = imprint_back
             identification.image_url = image_url
-            identification.payload = payload
+            identification.source_record = source_record
     elif source.kind == "dur":
         rule = None
         if not dur_rules_are_absent:
@@ -366,13 +375,17 @@ def normalize(
                 )
             )
         if rule is None:
-            rule = DurRule(source_code=source.code, rule_key=key, payload=payload)
+            rule = DurRule(
+                source_code=source.code,
+                rule_key=key,
+                source_record=source_record,
+            )
             db.add(rule)
         rule.item_seq = sequence
         rule.rule_type = source.rule_type or _string(
             first_value(payload, "TYPE_NAME", "typeName", "DUR_TYPE", "durType")
         )
-        rule.payload = payload
+        rule.source_record = source_record
     elif source.kind.startswith("status_"):
         event = db.scalar(
             select(DrugStatusEvent).where(
@@ -385,31 +398,38 @@ def normalize(
                 source_code=source.code,
                 event_key=key,
                 event_type=source.kind.removeprefix("status_"),
-                payload=payload,
+                source_record=source_record,
             )
             db.add(event)
         event.item_seq = sequence
         event.started_on = _date(first_value(payload, "START_DATE", "startDate", "공고일자"))
         event.ended_on = _date(first_value(payload, "END_DATE", "endDate"))
-        event.payload = payload
+        event.source_record = source_record
     elif source.kind == "price":
         price = db.scalar(select(DrugPrice).where(DrugPrice.insurance_code == key))
         if price is None:
-            price = DrugPrice(insurance_code=key, payload=payload)
+            price = DrugPrice(
+                insurance_code=key,
+                source_record=source_record,
+            )
             db.add(price)
         price.item_seq = sequence
         price.amount = _decimal(first_value(payload, "payAmt", "upperLimitPrice", "상한금액"))
         price.effective_date = _date(first_value(payload, "applyDt", "effectiveDate", "적용일자"))
-        price.payload = payload
+        price.source_record = source_record
     elif source.kind == "code":
         code = db.scalar(
             select(DrugCode).where(DrugCode.code_type == "standard", DrugCode.code == key)
         )
         if code is None:
-            code = DrugCode(code_type="standard", code=key, payload=payload)
+            code = DrugCode(
+                code_type="standard",
+                code=key,
+                source_record=source_record,
+            )
             db.add(code)
         code.item_seq = sequence
-        code.payload = payload
+        code.source_record = source_record
 
 
 def _advisory_lock_key(source_code: str) -> int:
@@ -566,7 +586,7 @@ def _sync_source_locked(
                     normalize(
                         db,
                         source,
-                        key,
+                        existing,
                         payload,
                         dur_rules_are_absent=dur_rules_are_absent,
                         identification_variants_are_absent=(
@@ -746,7 +766,7 @@ def renormalize(source_code: str) -> None:
         try:
             for record in records:
                 if isinstance(record.payload, dict):
-                    normalize(db, source, record.record_key, record.payload)
+                    normalize(db, source, record, record.payload)
                     count += 1
                 if count and count % 500 == 0:
                     db.flush()
