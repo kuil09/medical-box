@@ -10,7 +10,10 @@ graph is rendered separately for the `staging` and `production` environments.
   permission-gated catalog API, health checks, and both app-link manifests.
 - `catalog-sync` runs at `18:10 UTC` every day and exits when all configured
   official-source synchronizations finish.
-- `Postgres` stores only account/authentication data and the public catalog.
+- The code services deploy the `main` branch of `kuil09/medical-box`.
+- Production uses `Postgres`; staging uses the project-level
+  `Postgres-staging` service so the environments cannot share a volume.
+- PostgreSQL stores only account/authentication data and the public catalog.
 - All compute and PostgreSQL resources are placed in Railway's Singapore region.
 - The custom domain belongs to `medical-box`. No separate API subdomain is
   declared.
