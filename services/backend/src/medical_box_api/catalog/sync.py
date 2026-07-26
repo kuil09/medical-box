@@ -98,24 +98,34 @@ def item_seq(payload: dict[str, Any]) -> str | None:
     return str(value) if value not in (None, "") else None
 
 
-def ensure_product(db: Session, payload: dict[str, Any]) -> DrugProduct | None:
+def ensure_product(
+    db: Session,
+    payload: dict[str, Any],
+    product_cache: dict[str, DrugProduct] | None = None,
+) -> DrugProduct | None:
     sequence = item_seq(payload)
     if not sequence:
         return None
-    product = next(
-        (
-            pending
-            for pending in db.new
-            if isinstance(pending, DrugProduct) and pending.item_seq == sequence
-        ),
-        None,
-    )
-    if product is None:
-        product = db.get(DrugProduct, sequence)
+    if product_cache is not None:
+        product = product_cache.get(sequence)
+    else:
+        product = next(
+            (
+                pending
+                for pending in db.new
+                if isinstance(pending, DrugProduct)
+                and pending.item_seq == sequence
+            ),
+            None,
+        )
+        if product is None:
+            product = db.get(DrugProduct, sequence)
     name = first_value(payload, "ITEM_NAME", "itemName", "item_name", "품목명")
     if product is None:
         product = DrugProduct(item_seq=sequence, item_name=str(name or sequence))
         db.add(product)
+        if product_cache is not None:
+            product_cache[sequence] = product
     if name:
         product.item_name = str(name)
     manufacturer = first_value(payload, "ENTP_NAME", "entpName", "entp_name", "업체명")
@@ -273,9 +283,14 @@ def normalize(
     *,
     dur_rules_are_absent: bool = False,
     identification_variants_are_absent: bool = False,
+    product_cache: dict[str, DrugProduct] | None = None,
 ) -> None:
     key = source_record.record_key
-    product = None if source.kind == "dur" else ensure_product(db, payload)
+    product = (
+        None
+        if source.kind == "dur"
+        else ensure_product(db, payload, product_cache)
+    )
     sequence = product.item_seq if product else item_seq(payload)
     if source.kind == "product" and product:
         normalize_ingredients(db, product, payload)
@@ -540,6 +555,21 @@ def _sync_source_locked(
             db.execute(delete(DrugIdentification))
         for page, records, total in page_stream:
             pages = page
+            product_cache: dict[str, DrugProduct] | None = None
+            if source.kind != "dur":
+                page_item_sequences = {
+                    sequence
+                    for payload in records
+                    if (sequence := item_seq(payload)) is not None
+                }
+                product_cache = {
+                    product.item_seq: product
+                    for product in db.scalars(
+                        select(DrugProduct).where(
+                            DrugProduct.item_seq.in_(page_item_sequences)
+                        )
+                    ).all()
+                }
             for payload in records:
                 if not has_required_record_key(source, payload):
                     raise RuntimeError(
@@ -596,6 +626,7 @@ def _sync_source_locked(
                         identification_variants_are_absent=(
                             identification_variants_are_absent
                         ),
+                        product_cache=product_cache,
                     )
                 count += 1
             if checkpoint is None:
