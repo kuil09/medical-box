@@ -62,13 +62,21 @@ deployment probe for provider exchange, profile retrieval, catalog entitlement,
 refresh rotation, and logout. It accepts short-lived credentials only through
 the process environment and never prints them.
 
-Real provider exchange is not yet release evidence. A dedicated Google Cloud
-project, `medical-box-503706`, was created and its OAuth branding wizard was
-prepared, but the account owner must accept the Google API Services User Data
-Policy before the consent configuration can be created. Production Google,
-Kakao, and Apple verification identifiers are not complete. Until those
-provider-console steps and a real beta-account probe pass, social-login E2E
-remains blocked.
+The dedicated Google Cloud project `medical-box-503706` now has an external
+testing consent configuration, the account owner as a test user, production
+homepage/privacy/terms URLs, and `outoftokens.ai` as an authorized domain. Web,
+Android debug, and iOS OAuth clients were created. The Web client ID is
+configured on the Railway production and staging API services; both variable
+deployments reached `SUCCESS`, and a forged Google token now receives HTTP 401
+instead of a missing-configuration HTTP 503.
+
+Real Google provider exchange is not yet release evidence. The configured
+Android client is restricted to `com.medicalbox.app` and the current local debug
+certificate. A separate Android client must be created after the Play App
+Signing SHA-1 is available. The emulator reached Google's account sign-in
+surface, but credential entry remains a user-only step. Production Kakao and
+Apple verification identifiers are also incomplete. Until a real beta-account
+probe passes for each enabled provider, social-login E2E remains blocked.
 
 ## Android application QA
 

@@ -22,6 +22,14 @@
 				<string>kakao$(KAKAO_NATIVE_APP_KEY)</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.686392001303-d7v2bj2c9a24kc4f5a3t4lsgmsdtcs2k</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleName</key>
 	<string>MedicalBox</string>

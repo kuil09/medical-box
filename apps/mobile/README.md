@@ -44,7 +44,8 @@ boundary.
 
 Google builds must inject the Web OAuth client ID as
 `GOOGLE_SERVER_CLIENT_ID`. iOS builds must additionally inject the iOS OAuth
-client ID as `GOOGLE_IOS_CLIENT_ID`. Kakao builds must provide
-`KAKAO_NATIVE_APP_KEY` both as a build environment variable and a Dart define.
-Provider client IDs are configuration values, not secrets, but they remain
-environment-specific and are not hard-coded in the application.
+client ID as `GOOGLE_IOS_CLIENT_ID`. The non-secret iOS callback URL scheme for
+the Medical Box Google Cloud project is registered in `Info.plist`. Kakao
+builds must provide `KAKAO_NATIVE_APP_KEY` both as a build environment variable
+and a Dart define. Provider client IDs are configuration values, not secrets;
+the IDs used by Dart remain environment-specific build inputs.
