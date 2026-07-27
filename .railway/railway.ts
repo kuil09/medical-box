@@ -1,5 +1,6 @@
 import {
   defineRailway,
+  github,
   group,
   postgres,
   project,
@@ -30,9 +31,12 @@ export default defineRailway((ctx) => {
     "healthcheck.railway.app",
   ].join(",");
 
-  const database = postgres(production ? "Postgres" : "Postgres-staging", {
+  const database = postgres(production ? "Postgres" : "Postgres-staging-v2", {
     region: SINGAPORE,
   });
+  const preservedStagingDatabase = staging
+    ? postgres("Postgres-staging", { region: SINGAPORE })
+    : null;
 
   const sharedRuntimeEnv = {
     APP_ENV: production ? "production" : "staging",
@@ -64,6 +68,7 @@ export default defineRailway((ctx) => {
   };
 
   const api = service("medical-box", {
+    source: github("kuil09/medical-box"),
     rootDirectory: BACKEND_ROOT,
     build: {
       builder: "DOCKERFILE",
@@ -92,6 +97,7 @@ export default defineRailway((ctx) => {
   });
 
   const catalogSync = service("catalog-sync", {
+    source: github("kuil09/medical-box"),
     rootDirectory: BACKEND_ROOT,
     build: {
       builder: "DOCKERFILE",
@@ -110,7 +116,12 @@ export default defineRailway((ctx) => {
     env: sharedRuntimeEnv,
   });
 
-  const backend = group("Backend", [api, catalogSync, database]);
+  const backend = group("Backend", [
+    api,
+    catalogSync,
+    database,
+    ...(preservedStagingDatabase ? [preservedStagingDatabase] : []),
+  ]);
 
   return project("medical-box", {
     resources: [backend],
