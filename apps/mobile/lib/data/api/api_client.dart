@@ -7,10 +7,6 @@ const productionApiBaseUrl = String.fromEnvironment(
   defaultValue: 'https://medicalbox.outoftokens.ai/api',
 );
 
-const stagingAccessKey = String.fromEnvironment(
-  'MEDICAL_BOX_STAGING_ACCESS_KEY',
-);
-
 class ApiException implements Exception {
   const ApiException(this.statusCode, this.message);
 
@@ -33,8 +29,6 @@ class ApiClient {
       'accept': 'application/json',
       'content-type': 'application/json',
       if (accessToken != null) 'authorization': 'Bearer $accessToken',
-      if (baseUrl.contains('staging.') && stagingAccessKey.isNotEmpty)
-        'x-staging-key': stagingAccessKey,
     };
   }
 

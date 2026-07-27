@@ -8,14 +8,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    app_env: Literal["development", "test", "staging", "production"] = "development"
+    app_env: Literal["development", "test", "production"] = "development"
     database_url: str = "sqlite+pysqlite:///./medical_box.db"
     public_origin: str = "https://medicalbox.outoftokens.ai"
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
     jwt_secret: str = "development-only-secret-change-before-deploy"
     jwt_issuer: str = "medicalbox.outoftokens.ai"
     jwt_audience: str = "com.medicalbox.app"
-    staging_access_key: str | None = None
     catalog_access_email_allowlist: str = ""
 
     google_client_id: str | None = None
@@ -75,12 +74,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_deploy_secrets(self) -> "Settings":
-        if self.app_env in {"staging", "production"} and len(self.jwt_secret) < 32:
+        if self.app_env == "production" and len(self.jwt_secret) < 32:
             raise ValueError(
                 "JWT_SECRET must contain at least 32 characters outside local development."
             )
-        if self.app_env == "staging" and not self.staging_access_key:
-            raise ValueError("STAGING_ACCESS_KEY is required in staging.")
         return self
 
     @property

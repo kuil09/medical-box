@@ -6,10 +6,8 @@ console configuration is required before the flows can complete.
 ## Shared requirements
 
 - Register the exact application identifier `com.medicalbox.app`.
-- Configure production and staging OAuth/OIDC clients separately where the
-  provider supports it.
-- Register only `medicalbox.outoftokens.ai` and
-  `staging.medicalbox.outoftokens.ai` callback/link origins.
+- Configure the production OAuth/OIDC clients.
+- Register only `medicalbox.outoftokens.ai` as the callback/link origin.
 - Never commit provider secrets, service files, signing keys, or certificate
   fingerprints.
 
@@ -49,8 +47,7 @@ in the process environment and never place one on the command line or in a
 shell-history file:
 
 ```bash
-MEDICAL_BOX_API_BASE_URL=https://staging.medicalbox.outoftokens.ai/api \
-MEDICAL_BOX_STAGING_ACCESS_KEY=... \
+MEDICAL_BOX_API_BASE_URL=https://medicalbox.outoftokens.ai/api \
 MEDICAL_BOX_AUTH_PROVIDER=google \
 MEDICAL_BOX_PROVIDER_TOKEN=... \
 MEDICAL_BOX_EXPECT_CATALOG_ACCESS=true \

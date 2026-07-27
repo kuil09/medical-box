@@ -95,10 +95,11 @@ below the current 5 GB volume boundary with roughly 1.6 GiB of margin.
 
 Migration `20260726_0004` explicitly sets LZ4 compression on
 `source_records.payload` in PostgreSQL so this result does not depend on the
-server's default TOAST compression setting. The production import must still
-be preceded by a staging import and a live `pg_total_relation_size` check.
+server's default TOAST compression setting. Any future full replacement must
+still be preceded by an isolated disposable import and a live
+`pg_total_relation_size` check.
 
-## Railway staging validation
+## Historical Railway acquisition validation
 
 The complete authorized staging snapshot was measured on 2026-07-27 after
 loading 78,090 products, 266,033 active non-DUR raw records, and 860,199 DUR
@@ -111,6 +112,12 @@ changed DUR visibility to a single successful-run gate, removed the full-table
 activation, and set staging PostgreSQL `max_wal_size` to 256 MiB. Capacity
 checks must therefore measure both steady-state relations and transient WAL;
 logical database size alone is not a sufficient release criterion.
+
+The validated snapshot was promoted to production on 2026-07-27, after which
+the persistent staging environment was retired. Production database plus WAL
+measured 3,556,611,775 bytes. Scheduled full refresh remains disabled because
+the steady-state fit does not provide enough evidence of safe transient
+headroom on the 5 GB volume.
 
 ## Compression evidence
 
@@ -140,8 +147,9 @@ deduplication for this source.
 
 ## Recommended implementation order
 
-1. Run the complete compact import in Railway staging and confirm relation,
-   database, and volume sizes stay below the 5 GB boundary.
+1. Run every future compact import in disposable isolated infrastructure and
+   confirm relation, database, WAL, and volume sizes stay below the target
+   boundary.
 2. Keep content hashes and source attribution in PostgreSQL even if raw bodies
    move to compressed archival storage.
 3. Re-run the complete acquisition into a new database, validate counts and

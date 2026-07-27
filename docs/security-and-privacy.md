@@ -33,8 +33,8 @@ transaction replaces local data.
   access token and the database-backed `catalog:read` entitlement.
 - Entitlements are checked from the user row on every request, so revocation
   takes effect immediately even when an access token has not expired.
-- Production and staging use different issuers, audiences, signing keys, and
-  PostgreSQL environments.
+- Production is the only persistent Railway environment. Local and CI tests do
+  not receive production database credentials or signing keys.
 
 ## Logging boundary
 

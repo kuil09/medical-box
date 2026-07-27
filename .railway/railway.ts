@@ -12,44 +12,29 @@ const SINGAPORE = "asia-southeast1-eqsg3a";
 const BACKEND_ROOT = "services/backend";
 
 export default defineRailway((ctx) => {
-  const production = ctx.isEnvironment("production");
-  const staging = ctx.isEnvironment("staging");
-  if (!production && !staging) {
-    throw new Error(
-      "Medical Box IaC may only target the production or staging environment.",
-    );
+  if (!ctx.isEnvironment("production")) {
+    throw new Error("Medical Box IaC may only target the production environment.");
   }
 
-  const publicOrigin = production
-    ? "https://medicalbox.outoftokens.ai"
-    : "https://staging.medicalbox.outoftokens.ai";
-  const domain = production
-    ? "medicalbox.outoftokens.ai"
-    : "staging.medicalbox.outoftokens.ai";
+  const publicOrigin = "https://medicalbox.outoftokens.ai";
+  const domain = "medicalbox.outoftokens.ai";
   const allowedHosts = [
     domain,
     "medical-box.railway.internal",
     "healthcheck.railway.app",
   ].join(",");
 
-  const database = postgres(production ? "Postgres" : "Postgres-staging-v2", {
+  const database = postgres("Postgres", {
     region: SINGAPORE,
   });
-  const preservedStagingDatabase = staging
-    ? postgres("Postgres-staging", { region: SINGAPORE })
-    : null;
 
   const sharedRuntimeEnv = {
-    APP_ENV: production ? "production" : "staging",
+    APP_ENV: "production",
     DATABASE_URL: database.env.DATABASE_URL,
     PUBLIC_ORIGIN: publicOrigin,
     ALLOWED_HOSTS: allowedHosts,
-    JWT_ISSUER: production
-      ? "https://medicalbox.outoftokens.ai"
-      : "https://staging.medicalbox.outoftokens.ai",
-    JWT_AUDIENCE: production
-      ? "com.medicalbox.app"
-      : "com.medicalbox.app.staging",
+    JWT_ISSUER: "https://medicalbox.outoftokens.ai",
+    JWT_AUDIENCE: "com.medicalbox.app",
     JWT_SECRET: preserve(),
     CATALOG_ACCESS_EMAIL_ALLOWLIST: preserve(),
     DATA_GO_KR_SERVICE_KEY: preserve(),
@@ -62,7 +47,6 @@ export default defineRailway((ctx) => {
     MFDS_SHORTAGE_URL: preserve(),
     HIRA_PRICE_URL: preserve(),
     HIRA_STANDARD_CODE_URL: preserve(),
-    ...(staging ? { STAGING_ACCESS_KEY: preserve() } : {}),
   };
 
   const api = service("medical-box", {
@@ -93,37 +77,10 @@ export default defineRailway((ctx) => {
     },
   });
 
-  // Production catalog acquisition remains deferred until its operational
-  // prerequisites are explicitly re-enabled. The API can still be deployed and
-  // verified independently without creating a production ingestion job.
-  const catalogSync = staging
-    ? service("catalog-sync", {
-        source: github("kuil09/medical-box"),
-        rootDirectory: BACKEND_ROOT,
-        build: {
-          builder: "DOCKERFILE",
-          dockerfilePath: "Dockerfile",
-          watchPatterns: [
-            "services/backend/**",
-            ".railway/railway.ts",
-          ],
-        },
-        start: "uv run --no-sync medical-box-sync all-sources",
-        replicas: { [SINGAPORE]: 1 },
-        deploy: {
-          cronSchedule: "10 18 * * *",
-          restartPolicyType: "NEVER",
-        },
-        env: sharedRuntimeEnv,
-      })
-    : null;
-
-  const backend = group("Backend", [
-    api,
-    ...(catalogSync ? [catalogSync] : []),
-    database,
-    ...(preservedStagingDatabase ? [preservedStagingDatabase] : []),
-  ]);
+  // The promoted catalog is served from production. Automated full refreshes
+  // remain disabled until the 5 GB volume or ingestion transaction strategy is
+  // expanded enough to preserve operational headroom.
+  const backend = group("Backend", [api, database]);
 
   return project("medical-box", {
     resources: [backend],

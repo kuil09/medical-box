@@ -50,13 +50,12 @@ fvm dart run build_runner build
 fvm flutter run
 ```
 
-Production builds use `https://medicalbox.outoftokens.ai/api`. Internal builds
-must inject both the staging API URL and access key:
+All distributed builds use `https://medicalbox.outoftokens.ai/api`. Override
+the base URL only for a locally running backend:
 
 ```bash
 fvm flutter run \
-  --dart-define=MEDICAL_BOX_API_BASE_URL=https://staging.medicalbox.outoftokens.ai/api \
-  --dart-define=MEDICAL_BOX_STAGING_ACCESS_KEY=replace-me
+  --dart-define=MEDICAL_BOX_API_BASE_URL=http://127.0.0.1:8000/api
 ```
 
 Provider console credentials and platform files are intentionally not committed.
