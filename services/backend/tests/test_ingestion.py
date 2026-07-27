@@ -733,6 +733,30 @@ def test_initial_dur_bootstrap_commits_run_gated_batches_and_resumes() -> None:
         assert database.scalar(select(func.count()).select_from(DurRule)) == 11
 
 
+def test_unchanged_dur_snapshot_keeps_successful_record_run_ids() -> None:
+    reset_database()
+    dur_source = replace(
+        source(),
+        code="dur-unchanged",
+        kind="dur",
+        record_key_fields=("DUR_SEQ",),
+        rule_type="concomitant_contraindication",
+    )
+    records = [{"DUR_SEQ": "DUR-1", "ITEM_SEQ": "1"}]
+    with SessionLocal() as database:
+        first_run = sync_source(database, dur_source, RecordFetcher(records))
+        source_record = database.scalar(select(SourceRecord))
+        assert source_record is not None
+        assert source_record.last_seen_run_id == first_run.id
+
+        second_run = sync_source(database, dur_source, RecordFetcher(records))
+
+        database.refresh(source_record)
+        assert second_run.status == "succeeded"
+        assert source_record.last_seen_run_id == first_run.id
+        assert database.scalar(select(func.count()).select_from(DurRule)) == 1
+
+
 def test_product_sync_prefetches_each_page_in_one_query() -> None:
     reset_database()
     product_selects = 0
