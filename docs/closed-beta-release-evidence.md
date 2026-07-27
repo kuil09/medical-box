@@ -1,6 +1,6 @@
 # Closed-beta release evidence
 
-Evidence date: 2026-07-27
+Evidence date: 2026-07-28
 
 ## Scope
 
@@ -168,6 +168,40 @@ The first local iOS no-codesign attempt was blocked by Finder metadata on the
 generated Flutter framework under the local Documents directory. Removing that
 metadata from the generated build artifact allowed the same build to pass. The
 source tree did not require an iOS code change.
+
+## Mobile release readiness
+
+Pull request 10 introduces fail-closed mobile release packaging:
+
+- Android release tasks require a real keystore and complete
+  `android/key.properties` values. A negative dry run without signing
+  configuration failed with the expected configuration error.
+- The compile-only CI escape hatch is explicit and limited to
+  `MEDICAL_BOX_ALLOW_UNSIGNED_RELEASE=true`; it cannot produce a store-signed
+  artifact.
+- A Flutter 3.44.7 unsigned release AAB compiled successfully and measured
+  66.8 MB. `keytool` confirmed that the compile-only artifact was not signed.
+- An iOS release no-codesign build compiled successfully with Flutter 3.44.7 in
+  a non-File-Provider temporary checkout. The output was a 30.2 MB arm64
+  `Runner.app`; `codesign` confirmed that it was intentionally unsigned.
+- Google and Kakao release identifiers are build-time values rather than
+  committed secrets. Selecting Kakao login without a configured native app key
+  now fails with an explicit configuration error.
+- The protected manual `Mobile release build` workflow validates all required
+  Android and iOS signing inputs, creates ephemeral signing material, verifies
+  the resulting AAB or IPA, uploads a seven-day artifact, and removes signing
+  material in an always-run cleanup step.
+- Korean Play Store and App Store metadata source files are committed under
+  `store/metadata/ko-KR`. Medical claims are limited to organization,
+  reference, renewal-readiness, and sharing functions. A support URL is used
+  until a public support email is approved.
+
+GitHub Actions run `30283835780` did not allocate a runner to any of its five
+jobs. GitHub annotated every job with the same account-level error: recent
+account payments failed or the Actions spending limit must be increased.
+Therefore the red checks are an external GitHub billing gate, not a test
+failure. Pull request 10 remains a draft until the account owner resolves the
+billing or spending-limit state and a clean Actions rerun passes.
 
 ## Legal review
 
