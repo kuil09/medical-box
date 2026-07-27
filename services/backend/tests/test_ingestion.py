@@ -668,7 +668,7 @@ def test_partial_failure_and_count_collapse_preserve_last_catalog() -> None:
         )
 
 
-def test_initial_dur_bootstrap_commits_inactive_batches_and_resumes() -> None:
+def test_initial_dur_bootstrap_commits_run_gated_batches_and_resumes() -> None:
     class DurBootstrapFetcher(PublicDataFetcher):
         def __init__(self, *, fail_after_page: int | None = None) -> None:
             super().__init__("test", page_size=1)
@@ -728,7 +728,7 @@ def test_initial_dur_bootstrap_commits_inactive_batches_and_resumes() -> None:
                 .select_from(SourceRecord)
                 .where(SourceRecord.active.is_(True))
             )
-            == 11
+            == 0
         )
         assert database.scalar(select(func.count()).select_from(DurRule)) == 11
 

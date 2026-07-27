@@ -14,6 +14,7 @@ from medical_box_api.models import (
     DurRule,
     SourceRecord,
     SourceRegistry,
+    SyncRun,
     User,
 )
 
@@ -134,6 +135,9 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             payload={},
             last_seen_run_id=uuid.uuid4(),
         )
+        pregnancy_run_id = uuid.uuid4()
+        concomitant_run_id = uuid.uuid4()
+        failed_run_id = uuid.uuid4()
         pregnancy_source_record = SourceRecord(
             source_code="mfds_dur_product_pregnancy",
             record_key="pregnancy-1",
@@ -144,7 +148,7 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
                 "PROHBT_CONTENT": "공식 금기 내용",
                 "NOTIFICATION_DATE": "20260725",
             },
-            last_seen_run_id=uuid.uuid4(),
+            last_seen_run_id=pregnancy_run_id,
         )
         concomitant_source_record = SourceRecord(
             source_code="mfds_dur_product_concomitant",
@@ -158,13 +162,36 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
                 "MIXTURE_INGR_KOR_NAME": "상대성분",
                 "PROHBT_CONTENT": "함께 사용하지 않음",
             },
-            last_seen_run_id=uuid.uuid4(),
+            last_seen_run_id=concomitant_run_id,
+        )
+        failed_source_record = SourceRecord(
+            source_code="mfds_dur_product_elderly",
+            record_key="failed-1",
+            content_hash="failed-hash",
+            payload={"TYPE_NAME": "노인주의"},
+            last_seen_run_id=failed_run_id,
         )
         db.add_all(
             [
                 pill_source_record,
                 pregnancy_source_record,
                 concomitant_source_record,
+                failed_source_record,
+                SyncRun(
+                    id=pregnancy_run_id,
+                    source_code="mfds_dur_product_pregnancy",
+                    status="succeeded",
+                ),
+                SyncRun(
+                    id=concomitant_run_id,
+                    source_code="mfds_dur_product_concomitant",
+                    status="succeeded",
+                ),
+                SyncRun(
+                    id=failed_run_id,
+                    source_code="mfds_dur_product_elderly",
+                    status="failed",
+                ),
             ]
         )
         db.add(
@@ -215,6 +242,13 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
                     rule_key="concomitant-1",
                     rule_type="concomitant_contraindication",
                     source_record=concomitant_source_record,
+                ),
+                DurRule(
+                    item_seq="200000001",
+                    source_code="mfds_dur_product_elderly",
+                    rule_key="failed-1",
+                    rule_type="elderly_caution",
+                    source_record=failed_source_record,
                 ),
             ]
         )
