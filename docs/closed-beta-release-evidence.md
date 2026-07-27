@@ -12,9 +12,11 @@ sources remains a separate release gate.
 
 ## Production deployment
 
-Railway production deployment
-`ec142313-3400-4b7d-befe-3c403cc32ec5` completed successfully at
-`2026-07-27T06:14:21.545Z`. The running API uses:
+Railway API deployment `8e3888d1-b19c-4d68-8677-51a00ffeb80f` first shipped
+the catalog-safety release for commit
+`9efed852a6eff664efccb30c65827b4d5c84a559`. The current active deployment,
+`6df8debc-b8ac-479b-81fe-672f585e65ca`, then completed successfully for commit
+`e205941a65281bcb713c5e9832d1f1cb366f7563`. The running API uses:
 
 - repository root directory `services/backend`;
 - the Dockerfile builder;
@@ -22,9 +24,11 @@ Railway production deployment
 - the Singapore Railway region; and
 - the production PostgreSQL service through Railway private networking.
 
-`railway config plan` reported that the production environment matched
-`.railway/railway.ts` after deployment. Production catalog acquisition remains
-disabled in IaC; this pass did not create or run a production catalog cron.
+Railway IaC created the `catalog-sync` function, linked its public-data key to
+the existing API secret without printing it, and scheduled approved sources at
+`18:10 UTC` daily. Deployment `01514a9a-cddd-4497-bb64-c917ef2cced7`
+successfully built the cron image. A final `railway config plan` reported no
+drift from `.railway/railway.ts`.
 
 The following production paths returned HTTP 200:
 
@@ -121,6 +125,26 @@ finished. The family add and rename dialogs, plus the Settings password dialog,
 now use controller-free form state. The same add, top-tab navigation, and remove
 flow passed after rebuilding and reinstalling the application.
 
+### Device-local data boundary
+
+A second Android run exercised both local-data families with non-identifying
+test values between `2026-07-27T15:24:26Z` and
+`2026-07-27T15:37:33Z`:
+
+- a local medicine was created with quantity 7, edited to quantity 86, and
+  deleted;
+- a family member and personal pouch were created and deleted; and
+- the empty family list and the pre-existing inventory were restored after the
+  run.
+
+Railway production HTTP logs contained zero requests from the start of that
+interval onward. A wider 25-minute control window contained only two requests,
+both before the test interval: `GET /api/health/ready` with HTTP 200 and an
+anonymous `GET /api/v1/catalog/meta` with HTTP 401. No production POST, PATCH,
+or DELETE request occurred, and none of the local test markers appeared in
+server HTTP logs. The observed local mutations therefore did not cross the
+production API boundary.
+
 ## Build and test evidence
 
 - Flutter analysis: passed with no issues.
@@ -137,6 +161,8 @@ flow passed after rebuilding and reinstalling the application.
 - GitHub Actions run `30244655755`: all five jobs passed
   (`backend`, `flutter`, `flutter-ios`, `infrastructure`, and
   `product-design-prototype`).
+- Pull request 8 run `30279320950`: the same five jobs reached final SUCCESS
+  after the merge.
 
 The first local iOS no-codesign attempt was blocked by Finder metadata on the
 generated Flutter framework under the local Documents directory. Removing that
@@ -160,7 +186,10 @@ The Google Play Console account `lv0gun9` reports that the developer profile and
 all apps were deleted after the account-verification deadline on 2024-08-19.
 The Create app action is disabled. Internal testing cannot be created until the
 account owner completes Google Play developer-account recovery or establishes a
-verified replacement account.
+verified replacement account. The recovery wizard is open at its first
+user-controlled step. It requires an individual-or-organization choice, a
+Google payments profile, account details, private contact details, and public
+developer-profile details.
 
 App Store Connect reached the Apple sign-in page, but the available passkey
 attempt returned an error. The local project has valid Apple Development and
@@ -173,6 +202,11 @@ The Kakao Developers console is signed out. Railway production also lacks
 `KAKAO_APP_ID`, `APPLE_TEAM_ID`, and the release `ANDROID_CERT_SHA256`. Kakao
 application registration and the final Apple/Android identifiers require the
 respective authenticated provider and store accounts.
+
+The public-data portal is also signed out in the retained browser session.
+Recall, supply-interruption, and HIRA-price application or approval state cannot
+be changed until the account owner signs in. Production probes for all three
+currently return HTTP 403.
 
 ## Catalog promotion and staging retirement
 
@@ -195,13 +229,34 @@ Railway environment.
 An isolated PostgreSQL 18 restore subsequently loaded the official HIRA
 standard-code file: 305,522 rows succeeded in 43.08 seconds, product count stayed
 at 78,090, no index became invalid, and measured database growth was
-358,203,392 bytes. The production cron and first production load require the
-run-gated ingestion deployment and the documented 96 MB PostgreSQL WAL limit.
+358,203,392 bytes.
+
+The first production load then succeeded in 746.69 seconds:
+
+- raw and active standard-code records: 305,522;
+- normalized standard codes: 305,522;
+- unchanged products: 78,090;
+- invalid indexes: 0;
+- checkpoint SHA-256:
+  `8f177ced6a93fefa439535125aeb4f626e9d386fa5700271094ca26bdcb50ff0`;
+- PostgreSQL `max_wal_size` / `min_wal_size`: 96 MB / 32 MB; and
+- database plus retained WAL: 3,865,712,319 bytes, leaving
+  1,134,287,681 bytes on the configured 5 GB capacity.
+
+The three unauthorized sources are disabled in `source_registry` and excluded
+from the scheduled allowlist. Production readiness remained HTTP 200 and an
+anonymous metadata request remained HTTP 401 after the load.
+
+A read-only query against production returned one installed `pg_trgm`
+extension. The final Railway IaC plan reported that production was already up
+to date, and the readiness endpoint returned HTTP 200.
 
 ## Production monitoring
 
 `.github/workflows/production-monitor.yml` probes the product, legal, support,
 health, well-known, authentication-boundary, HSTS, and `nosniff` behavior every
-15 minutes and on manual dispatch. Activation evidence requires this branch to
-be merged, a manual workflow dispatch to pass, and at least one scheduled run
-to complete.
+15 minutes and on manual dispatch. Manual run `30276771772` completed
+successfully after the workflow was merged. Scheduled run `30281631480` then
+completed successfully for commit
+`cce7671dbe67a8b4342a7429c38e2c5aaebfee98`, independently proving the GitHub
+scheduler path.
