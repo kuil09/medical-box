@@ -588,6 +588,7 @@ def _sync_source_locked(
             db.execute(delete(DrugIdentification))
         for page, records, total in page_stream:
             pages = page
+            source_record_cache: dict[str, SourceRecord] | None = None
             product_cache: dict[str, DrugProduct] | None = None
             ingredient_cache: (
                 dict[tuple[str, str], DrugIngredient] | None
@@ -597,6 +598,21 @@ def _sync_source_locked(
             identification_variant_cache: (
                 dict[tuple[str, str], DrugIdentificationVariant] | None
             ) = None
+            if not source_records_are_absent:
+                page_record_keys = {
+                    record_key(source, payload)
+                    for payload in records
+                    if has_required_record_key(source, payload)
+                }
+                source_record_cache = {
+                    record.record_key: record
+                    for record in db.scalars(
+                        select(SourceRecord).where(
+                            SourceRecord.source_code == source.code,
+                            SourceRecord.record_key.in_(page_record_keys),
+                        )
+                    ).all()
+                }
             if source.kind != "dur":
                 page_item_sequences = {
                     sequence
@@ -683,14 +699,11 @@ def _sync_source_locked(
                     )
                 seen_keys.add(key)
                 seen_digests[key] = digest
-                existing = None
-                if not source_records_are_absent:
-                    existing = db.scalar(
-                        select(SourceRecord).where(
-                            SourceRecord.source_code == source.code,
-                            SourceRecord.record_key == key,
-                        )
-                    )
+                existing = (
+                    source_record_cache.get(key)
+                    if source_record_cache is not None
+                    else None
+                )
                 is_new = existing is None
                 unchanged = False
                 if existing is None:
@@ -705,12 +718,16 @@ def _sync_source_locked(
                     db.add(existing)
                 else:
                     unchanged = existing.content_hash == digest
-                    existing.content_hash = digest
-                    existing.payload = payload
+                    if not unchanged:
+                        existing.content_hash = digest
+                        existing.payload = payload
+                        existing.last_seen_run_id = run.id
+                        existing.last_seen_at = datetime.now(UTC)
+                    elif source.kind != "dur" or batch_dur_bootstrap:
+                        existing.last_seen_run_id = run.id
+                        existing.last_seen_at = datetime.now(UTC)
                     if source.kind != "dur":
                         existing.active = True
-                    existing.last_seen_run_id = run.id
-                    existing.last_seen_at = datetime.now(UTC)
                 if is_new or not unchanged or source.kind == "identification":
                     normalize(
                         db,
@@ -760,16 +777,28 @@ def _sync_source_locked(
                 .values(active=False)
             )
         elif not dur_rules_are_absent:
-            stale_source_records = select(SourceRecord.id).where(
-                SourceRecord.source_code == source.code,
-                SourceRecord.last_seen_run_id != run.id,
-            )
-            db.execute(
-                delete(DurRule).where(
-                    DurRule.source_code == source.code,
-                    DurRule.source_record_id.in_(stale_source_records),
+            stale_source_record_ids = [
+                record_id
+                for record_id, key in db.execute(
+                    select(SourceRecord.id, SourceRecord.record_key).where(
+                        SourceRecord.source_code == source.code,
+                    )
                 )
-            )
+                if key not in seen_keys
+            ]
+            for offset in range(0, len(stale_source_record_ids), 500):
+                stale_batch = stale_source_record_ids[offset : offset + 500]
+                db.execute(
+                    delete(DurRule).where(
+                        DurRule.source_code == source.code,
+                        DurRule.source_record_id.in_(stale_batch),
+                    )
+                )
+                db.execute(
+                    update(SourceRecord)
+                    .where(SourceRecord.id.in_(stale_batch))
+                    .values(active=False)
+                )
         if source.kind == "identification":
             active_source_record = (
                 select(SourceRecord.id)
