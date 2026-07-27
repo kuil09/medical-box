@@ -5,6 +5,7 @@ description = "Privacy-first API and Korean medicine catalog pipeline for Medica
 requires-python = ">=3.13"
 dependencies = [
   "alembic>=1.16.4,<2.0",
+  "boto3>=1.40.0,<2.0",
   "fastapi>=0.140.7,<1.0",
   "httpx>=0.28.1,<1.0",
   "openpyxl>=3.1.5,<4.0",
@@ -19,6 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "boto3-stubs[s3]>=1.40.0,<2.0",
   "mypy>=2.3.0,<3.0",
   "pytest>=9.1.1,<10.0",
   "pytest-cov>=7.1.0,<8.0",
@@ -28,6 +30,7 @@ dev = [
 
 [project.scripts]
 medical-box-access = "medical_box_api.access:app"
+medical-box-backup = "medical_box_api.backup.cli:app"
 medical-box-sync = "medical_box_api.catalog.sync:app"
 
 [build-system]

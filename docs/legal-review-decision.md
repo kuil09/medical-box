@@ -26,13 +26,14 @@ review.
 | Area | Decision | Required changes | Evidence reviewed |
 | --- | --- | --- | --- |
 | Medicine wording | Pending | Pending | Official detail and DUR screenshots |
-| Medical-device boundary | Pending | Pending | Architecture and feature inventory |
-| Overseas processing | Pending | Pending | Privacy notice and server schema |
-| Social login | Pending | Pending | Provider configuration and login flows |
-| Account deletion | Pending | Pending | Reauthentication and deletion flows |
-| Public-data reuse | Pending | Pending | Source registry and attribution surfaces |
-| Pill-image handling | Pending | Pending | Source-link and fallback behavior |
-| Emergency sharing | Pending | Pending | Selected-field preview and safety copy |
+| Medical-device intended-use boundary | Pending | Pending | Architecture and feature inventory |
+| Singapore and United States processing | Pending | Pending | Privacy notice and server schema |
+| Encrypted backup and restore processing | Pending | Pending | Backup architecture and restore evidence |
+| Social login disclosures | Pending | Pending | Provider configuration and login flows |
+| Account and device-data deletion | Pending | Pending | Reauthentication and deletion flows |
+| MFDS and HIRA reuse and attribution | Pending | Pending | Source registry and attribution surfaces |
+| Pill-image URL and hotlinking | Pending | Pending | Source-link and fallback behavior |
+| Emergency sharing language | Pending | Pending | Selected-field preview and safety copy |
 
 Each decision must be one of:
 

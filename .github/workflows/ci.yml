@@ -88,6 +88,7 @@ jobs:
       - run: uv run alembic upgrade head
       - run: PYTHONPATH=src uv run python scripts/export_openapi.py
       - run: git diff --exit-code openapi/openapi.json
+      - run: ./scripts/test_backup_roundtrip.sh
 
   product-design-prototype:
     needs: changes

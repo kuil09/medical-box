@@ -20,8 +20,9 @@ Evidence date: 2026-07-28
 - [x] Railway production plan reports no drift and no unexpected deletes
 - [x] API and PostgreSQL run in Railway Singapore
 - [ ] Railway-native or approved off-device daily, weekly, and monthly backups
-  enabled. Railway-native backups require a Pro-plan upgrade; no upgrade or
-  alternative destination has been authorized.
+  enabled. The encrypted bucket worker, signed manifests, retention logic, and
+  monthly disposable-restore workflow pass local validation; the Railway
+  bucket and dedicated Singapore restore runner still require owner approval.
 - [x] Disposable production-backup restore performed and documented within the
   current month
 - [x] `pg_trgm` activated once in production

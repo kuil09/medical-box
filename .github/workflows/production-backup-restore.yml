@@ -1,0 +1,79 @@
+name: Production backup restore verification
+
+on:
+  schedule:
+    - cron: "30 22 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-backup-restore
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: [self-hosted, linux, x64, medical-box-backup, singapore]
+    timeout-minutes: 45
+    environment: backup-restore
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: medical_box
+          POSTGRES_PASSWORD: restore-verification-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username postgres --dbname medical_box"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      APP_ENV: test
+      APP_ROLE: backup_verify
+      DATABASE_URL: postgresql://backup:unused@production.invalid:5432/medical_box
+      BACKUP_STORE: s3
+      BACKUP_PREFIX: medical-box/production
+      AWS_ENDPOINT_URL: ${{ secrets.AWS_ENDPOINT_URL }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
+      AWS_DEFAULT_REGION: sin
+      AWS_S3_ADDRESSING_STYLE: path
+      BACKUP_GPG_PRIVATE_KEY_BASE64: ${{ secrets.BACKUP_GPG_PRIVATE_KEY_BASE64 }}
+      BACKUP_GPG_PASSPHRASE: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
+      BACKUP_MANIFEST_HMAC_KEY_BASE64: ${{ secrets.BACKUP_MANIFEST_HMAC_KEY_BASE64 }}
+      BACKUP_RESTORE_DATABASE_URL: postgresql://postgres:restore-verification-only@127.0.0.1:5432/medical_box
+      BACKUP_RESTORE_CONFIRMATION: restore-disposable-database
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the pinned PostgreSQL 18 backup runtime
+        run: >-
+          docker build
+          --file services/backend/Dockerfile.backup
+          --tag medical-box-backup:restore
+          services/backend
+      - name: Restore and verify the newest signed backup
+        run: |
+          docker run --rm \
+            --network host \
+            --env APP_ENV \
+            --env APP_ROLE \
+            --env DATABASE_URL \
+            --env BACKUP_STORE \
+            --env BACKUP_PREFIX \
+            --env AWS_ENDPOINT_URL \
+            --env AWS_ACCESS_KEY_ID \
+            --env AWS_SECRET_ACCESS_KEY \
+            --env AWS_S3_BUCKET_NAME \
+            --env AWS_DEFAULT_REGION \
+            --env AWS_S3_ADDRESSING_STYLE \
+            --env BACKUP_GPG_PRIVATE_KEY_BASE64 \
+            --env BACKUP_GPG_PASSPHRASE \
+            --env BACKUP_MANIFEST_HMAC_KEY_BASE64 \
+            --env BACKUP_RESTORE_DATABASE_URL \
+            --env BACKUP_RESTORE_CONFIRMATION \
+            medical-box-backup:restore \
+            uv run --no-sync medical-box-backup verify --restore
