@@ -177,11 +177,12 @@ track an MFDS/data.go.kr request for a functioning HTTPS route; the HTTP route i
 an explicit upstream security exception, not a general allowance for plaintext
 API traffic.
 
-## Railway staging snapshot
+## Historical Railway acquisition snapshot
 
 The replacement staging database completed its first compact PostgreSQL import
 on 2026-07-27. This snapshot is independent of the earlier local SQLite
-measurements above.
+measurements above. The staging resources were temporary acquisition
+infrastructure and are no longer part of the deployed architecture.
 
 | Staging measurement | Count |
 | --- | ---: |
@@ -207,23 +208,55 @@ so finalization updates one run row instead of every raw record. PostgreSQL
 measurement was 3,607 MiB used and 992 MiB available on the 4,615 MiB usable
 filesystem.
 
-The API and catalog-sync services use the replacement database and their
-staging database password, JWT secret, and staging access key were rotated
-after deployment verification. The public-data service key must be reissued in
-the data.go.kr portal after its terminal exposure.
+The temporary API and catalog-sync services used the replacement database.
+Their database password, JWT secret, and staging access key were rotated after
+deployment verification. The public-data service key must be reissued in the
+data.go.kr portal after its terminal exposure.
 
 The replacement database and its 3.88 GB Railway volume were migrated from the
 temporary US West placement to `asia-southeast1-eqsg3a` on 2026-07-27. The
 post-migration deployment returned `SUCCESS`, the volume returned `READY`, and
 the API container reported HTTP 200 for `/api/health/ready`. Read-only
 validation reproduced 78,090 products, 860,199 DUR rules, the 256 MiB
-`max_wal_size`, and no running sync jobs. Anonymous catalog probes continued to
-return 404 without the staging key and 401 without user authentication.
+`max_wal_size`, and no running sync jobs. Anonymous catalog probes returned 404
+without the former staging key and 401 without user authentication.
 
 The recall endpoint is configured but returned HTTP 403 for the current public
 data key. Supply interruption and HIRA price access also remain unauthorized,
 and the HIRA standard-code source URL remains unresolved. These sources are not
 reported as loaded. Railway native daily, weekly, and monthly backup schedules
 also remain unset because the current API token or plan returned
-`Not Authorized`; configure them in the database service Backups tab before a
-beta release.
+`Not Authorized`; configure production backups in the database service Backups
+tab before a beta release.
+
+## Production promotion and retirement evidence
+
+The validated catalog was copied into production from a repeatable-read source
+snapshot on 2026-07-27. The operation replaced only the 13 catalog tables and
+left the four account/authentication tables intact.
+
+| Production measurement | Count |
+| --- | ---: |
+| Products | 78,090 |
+| Product ingredients | 89,697 |
+| Consumer-information rows | 4,739 |
+| Identification representatives | 25,346 |
+| Identification variants | 25,363 |
+| DUR rules | 860,199 |
+| Raw source records | 1,102,783 |
+
+Row counts and canonical JSONB fingerprints matched the source for all 13
+catalog tables. Authentication row fingerprints also matched a disposable
+restore of the pre-promotion logical backup. Production API checks passed for
+readiness, entitlement enforcement, metadata, search, detail, and DUR routes.
+
+The production database measured 3,472,725,695 bytes after promotion. Database
+plus WAL measured 3,556,611,775 bytes on the 5 GB volume. This is sufficient
+for serving the current snapshot but not evidence that a full refresh can run
+within the same volume: the historical refresh generated large transient WAL.
+Automated full refresh therefore remains disabled until storage or the
+replacement transaction strategy is expanded.
+
+After these checks, the staging domain, services, databases, volumes, and
+Railway environment were authorized for deletion. The production database is
+the sole persistent catalog source.

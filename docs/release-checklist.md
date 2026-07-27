@@ -15,12 +15,12 @@
 
 ## Infrastructure gates
 
-- Railway plan reviewed for staging and production with no unexpected deletes
-- API, catalog cron, and PostgreSQL isolated by environment in Singapore
-- Distinct issuer, audience, signing key, staging access key, and database
+- Railway production plan reviewed with no unexpected deletes
+- API and PostgreSQL run in Railway Singapore
 - Daily, weekly, and monthly backups enabled
-- Staging restore performed and documented within the current month
-- `pg_trgm` activated once per database
+- Disposable production-backup restore performed and documented within the
+  current month
+- `pg_trgm` activated once in production
 - DNS CNAME, automatic TLS, HSTS, allowed-host filtering, web/legal/API/health,
   and both `/.well-known` paths verified
 
