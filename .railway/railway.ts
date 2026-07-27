@@ -132,7 +132,6 @@ export default defineRailway((ctx) => {
     deploy: {
       cronSchedule: "10 18 * * *",
       restartPolicyType: "NEVER",
-      restartPolicyMaxRetries: 1,
     },
     env: {
       ...catalogRuntimeEnv,
