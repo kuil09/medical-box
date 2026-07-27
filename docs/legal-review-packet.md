@@ -7,6 +7,13 @@ not legal advice and does not record legal approval. A qualified Korean reviewer
 must sign off on every item in the final decision table before external beta
 distribution.
 
+The legal-source check was refreshed on 2026-07-27 against:
+
+- Personal Information Protection Act Article 28-8, effective 2025-10-02;
+- Medical Devices Act Article 2, effective 2026-07-01;
+- Railway's Privacy Policy, effective 2026-04-20; and
+- Railway's current Data Processing Addendum.
+
 ## Product boundary
 
 Medical Box is a device-local household medicine organizer with an optional
@@ -41,7 +48,24 @@ The reviewer should confirm that the following product rules are sufficient:
 
 The optional account may contain provider subject, provider name, display name,
 and email address. Railway hosts the account and public catalog database in
-Singapore. The reviewer must confirm:
+Singapore, while Railway states that its primary processing operations take
+place in the United States. Railway Corporation is the processor named in its
+DPA, at 548 Market St PMB 68956, San Francisco, California 94104, reachable at
+`privacy@railway.com`.
+
+Article 28-8 permits overseas processing necessary to perform a contract when
+the prescribed facts are disclosed in the privacy policy or notified to the
+data subject. The final notice must identify:
+
+- the transferred account fields;
+- Singapore and any additional country in which Railway or an authorized
+  subprocessor processes the data;
+- transfer timing and method;
+- Railway Corporation's name and contact details;
+- processing purpose and retention period; and
+- the refusal method, procedure, and consequence.
+
+The reviewer must confirm:
 
 - the legal basis and required consent or notice for transferring this minimal
   account information to Singapore;
@@ -63,6 +87,21 @@ for MFDS and HIRA records. Pill image binaries are not copied to owned storage.
 The app renders source-provided URLs with a failure fallback. The review must
 determine whether hotlinking and local encrypted storage of a selected image URL
 and appearance summary are permitted.
+
+The HIRA standard-code file is licensed under Korea Open Government License Type
+1 and requires attribution. The current file is annual and the portal states
+that deleted reimbursement entries remain in the mapping, so the product must
+not describe the mapping as proof of current reimbursement eligibility.
+
+## Medical-product classification boundary
+
+The Medical Devices Act definition expressly includes software used for
+diagnosis, treatment, mitigation, management, or prevention. The reviewer should
+confirm that the implemented organizer and unmodified official-reference
+surfaces remain outside that intended-use boundary. Any future feature that
+evaluates a person against DUR rules, calculates a dose, identifies a pill with
+diagnostic certainty, recommends treatment, or predicts a medical outcome must
+trigger a new classification review before implementation.
 
 ## Store and account deletion disclosures
 

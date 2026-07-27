@@ -10,10 +10,12 @@ from sqlalchemy import event, func, select
 from medical_box_api.catalog.fetcher import PublicDataFetcher, SourceResponseError
 from medical_box_api.catalog.sources import SourceDefinition, official_sources
 from medical_box_api.catalog.sync import (
+    _require_catalog_storage_headroom,
     canonical_hash,
     ingredient_rows,
     item_seq,
     record_key,
+    seed_source_registry,
     sync_source,
 )
 from medical_box_api.config import Settings
@@ -27,6 +29,8 @@ from medical_box_api.models import (
     DrugProduct,
     DurRule,
     SourceRecord,
+    SourceRegistry,
+    SyncCheckpoint,
     SyncRun,
 )
 
@@ -215,6 +219,38 @@ def test_all_dur_rule_streams_are_registered() -> None:
         "extended_release_split_caution",
         "pregnancy_contraindication",
     }
+
+
+def test_catalog_sync_source_allowlist_is_normalized() -> None:
+    settings = Settings(
+        _env_file=None,
+        catalog_sync_source_allowlist="mfds_product, mfds_easy, mfds_product",
+    )
+
+    assert settings.catalog_sync_source_allowlist_set == {
+        "mfds_product",
+        "mfds_easy",
+    }
+
+
+def test_source_registry_disables_sources_outside_sync_allowlist() -> None:
+    reset_database()
+    excluded = replace(source(), code="excluded")
+    with SessionLocal() as database:
+        seed_source_registry(
+            database,
+            [source(), excluded],
+            enabled_codes={"test"},
+        )
+
+        assert database.scalar(
+            select(SourceRegistry.enabled).where(SourceRegistry.code == "test")
+        )
+        assert not database.scalar(
+            select(SourceRegistry.enabled).where(
+                SourceRegistry.code == "excluded"
+            )
+        )
 
 
 def test_dur_stream_assigns_explicit_rule_type() -> None:
@@ -553,20 +589,32 @@ def test_xlsx_header_and_rows_are_detected() -> None:
 
 def test_unchanged_standard_code_file_is_not_reloaded() -> None:
     class FileFetcher(PublicDataFetcher):
-        def tabular_file(
+        def tabular_file_pages(
             self,
             source: SourceDefinition,
-        ) -> tuple[str, str | None, list[dict[str, object]]]:
+        ) -> tuple[
+            str,
+            str | None,
+            Iterator[tuple[int, list[dict[str, object]], int]],
+        ]:
             return (
                 "a" * 64,
                 "Fri, 25 Jul 2026 00:00:00 GMT",
-                [
-                    {
-                        "표준코드": "8801234567890",
-                        "품목기준코드": "123456789",
-                        "품목명": "테스트정",
-                    }
-                ],
+                iter(
+                    [
+                        (
+                            1,
+                            [
+                                {
+                                    "표준코드": "8801234567890",
+                                    "품목기준코드": "123456789",
+                                    "품목명": "테스트정",
+                                }
+                            ],
+                            1,
+                        )
+                    ]
+                ),
             )
 
     reset_database()
@@ -584,6 +632,95 @@ def test_unchanged_standard_code_file_is_not_reloaded() -> None:
         assert second.status == "skipped"
         assert database.scalar(select(func.count()).select_from(DrugCode)) == 1
         assert database.scalar(select(SourceRecord.last_seen_run_id)) == first_seen_run
+
+
+def test_standard_code_bootstrap_is_quarantined_until_complete() -> None:
+    class BootstrapFileFetcher(PublicDataFetcher):
+        def __init__(self, *, fail_after_page: int | None = None) -> None:
+            super().__init__("")
+            self.fail_after_page = fail_after_page
+
+        def tabular_file_pages(
+            self,
+            source: SourceDefinition,
+        ) -> tuple[
+            str,
+            str | None,
+            Iterator[tuple[int, list[dict[str, object]], int]],
+        ]:
+            def pages() -> Iterator[tuple[int, list[dict[str, object]], int]]:
+                for page in range(1, 13):
+                    if self.fail_after_page == page:
+                        raise SourceResponseError("simulated file interruption")
+                    yield (
+                        page,
+                        [
+                            {
+                                "표준코드": f"8801234567{page:03d}",
+                                "품목기준코드": f"12345{page:04d}",
+                                "품목명": f"테스트정 {page}",
+                            }
+                        ],
+                        12,
+                    )
+
+            return (
+                "b" * 64,
+                "Fri, 25 Jul 2026 00:00:00 GMT",
+                pages(),
+            )
+
+    reset_database()
+    standard_code_source = replace(
+        source(),
+        kind="code",
+        record_key_fields=("표준코드",),
+    )
+    with SessionLocal() as database:
+        with pytest.raises(SourceResponseError, match="simulated file interruption"):
+            sync_source(
+                database,
+                standard_code_source,
+                BootstrapFileFetcher(fail_after_page=11),
+            )
+
+        assert (
+            database.scalar(select(func.count()).select_from(SourceRecord)) == 10
+        )
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(SourceRecord)
+                .join(SyncRun, SyncRun.id == SourceRecord.last_seen_run_id)
+                .where(SyncRun.status == "succeeded")
+            )
+            == 0
+        )
+        assert database.scalar(select(func.count()).select_from(DrugProduct)) == 0
+        checkpoint = database.get(SyncCheckpoint, standard_code_source.code)
+        assert checkpoint is not None
+        assert checkpoint.content_hash is None
+
+        completed = sync_source(
+            database,
+            standard_code_source,
+            BootstrapFileFetcher(),
+        )
+
+        assert completed.status == "succeeded"
+        assert completed.record_count == 12
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(SourceRecord)
+                .where(SourceRecord.active.is_(True))
+            )
+            == 12
+        )
+        assert database.scalar(select(func.count()).select_from(DrugCode)) == 12
+        assert database.scalar(select(func.count()).select_from(DrugProduct)) == 0
+        database.refresh(checkpoint)
+        assert checkpoint.content_hash == "b" * 64
 
 
 def test_duplicate_and_missing_record_keys_fail_without_publishing() -> None:
@@ -755,6 +892,54 @@ def test_unchanged_dur_snapshot_keeps_successful_record_run_ids() -> None:
         assert second_run.status == "succeeded"
         assert source_record.last_seen_run_id == first_run.id
         assert database.scalar(select(func.count()).select_from(DurRule)) == 1
+
+
+def test_unchanged_product_snapshot_avoids_writes_and_reactivates_returns() -> None:
+    reset_database()
+    records = [
+        {"itemSeq": "1", "itemName": "First"},
+        {"itemSeq": "2", "itemName": "Second"},
+    ]
+    with SessionLocal() as database:
+        first_run = sync_source(database, source(), RecordFetcher(records))
+        second_record = database.scalar(
+            select(SourceRecord).where(SourceRecord.record_key == "2")
+        )
+        assert second_record is not None
+        assert second_record.last_seen_run_id == first_run.id
+
+        sync_source(database, source(), RecordFetcher(records))
+        database.refresh(second_record)
+        assert second_record.last_seen_run_id == first_run.id
+        assert second_record.active is True
+
+        sync_source(database, source(), RecordFetcher(records[:1]))
+        database.refresh(second_record)
+        assert second_record.active is False
+
+        return_run = sync_source(database, source(), RecordFetcher(records))
+        database.refresh(second_record)
+        assert second_record.active is True
+        assert second_record.last_seen_run_id == return_run.id
+
+
+def test_catalog_storage_reserve_stops_sync_before_capacity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "medical_box_api.catalog.sync.get_settings",
+        lambda: Settings(
+            _env_file=None,
+            catalog_database_capacity_bytes=1_000,
+            catalog_min_free_bytes=300,
+        ),
+    )
+    monkeypatch.setattr(
+        "medical_box_api.catalog.sync._postgres_storage_usage_bytes",
+        lambda database: 800,
+    )
+    with SessionLocal() as database, pytest.raises(RuntimeError, match="storage"):
+        _require_catalog_storage_headroom(database, "test")
 
 
 def test_product_sync_prefetches_each_page_in_one_query() -> None:

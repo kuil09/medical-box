@@ -1,6 +1,8 @@
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from sqlalchemy import inspect
 
 from medical_box_api.config import Settings, get_settings
@@ -37,6 +39,23 @@ def test_railway_postgres_url_uses_psycopg_v3() -> None:
         database_url="postgresql://user:password@postgres.railway.internal:5432/railway"
     )
     assert settings.database_url.startswith("postgresql+psycopg://")
+
+
+def test_production_catalog_worker_does_not_require_api_jwt_secret() -> None:
+    worker_settings = Settings(
+        _env_file=None,
+        app_env="production",
+        app_role="catalog_sync",
+    )
+    assert worker_settings.app_role == "catalog_sync"
+
+    with pytest.raises(ValidationError, match="JWT_SECRET"):
+        Settings(
+            _env_file=None,
+            app_env="production",
+            app_role="api",
+            jwt_secret="short",
+        )
 
 
 def test_web_health_and_security_headers(client: TestClient) -> None:
