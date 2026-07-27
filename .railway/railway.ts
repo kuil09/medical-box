@@ -3,6 +3,7 @@ import {
   github,
   group,
   postgres,
+  preserve,
   project,
   service,
 } from "railway/iac";
@@ -49,22 +50,19 @@ export default defineRailway((ctx) => {
     JWT_AUDIENCE: production
       ? "com.medicalbox.app"
       : "com.medicalbox.app.staging",
-    JWT_SECRET: ctx.shared.JWT_SECRET,
-    CATALOG_ACCESS_EMAIL_ALLOWLIST:
-      ctx.shared.CATALOG_ACCESS_EMAIL_ALLOWLIST,
-    DATA_GO_KR_SERVICE_KEY: ctx.shared.DATA_GO_KR_SERVICE_KEY,
-    GOOGLE_CLIENT_ID: ctx.shared.GOOGLE_CLIENT_ID,
+    JWT_SECRET: preserve(),
+    CATALOG_ACCESS_EMAIL_ALLOWLIST: preserve(),
+    DATA_GO_KR_SERVICE_KEY: preserve(),
+    GOOGLE_CLIENT_ID: preserve(),
     APPLE_CLIENT_ID: "com.medicalbox.app",
-    KAKAO_APP_ID: ctx.shared.KAKAO_APP_ID,
-    APPLE_TEAM_ID: ctx.shared.APPLE_TEAM_ID,
-    ANDROID_CERT_SHA256: ctx.shared.ANDROID_CERT_SHA256,
-    MFDS_RECALL_URL: ctx.shared.MFDS_RECALL_URL,
-    MFDS_SHORTAGE_URL: ctx.shared.MFDS_SHORTAGE_URL,
-    HIRA_PRICE_URL: ctx.shared.HIRA_PRICE_URL,
-    HIRA_STANDARD_CODE_URL: ctx.shared.HIRA_STANDARD_CODE_URL,
-    ...(staging
-      ? { STAGING_ACCESS_KEY: ctx.shared.STAGING_ACCESS_KEY }
-      : {}),
+    KAKAO_APP_ID: preserve(),
+    APPLE_TEAM_ID: preserve(),
+    ANDROID_CERT_SHA256: preserve(),
+    MFDS_RECALL_URL: preserve(),
+    MFDS_SHORTAGE_URL: preserve(),
+    HIRA_PRICE_URL: preserve(),
+    HIRA_STANDARD_CODE_URL: preserve(),
+    ...(staging ? { STAGING_ACCESS_KEY: preserve() } : {}),
   };
 
   const api = service("medical-box", {
@@ -85,7 +83,6 @@ export default defineRailway((ctx) => {
     healthcheckTimeout: 300,
     replicas: { [SINGAPORE]: 1 },
     deploy: {
-      restartPolicyType: "ON_FAILURE",
       restartPolicyMaxRetries: 5,
       overlapSeconds: 20,
       drainingSeconds: 15,

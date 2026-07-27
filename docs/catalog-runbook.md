@@ -212,6 +212,14 @@ staging database password, JWT secret, and staging access key were rotated
 after deployment verification. The public-data service key must be reissued in
 the data.go.kr portal after its terminal exposure.
 
+The replacement database and its 3.88 GB Railway volume were migrated from the
+temporary US West placement to `asia-southeast1-eqsg3a` on 2026-07-27. The
+post-migration deployment returned `SUCCESS`, the volume returned `READY`, and
+the API container reported HTTP 200 for `/api/health/ready`. Read-only
+validation reproduced 78,090 products, 860,199 DUR rules, the 256 MiB
+`max_wal_size`, and no running sync jobs. Anonymous catalog probes continued to
+return 404 without the staging key and 401 without user authentication.
+
 The recall endpoint is configured but returned HTTP 403 for the current public
 data key. Supply interruption and HIRA price access also remain unauthorized,
 and the HIRA standard-code source URL remains unresolved. These sources are not
