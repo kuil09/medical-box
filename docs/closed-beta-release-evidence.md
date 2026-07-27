@@ -117,6 +117,9 @@ flow passed after rebuilding and reinstalling the application.
 - Alembic upgrade to head: passed.
 - OpenAPI regeneration and committed-spec diff: passed.
 - Railway TypeScript IaC compilation: passed.
+- GitHub Actions run `30244655755`: all five jobs passed
+  (`backend`, `flutter`, `flutter-ios`, `infrastructure`, and
+  `product-design-prototype`).
 
 The first local iOS no-codesign attempt was blocked by Finder metadata on the
 generated Flutter framework under the local Documents directory. Removing that
