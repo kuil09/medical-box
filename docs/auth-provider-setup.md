@@ -41,6 +41,11 @@ console configuration is required before the flows can complete.
 Provider success, cancellation, expiry, forged signature, and wrong-audience
 cases must all be tested on both platforms before external beta.
 
+The protected `Mobile release build` workflow injects provider configuration
+into signed store artifacts and fails before compilation when any required
+provider value is absent. See `docs/mobile-release-runbook.md` for the signing
+and artifact boundary.
+
 After a provider console is configured, run the deployment probe with a
 short-lived ID token from an operator-controlled beta account. Keep every token
 in the process environment and never place one on the command line or in a

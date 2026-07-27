@@ -34,7 +34,9 @@ fvm dart run build_runner build --delete-conflicting-outputs
 fvm flutter analyze
 fvm flutter test
 fvm flutter build apk --debug
-fvm flutter build ios --no-codesign
+ORG_GRADLE_PROJECT_MEDICAL_BOX_ALLOW_UNSIGNED_RELEASE=true \
+  fvm flutter build appbundle --release
+fvm flutter build ios --release --no-codesign
 ```
 
 Local Android emulator QA may inject
@@ -49,3 +51,15 @@ the Medical Box Google Cloud project is registered in `Info.plist`. Kakao
 builds must provide `KAKAO_NATIVE_APP_KEY` both as a build environment variable
 and a Dart define. Provider client IDs are configuration values, not secrets;
 the IDs used by Dart remain environment-specific build inputs.
+
+## Release artifacts
+
+Android distribution builds require `android/key.properties` and the referenced
+upload keystore. Gradle rejects a release task when signing is incomplete;
+`MEDICAL_BOX_ALLOW_UNSIGNED_RELEASE=true` exists only for compile-only CI and
+must never be used for a store artifact.
+
+iOS release builds read the Kakao callback value from the ignored
+`ios/Flutter/ReleaseSecrets.xcconfig`. Signed AAB and IPA artifacts are produced
+only by the protected `Mobile release build` workflow described in
+`docs/mobile-release-runbook.md`.

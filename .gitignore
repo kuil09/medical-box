@@ -5,6 +5,11 @@
 *.medicalbox
 *.pem
 *.p8
+*.jks
+*.keystore
+apps/mobile/android/key.properties
+apps/mobile/ios/Flutter/LocalSecrets.xcconfig
+apps/mobile/ios/Flutter/ReleaseSecrets.xcconfig
 .backups/
 GoogleService-Info.plist
 google-services.json
