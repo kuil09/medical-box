@@ -5,10 +5,10 @@ Evidence date: 2026-07-27
 ## Scope
 
 This record covers the requested authentication and catalog entitlement
-boundary, mobile application QA, production API rollout, and legal-review
-preparation. Public-data key acquisition, database backup or `pg_trgm`
-operations, and acquisition of additional official catalog sources were
-explicitly excluded from this pass.
+boundary, mobile application QA, production API rollout, legal-review
+preparation, and the production backup/restore verification recorded in
+`docs/production-backup-restore.md`. Acquisition of additional official catalog
+sources remains a separate release gate.
 
 ## Production deployment
 
@@ -69,13 +69,20 @@ Android debug, and iOS OAuth clients were created. The Web client ID is
 configured on the Railway production API service, and a forged Google token
 receives HTTP 401 instead of a missing-configuration HTTP 503.
 
-Real Google provider exchange is not yet release evidence. The configured
-Android client is restricted to `com.medicalbox.app` and the current local debug
-certificate. A separate Android client must be created after the Play App
-Signing SHA-1 is available. The emulator reached Google's account sign-in
-surface, but credential entry remains a user-only step. Production Kakao and
-Apple verification identifiers are also incomplete. Until a real beta-account
-probe passes for each enabled provider, social-login E2E remains blocked.
+The Android emulator restored a real Google production session for the only
+current production account. The Settings login surface reported that catalog
+permission was confirmed. The same session opened the official detail for
+`핀테정(에포니디핀염산염)`, rendered both pill variants and three DUR categories,
+and loaded the `용량주의 · 공고 2014.10.24` rule from production. This is live
+evidence for Google session restoration, `catalog:read` entitlement, product
+detail, appearance variants, and DUR detail. The captured artifact is
+`design/audit/flutter-09-google-production-dur.png`.
+
+The configured Android client is restricted to `com.medicalbox.app` and the
+current local debug certificate. A separate Android client must be created after
+the Play App Signing SHA-1 is available. Production Kakao and Apple verification
+identifiers remain incomplete. Account-deletion E2E must use a disposable beta
+account rather than deleting the only entitled production identity.
 
 ## Android application QA
 
@@ -104,7 +111,9 @@ Observed passing flows:
   target; and
 - the pre-configuration Google flow reached the platform Google account
   sign-in screen; the source now requires an explicit Web client ID before
-  starting that flow so a build cannot continue into a backend HTTP 503.
+  starting that flow so a build cannot continue into a backend HTTP 503; and
+- a restored real Google production session opened a permissioned official
+  detail and expanded a live DUR rule.
 
 The first family-add run exposed a Flutter framework assertion caused by
 disposing a dialog `TextEditingController` before the route transition had
@@ -121,7 +130,7 @@ flow passed after rebuilding and reinstalling the application.
 - iOS release no-codesign build: passed.
 - Backend Ruff: passed.
 - Backend MyPy strict mode: passed.
-- Backend Pytest: 32 passed.
+- Backend Pytest: 38 passed.
 - Alembic upgrade to head: passed.
 - OpenAPI regeneration and committed-spec diff: passed.
 - Railway TypeScript IaC compilation: passed.
@@ -145,6 +154,26 @@ This preparation is not legal approval. External beta promotion remains blocked
 until a qualified Korean reviewer records dated approval and any required edits
 are implemented and reverified.
 
+## Store-account gates
+
+The Google Play Console account `lv0gun9` reports that the developer profile and
+all apps were deleted after the account-verification deadline on 2024-08-19.
+The Create app action is disabled. Internal testing cannot be created until the
+account owner completes Google Play developer-account recovery or establishes a
+verified replacement account.
+
+App Store Connect reached the Apple sign-in page, but the available passkey
+attempt returned an error. The local project has valid Apple Development and
+Apple Distribution identities for team `GS344U4ZSG`, automatic signing, and
+bundle identifier `com.medicalbox.app`. TestFlight work remains blocked until
+the account owner completes Apple sign-in and two-factor authentication in the
+existing browser session.
+
+The Kakao Developers console is signed out. Railway production also lacks
+`KAKAO_APP_ID`, `APPLE_TEAM_ID`, and the release `ANDROID_CERT_SHA256`. Kakao
+application registration and the final Apple/Android identifiers require the
+respective authenticated provider and store accounts.
+
 ## Catalog promotion and staging retirement
 
 On 2026-07-27, the validated catalog was promoted into the production
@@ -161,5 +190,18 @@ the 5 GB volume.
 
 The staging Railway environment and its custom domain, catalog-sync service,
 databases, and volumes were then retired. Production is the only persistent
-Railway environment. Automated full-catalog refresh remains disabled until
-capacity or transaction changes provide safe transient storage headroom.
+Railway environment.
+
+An isolated PostgreSQL 18 restore subsequently loaded the official HIRA
+standard-code file: 305,522 rows succeeded in 43.08 seconds, product count stayed
+at 78,090, no index became invalid, and measured database growth was
+358,203,392 bytes. The production cron and first production load require the
+run-gated ingestion deployment and the documented 96 MB PostgreSQL WAL limit.
+
+## Production monitoring
+
+`.github/workflows/production-monitor.yml` probes the product, legal, support,
+health, well-known, authentication-boundary, HSTS, and `nosniff` behavior every
+15 minutes and on manual dispatch. Activation evidence requires this branch to
+be merged, a manual workflow dispatch to pass, and at least one scheduled run
+to complete.

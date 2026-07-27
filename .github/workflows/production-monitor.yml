@@ -1,0 +1,72 @@
+name: Production monitor
+
+on:
+  schedule:
+    - cron: "3,18,33,48 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-monitor
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify public routes and security boundaries
+        env:
+          ORIGIN: https://medicalbox.outoftokens.ai
+        run: |
+          set -euo pipefail
+
+          probe_status() {
+            local path="$1"
+            local expected="$2"
+            local actual
+            actual="$(curl \
+              --silent \
+              --show-error \
+              --location \
+              --retry 3 \
+              --retry-all-errors \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --output /dev/null \
+              --write-out "%{http_code}" \
+              "${ORIGIN}${path}")"
+            if [[ "${actual}" != "${expected}" ]]; then
+              echo "::error title=Production probe failed::${path} returned ${actual}; expected ${expected}."
+              return 1
+            fi
+          }
+
+          probe_status "/" "200"
+          probe_status "/privacy" "200"
+          probe_status "/terms" "200"
+          probe_status "/support" "200"
+          probe_status "/account-deletion" "200"
+          probe_status "/api/health/live" "200"
+          probe_status "/api/health/ready" "200"
+          probe_status "/.well-known/apple-app-site-association" "200"
+          probe_status "/.well-known/assetlinks.json" "200"
+          probe_status "/api/v1/catalog/meta" "401"
+
+          headers="$(mktemp)"
+          curl \
+            --silent \
+            --show-error \
+            --location \
+            --retry 3 \
+            --retry-all-errors \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --dump-header "${headers}" \
+            --output /dev/null \
+            "${ORIGIN}/api/health/ready"
+
+          grep --ignore-case --quiet "^strict-transport-security:" "${headers}"
+          grep --ignore-case --quiet "^x-content-type-options: nosniff" "${headers}"

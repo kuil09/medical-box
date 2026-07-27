@@ -31,10 +31,24 @@ are intentionally excluded.
 - Recurring DUR runs prefetch raw records once per page and do not rewrite
   unchanged records. This prevents a large unchanged source from generating a
   full-table WAL burst.
+- Recurring non-DUR runs also leave unchanged `source_records` untouched.
+  Returning and stale records are updated in bounded batches, avoiding a
+  full-source `last_seen_run_id` rewrite on every refresh.
+- Production synchronization measures PostgreSQL database plus WAL bytes before
+  acquisition and after every page. It aborts before the configured
+  `CATALOG_MIN_FREE_BYTES` reserve is crossed.
 - HIRA standard-code downloads accept CSV, XLSX, or ZIP containers, detect
-  Korean header rows, and are capped at 250 MiB per file.
+  Korean header rows, stream CSV rows in 500-record pages, and are capped at
+  250 MiB per file.
 - A standard-code file whose SHA-256 matches its checkpoint is recorded as
   skipped and does not update source rows or normalized codes.
+- The first standard-code load commits bounded run-gated batches. A failed run
+  cannot become a successful source snapshot, its checkpoint hash is not
+  published, and a retry can reuse quarantined rows without exposing partial
+  products through search.
+- Code, price, status, and DUR records never create placeholder products.
+  Product search is populated only by product, ingredient, consumer, and
+  identification sources.
 - Product ingredients are normalized from structured ingredient fields when
   available and conservatively split from known flat MFDS ingredient fields.
 - DUR product and ingredient operations are synchronized as 16 independent
@@ -99,10 +113,11 @@ raw-payload retention is not storage-neutral. Production capacity planning must
 therefore use measured payload size rather than product count.
 
 The latest HIRA standard-code file published at this checkpoint is the
-2025-10-31 CSV with 298,183 rows. The portal permits the original file to be
-downloaded without login, but its generated OpenAPI still requires a separate
-application. The production job should prefer the original file and record its
-download hash.
+2025-10 CSV. Its original 54,880,067-byte download contains 305,522 data rows
+and has SHA-256
+`8f177ced6a93fefa439535125aeb4f626e9d386fa5700271094ca26bdcb50ff0`.
+The portal permits the original file to be downloaded without login. The
+production job uses that file and records its download hash.
 
 At the same checkpoint, e약은요 was approved, its gateway access had propagated,
 and the full 4,757-record run succeeded. Supply interruption and HIRA price
@@ -221,13 +236,13 @@ validation reproduced 78,090 products, 860,199 DUR rules, the 256 MiB
 `max_wal_size`, and no running sync jobs. Anonymous catalog probes returned 404
 without the former staging key and 401 without user authentication.
 
-The recall endpoint is configured but returned HTTP 403 for the current public
-data key. Supply interruption and HIRA price access also remain unauthorized,
-and the HIRA standard-code source URL remains unresolved. These sources are not
-reported as loaded. Railway native daily, weekly, and monthly backup schedules
-also remain unset because the current API token or plan returned
-`Not Authorized`; configure production backups in the database service Backups
-tab before a beta release.
+The current recall endpoint is
+`MdcinRtrvlSleStpgeInfoService04/getMdcinRtrvlSleStpgelList03`, but it returned
+HTTP 403 for the production public-data key. Supply interruption and HIRA price
+access also remain unauthorized. These three sources are excluded from the
+scheduled allowlist and are not reported as loaded. Railway native daily,
+weekly, and monthly backup schedules remain unavailable on the current Hobby
+plan; see `docs/production-backup-restore.md`.
 
 ## Production promotion and retirement evidence
 
@@ -256,6 +271,44 @@ for serving the current snapshot but not evidence that a full refresh can run
 within the same volume: the historical refresh generated large transient WAL.
 Automated full refresh therefore remains disabled until storage or the
 replacement transaction strategy is expanded.
+
+The replacement synchronization strategy avoids writes for unchanged non-DUR
+records, updates stale rows in 500-row batches, and enforces a 750,000,000-byte
+database-plus-WAL reserve against the configured 5,000,000,000-byte capacity.
+Its unit and ingestion regression tests pass.
+
+## Standard-code production canary
+
+A fresh production dump was restored into an isolated PostgreSQL 18 container
+on 2026-07-27. The official 305,522-row HIRA file was then ingested with the
+same source code and schema intended for production.
+
+| Measurement | Result |
+| --- | ---: |
+| Run status | succeeded |
+| Elapsed time | 43.08 seconds |
+| Peak resident memory | 407,977,984 bytes |
+| Database growth | 358,203,392 bytes |
+| WAL generated over the run | 2,047,342,600 bytes |
+| WAL retained with `max_wal_size=96MB` | 100,663,296 bytes |
+| Active standard-code raw records | 305,522 |
+| Normalized standard codes | 305,522 |
+| Product count before and after | 78,090 |
+| Invalid indexes | 0 |
+
+The first single-transaction implementation generated approximately 1.86 GB of
+WAL and was rejected for production. The final implementation commits bounded
+bootstrap pages behind the owning `sync_runs.status == "succeeded"` visibility
+gate and does not create incomplete products. Applying the measured database
+growth and 96 MiB retained WAL to the production baseline predicts
+3,931,592,383 bytes in use, leaving 1,068,407,617 bytes on the configured 5 GB
+capacity. This preserves the 750 MB synchronization reserve with approximately
+318 MB additional margin.
+
+The production PostgreSQL `max_wal_size` must be changed from 1 GB to 96 MB
+before the first standard-code run and verified after it. The approved-source
+cron runs at `18:10 UTC` and excludes recall, supply interruption, and price
+until their production API applications return authorized responses.
 
 After these checks, the staging domain, services, databases, volumes, and
 Railway environment were authorized for deletion. The production database is
