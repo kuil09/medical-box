@@ -119,12 +119,17 @@ jobs:
         env:
           FLUTTER_COMMIT: 84fc5cbb223bc12f83d65b647ff8a56caf779ffd # 3.44.7
           FLUTTER_HOME: ${{ runner.temp }}/flutter
+          FLUTTER_VERSION: 3.44.7
         run: |
           set -euo pipefail
           git init "${FLUTTER_HOME}"
           git -C "${FLUTTER_HOME}" remote add origin https://github.com/flutter/flutter.git
-          git -C "${FLUTTER_HOME}" fetch --depth 1 origin "${FLUTTER_COMMIT}"
-          git -C "${FLUTTER_HOME}" checkout --detach FETCH_HEAD
+          git -C "${FLUTTER_HOME}" fetch \
+            --depth 1 \
+            origin \
+            "refs/tags/${FLUTTER_VERSION}:refs/tags/${FLUTTER_VERSION}"
+          git -C "${FLUTTER_HOME}" checkout --detach "refs/tags/${FLUTTER_VERSION}"
+          test "$(git -C "${FLUTTER_HOME}" rev-parse HEAD)" = "${FLUTTER_COMMIT}"
           echo "${FLUTTER_HOME}/bin" >> "${GITHUB_PATH}"
           "${FLUTTER_HOME}/bin/flutter" config --no-analytics
       - run: flutter pub get
@@ -148,12 +153,17 @@ jobs:
         env:
           FLUTTER_COMMIT: 84fc5cbb223bc12f83d65b647ff8a56caf779ffd # 3.44.7
           FLUTTER_HOME: ${{ runner.temp }}/flutter
+          FLUTTER_VERSION: 3.44.7
         run: |
           set -euo pipefail
           git init "${FLUTTER_HOME}"
           git -C "${FLUTTER_HOME}" remote add origin https://github.com/flutter/flutter.git
-          git -C "${FLUTTER_HOME}" fetch --depth 1 origin "${FLUTTER_COMMIT}"
-          git -C "${FLUTTER_HOME}" checkout --detach FETCH_HEAD
+          git -C "${FLUTTER_HOME}" fetch \
+            --depth 1 \
+            origin \
+            "refs/tags/${FLUTTER_VERSION}:refs/tags/${FLUTTER_VERSION}"
+          git -C "${FLUTTER_HOME}" checkout --detach "refs/tags/${FLUTTER_VERSION}"
+          test "$(git -C "${FLUTTER_HOME}" rev-parse HEAD)" = "${FLUTTER_COMMIT}"
           echo "${FLUTTER_HOME}/bin" >> "${GITHUB_PATH}"
           "${FLUTTER_HOME}/bin/flutter" config --no-analytics
       - run: flutter pub get
