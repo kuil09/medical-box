@@ -93,29 +93,34 @@ export default defineRailway((ctx) => {
     },
   });
 
-  const catalogSync = service("catalog-sync", {
-    source: github("kuil09/medical-box"),
-    rootDirectory: BACKEND_ROOT,
-    build: {
-      builder: "DOCKERFILE",
-      dockerfilePath: "Dockerfile",
-      watchPatterns: [
-        "services/backend/**",
-        ".railway/railway.ts",
-      ],
-    },
-    start: "uv run --no-sync medical-box-sync all-sources",
-    replicas: { [SINGAPORE]: 1 },
-    deploy: {
-      cronSchedule: "10 18 * * *",
-      restartPolicyType: "NEVER",
-    },
-    env: sharedRuntimeEnv,
-  });
+  // Production catalog acquisition remains deferred until its operational
+  // prerequisites are explicitly re-enabled. The API can still be deployed and
+  // verified independently without creating a production ingestion job.
+  const catalogSync = staging
+    ? service("catalog-sync", {
+        source: github("kuil09/medical-box"),
+        rootDirectory: BACKEND_ROOT,
+        build: {
+          builder: "DOCKERFILE",
+          dockerfilePath: "Dockerfile",
+          watchPatterns: [
+            "services/backend/**",
+            ".railway/railway.ts",
+          ],
+        },
+        start: "uv run --no-sync medical-box-sync all-sources",
+        replicas: { [SINGAPORE]: 1 },
+        deploy: {
+          cronSchedule: "10 18 * * *",
+          restartPolicyType: "NEVER",
+        },
+        env: sharedRuntimeEnv,
+      })
+    : null;
 
   const backend = group("Backend", [
     api,
-    catalogSync,
+    ...(catalogSync ? [catalogSync] : []),
     database,
     ...(preservedStagingDatabase ? [preservedStagingDatabase] : []),
   ]);
