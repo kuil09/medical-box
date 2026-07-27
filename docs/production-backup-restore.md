@@ -144,3 +144,87 @@ The read-only Railway configuration plan on 2026-07-28 targeted project
 creates: group `Operations`, service `production-backup`, and bucket
 `production-backups`. It reported no updates and no deletion operations. The
 plan was not applied.
+
+## Activation runbook
+
+Do not execute this section until PR #11 is merged, hosted CI is green, the
+Railway cost is approved, and the legal reviewer accepts the backup processing
+boundary.
+
+Create a dedicated key outside the repository:
+
+```bash
+services/backend/scripts/prepare_backup_key_material.sh \
+  /Users/operator/.private_keys/medical-box/production-backup-v1
+```
+
+The command creates a five-year Ed25519 certification key with a CV25519
+encryption subkey, a random passphrase, and a 256-bit manifest HMAC key. It
+refuses an existing directory and any path inside the Git repository. Copy the
+result to an approved offline recovery location before continuing.
+
+The production key material was generated locally on 2026-07-28 at
+`$HOME/.private_keys/medical-box/production-backup-v1`. Its public
+recipient fingerprint is
+`9B2FDA74DC458A383A26E1C5F0DB735FD546BE97`. All five files are mode `0600`;
+the manifest key is exactly 32 bytes, and the private key and passphrase are
+non-empty. The directory has not yet been copied to an approved offline
+recovery location and must not be treated as the sole recovery copy.
+
+After billable-resource approval, create an empty bucket and service without
+connecting a deployable source:
+
+```bash
+railway bucket create production-backups \
+  --region sin \
+  --environment production \
+  --json
+railway add --service production-backup --json
+```
+
+Wire credentials through standard input. This step disables automatic deploys
+and never sends the private decryption key to Railway:
+
+```bash
+services/backend/scripts/wire_backup_secrets.sh \
+  /Users/operator/.private_keys/medical-box/production-backup-v1
+```
+
+Re-run `railway config plan --json`. Proceed only if the plan contains no
+delete operation and changes only the prepared backup resources. Apply the
+configuration only after that review:
+
+```bash
+railway config apply
+```
+
+After the backup runtime has built successfully, run the first backup from the
+same pinned container locally while Railway injects the production service
+variables without printing them:
+
+```bash
+railway run \
+  --service production-backup \
+  --environment production \
+  -- \
+  services/backend/scripts/run_production_backup_container.sh
+```
+
+Verify the newest signed object by restoring it into a disposable PostgreSQL 18
+container. This command substitutes a non-secret placeholder for the production
+database URL because restore verification does not connect to the source:
+
+```bash
+railway run \
+  --service production-backup \
+  --environment production \
+  -- \
+  services/backend/scripts/verify_production_backup_restore.sh \
+  /Users/operator/.private_keys/medical-box/production-backup-v1
+```
+
+Record only the backup ID, manifest key, encrypted size, encrypted SHA-256,
+restored Alembic revision, and table counts. Do not record credentials, key
+material, database URLs, or decrypted contents. If any step fails, preserve the
+existing local encrypted recovery snapshot and bucket objects, do not prune or
+delete resources, and fix the failing boundary before enabling the cron.

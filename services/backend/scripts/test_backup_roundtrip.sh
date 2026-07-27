@@ -100,31 +100,19 @@ if [[ "${lock_probe_status}" -eq 0 ]] ||
 fi
 docker rm --force "${lock_name}" >/dev/null
 
-gpg_home="${work_directory}/gnupg"
-mkdir -m 700 "${gpg_home}"
-gpg --homedir "${gpg_home}" \
-  --batch \
-  --passphrase "" \
-  --quick-gen-key "Medical Box Backup E2E <backup-e2e@medicalbox.invalid>" \
-  rsa2048 encr 1d
-fingerprint="$(
-  gpg --homedir "${gpg_home}" --batch --with-colons --list-keys |
-    awk -F: '$1 == "fpr" { print $10; exit }'
+key_directory="${work_directory}/key-material"
+"${backend_root}/scripts/prepare_backup_key_material.sh" "${key_directory}"
+fingerprint="$(<"${key_directory}/backup-recipient-fingerprint.txt")"
+public_key_base64="$(
+  base64 <"${key_directory}/backup-public.gpg" | tr -d '\n'
 )"
-gpg --homedir "${gpg_home}" \
-  --batch \
-  --output "${work_directory}/public.gpg" \
-  --export "${fingerprint}"
-gpg --homedir "${gpg_home}" \
-  --batch \
-  --passphrase "" \
-  --pinentry-mode loopback \
-  --output "${work_directory}/private.gpg" \
-  --export-secret-keys "${fingerprint}"
-
-public_key_base64="$(base64 <"${work_directory}/public.gpg" | tr -d '\n')"
-private_key_base64="$(base64 <"${work_directory}/private.gpg" | tr -d '\n')"
-manifest_hmac_key_base64="$(openssl rand -base64 32 | tr -d '\n')"
+private_key_base64="$(
+  base64 <"${key_directory}/backup-private.gpg" | tr -d '\n'
+)"
+private_key_passphrase="$(<"${key_directory}/backup-passphrase.txt")"
+manifest_hmac_key_base64="$(
+  base64 <"${key_directory}/backup-manifest-hmac.key" | tr -d '\n'
+)"
 mkdir -m 700 "${work_directory}/store"
 
 docker run --rm \
@@ -160,6 +148,7 @@ docker run --rm \
   --env BACKUP_LOCAL_DIRECTORY=/backups \
   --env BACKUP_PREFIX=medical-box/e2e \
   --env "BACKUP_GPG_PRIVATE_KEY_BASE64=${private_key_base64}" \
+  --env "BACKUP_GPG_PASSPHRASE=${private_key_passphrase}" \
   --env "BACKUP_MANIFEST_HMAC_KEY_BASE64=${manifest_hmac_key_base64}" \
   --env "BACKUP_RESTORE_DATABASE_URL=postgresql+psycopg://postgres:${database_password}@${restore_name}:5432/medical_box" \
   --env BACKUP_RESTORE_CONFIRMATION=restore-disposable-database \

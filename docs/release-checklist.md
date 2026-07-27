@@ -25,6 +25,9 @@ Evidence date: 2026-07-28
   bucket and dedicated Singapore restore runner still require owner approval.
 - [x] Disposable production-backup restore performed and documented within the
   current month
+- [ ] Dedicated production backup private key copied to an approved offline
+  recovery location. The local mode-`0600` key set exists, but a second
+  recovery copy has not been authorized.
 - [x] `pg_trgm` activated once in production
 - [x] DNS CNAME, automatic TLS, HSTS, allowed-host filtering, web/legal/API/health,
   and both `/.well-known` paths verified
