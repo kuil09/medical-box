@@ -707,7 +707,8 @@ def _sync_source_locked(
                     unchanged = existing.content_hash == digest
                     existing.content_hash = digest
                     existing.payload = payload
-                    existing.active = not batch_dur_bootstrap
+                    if source.kind != "dur":
+                        existing.active = True
                     existing.last_seen_run_id = run.id
                     existing.last_seen_at = datetime.now(UTC)
                 if is_new or not unchanged or source.kind == "identification":
@@ -749,32 +750,24 @@ def _sync_source_locked(
             raise RuntimeError(
                 f"Record count collapsed from {previous_count} to {count}; keeping prior snapshot."
             )
-        if batch_dur_bootstrap:
+        if source.kind != "dur":
             db.execute(
                 update(SourceRecord)
                 .where(
                     SourceRecord.source_code == source.code,
-                    SourceRecord.last_seen_run_id == run.id,
+                    SourceRecord.last_seen_run_id != run.id,
                 )
-                .values(active=True)
+                .values(active=False)
             )
-        db.execute(
-            update(SourceRecord)
-            .where(
+        elif not dur_rules_are_absent:
+            stale_source_records = select(SourceRecord.id).where(
                 SourceRecord.source_code == source.code,
                 SourceRecord.last_seen_run_id != run.id,
-            )
-            .values(active=False)
-        )
-        if source.kind == "dur" and not dur_rules_are_absent:
-            inactive_source_records = select(SourceRecord.id).where(
-                SourceRecord.source_code == source.code,
-                SourceRecord.active.is_(False),
             )
             db.execute(
                 delete(DurRule).where(
                     DurRule.source_code == source.code,
-                    DurRule.source_record_id.in_(inactive_source_records),
+                    DurRule.source_record_id.in_(stale_source_records),
                 )
             )
         if source.kind == "identification":
@@ -901,12 +894,19 @@ def renormalize(source_code: str) -> None:
         raise typer.BadParameter(f"Unknown source: {source_code}")
     count = 0
     with SessionLocal() as db:
-        records = db.scalars(
-            select(SourceRecord).where(
-                SourceRecord.source_code == source.code,
+        statement = select(SourceRecord).where(
+            SourceRecord.source_code == source.code,
+        )
+        if source.kind == "dur":
+            statement = statement.join(
+                SyncRun,
+                SyncRun.id == SourceRecord.last_seen_run_id,
+            ).where(SyncRun.status == "succeeded")
+        else:
+            statement = statement.where(
                 SourceRecord.active.is_(True),
             )
-        ).yield_per(500)
+        records = db.scalars(statement).yield_per(500)
         try:
             for record in records:
                 if isinstance(record.payload, dict):

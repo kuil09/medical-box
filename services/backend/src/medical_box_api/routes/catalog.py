@@ -11,6 +11,7 @@ from ..models import (
     DrugIdentificationVariant,
     DrugProduct,
     DurRule,
+    SourceRecord,
     SourceRegistry,
     SyncRun,
 )
@@ -206,10 +207,13 @@ def get_drug_safety_rules(
 
     statement = (
         select(DurRule)
+        .join(SourceRecord, SourceRecord.id == DurRule.source_record_id)
+        .join(SyncRun, SyncRun.id == SourceRecord.last_seen_run_id)
         .options(selectinload(DurRule.source_record))
         .where(
             DurRule.item_seq == item_seq,
             DurRule.rule_type.in_(SAFETY_RULE_TYPES),
+            SyncRun.status == "succeeded",
         )
         .order_by(DurRule.id)
     )
@@ -253,9 +257,12 @@ def get_drug(
     ).all()
     safety_counts = db.execute(
         select(DurRule.rule_type, func.count(DurRule.id))
+        .join(SourceRecord, SourceRecord.id == DurRule.source_record_id)
+        .join(SyncRun, SyncRun.id == SourceRecord.last_seen_run_id)
         .where(
             DurRule.item_seq == item_seq,
             DurRule.rule_type.in_(SAFETY_RULE_TYPES),
+            SyncRun.status == "succeeded",
         )
         .group_by(DurRule.rule_type)
         .order_by(DurRule.rule_type)
@@ -280,9 +287,12 @@ def get_drug(
     contributing_source_codes.update(
         db.scalars(
             select(DurRule.source_code)
+            .join(SourceRecord, SourceRecord.id == DurRule.source_record_id)
+            .join(SyncRun, SyncRun.id == SourceRecord.last_seen_run_id)
             .where(
                 DurRule.item_seq == item_seq,
                 DurRule.rule_type.in_(SAFETY_RULE_TYPES),
+                SyncRun.status == "succeeded",
             )
             .distinct()
         ).all()
