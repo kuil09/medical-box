@@ -8,9 +8,50 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  infrastructure:
+  changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      infrastructure: ${{ steps.paths.outputs.infrastructure }}
+      backend: ${{ steps.paths.outputs.backend }}
+      prototype: ${{ steps.paths.outputs.prototype }}
+      mobile: ${{ steps.paths.outputs.mobile }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify path classifier
+        run: .github/scripts/test-classify-ci-changes.sh
+      - id: paths
+        name: Classify changed paths
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${BASE_SHA}" =~ ^0+$ ]]; then
+            git diff-tree \
+              --no-commit-id \
+              --name-only \
+              --root \
+              -r "${HEAD_SHA}" |
+              .github/scripts/classify-ci-changes.sh >> "${GITHUB_OUTPUT}"
+          else
+            git diff --name-only "${BASE_SHA}" "${HEAD_SHA}" |
+              .github/scripts/classify-ci-changes.sh >> "${GITHUB_OUTPUT}"
+          fi
+
+  infrastructure:
+    needs: changes
+    if: ${{ needs.changes.outputs.infrastructure == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,7 +62,10 @@ jobs:
       - run: npm run check:railway
 
   backend:
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: services/backend
@@ -43,7 +87,10 @@ jobs:
       - run: git diff --exit-code openapi/openapi.json
 
   product-design-prototype:
+    needs: changes
+    if: ${{ needs.changes.outputs.prototype == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: design/prototype
@@ -59,7 +106,10 @@ jobs:
       - run: npm run build
 
   flutter:
+    needs: changes
+    if: ${{ needs.changes.outputs.mobile == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: apps/mobile
@@ -75,11 +125,13 @@ jobs:
       - run: git diff --exit-code lib/data/local/app_database.g.dart
       - run: flutter analyze
       - run: flutter test
-      - run: flutter test test/golden
       - run: flutter build apk --debug
 
   flutter-ios:
+    needs: changes
+    if: ${{ needs.changes.outputs.mobile == 'true' }}
     runs-on: macos-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: apps/mobile
