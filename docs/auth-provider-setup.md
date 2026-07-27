@@ -21,22 +21,45 @@ console configuration is required before the flows can complete.
 
 ## Google
 
-- Create iOS and Android OAuth clients for the exact bundle/application ID.
+- Create one Web OAuth client for the backend audience and separate iOS and
+  Android OAuth clients for the exact bundle/application ID.
 - Add the release signing certificate fingerprint.
-- Add platform configuration files locally or through the protected CI secret
-  workflow.
-- Set the backend `GOOGLE_CLIENT_ID` to the audience accepted by the exchange
-  endpoint.
+- Inject the Web client ID with
+  `--dart-define=GOOGLE_SERVER_CLIENT_ID=...`.
+- Inject the iOS client ID in iOS builds with
+  `--dart-define=GOOGLE_IOS_CLIENT_ID=...`.
+- Set the backend `GOOGLE_CLIENT_ID` to the same Web client ID used as
+  `GOOGLE_SERVER_CLIENT_ID`.
 
 ## Kakao
 
 - Enable OpenID Connect; the Flutter client requires an ID token.
 - Register Android key hashes and the iOS bundle identifier.
-- Inject `KAKAO_NATIVE_APP_KEY` with `--dart-define`.
+- Provide `KAKAO_NATIVE_APP_KEY` as a Gradle environment variable for the
+  Android callback scheme and inject the same value with
+  `--dart-define=KAKAO_NATIVE_APP_KEY=...`.
 - Set backend `KAKAO_APP_ID` to the expected OIDC audience.
 
 Provider success, cancellation, expiry, forged signature, and wrong-audience
 cases must all be tested on both platforms before external beta.
+
+After a provider console is configured, run the deployment probe with a
+short-lived ID token from an operator-controlled beta account. Keep every token
+in the process environment and never place one on the command line or in a
+shell-history file:
+
+```bash
+MEDICAL_BOX_API_BASE_URL=https://staging.medicalbox.outoftokens.ai/api \
+MEDICAL_BOX_STAGING_ACCESS_KEY=... \
+MEDICAL_BOX_AUTH_PROVIDER=google \
+MEDICAL_BOX_PROVIDER_TOKEN=... \
+MEDICAL_BOX_EXPECT_CATALOG_ACCESS=true \
+uv run python scripts/verify_deployed_auth.py
+```
+
+The probe exchanges the provider token, verifies the account profile and
+catalog entitlement, rotates the refresh token, and logs out. It never prints
+provider or session tokens.
 
 ## Closed-beta catalog access
 

@@ -62,6 +62,9 @@ fvm flutter run \
 Provider console credentials and platform files are intentionally not committed.
 Follow `docs/auth-provider-setup.md` before testing social login.
 
+Closed-beta evidence and the external legal-review checklist are maintained in
+`docs/closed-beta-release-evidence.md` and `docs/legal-review-packet.md`.
+
 ## Verification
 
 ```bash

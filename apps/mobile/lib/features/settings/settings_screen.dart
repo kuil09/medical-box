@@ -19,15 +19,15 @@ class SettingsScreen extends ConsumerWidget {
     required String title,
     required String action,
   }) async {
-    final controller = TextEditingController();
+    var input = '';
     final value = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title),
-        content: TextField(
-          controller: controller,
+        content: TextFormField(
           autofocus: true,
           obscureText: true,
+          onChanged: (value) => input = value,
           decoration: const InputDecoration(
             labelText: '암호',
             helperText: '10자 이상 입력해 주세요.',
@@ -39,13 +39,12 @@ class SettingsScreen extends ConsumerWidget {
             child: const Text('취소'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
+            onPressed: () => Navigator.pop(context, input),
             child: Text(action),
           ),
         ],
       ),
     );
-    controller.dispose();
     return value;
   }
 

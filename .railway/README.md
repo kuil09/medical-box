@@ -8,8 +8,11 @@ graph is rendered separately for the `staging` and `production` environments.
 - `medical-box` is the production API service and serves product pages, legal
   pages, account authentication, the
   permission-gated catalog API, health checks, and both app-link manifests.
-- `catalog-sync` runs at `18:10 UTC` every day and exits when all configured
-  official-source synchronizations finish.
+- The staging `catalog-sync` service runs at `18:10 UTC` every day and exits
+  when all configured official-source synchronizations finish.
+- Production catalog acquisition is intentionally deferred. Production IaC
+  deploys the API and PostgreSQL only until the catalog operational
+  prerequisites are explicitly re-enabled in source control.
 - The code services deploy from the `kuil09/medical-box` GitHub source with
   `services/backend` as their root directory.
 - `.railway/railway.ts` is the sole Railway configuration model; a service-level
@@ -78,5 +81,8 @@ sign-in grants access again. Remove the email from the allowlist before
 revoking that account.
 
 The staging IaC graph was applied after explicit approval on 2026-07-27,
-including migration of `Postgres-staging-v2` to Singapore. Production apply and
-all DNS-provider changes remain outside automated setup.
+including migration of `Postgres-staging-v2` to Singapore. The staging domain
+and Railway verification record were added at the DNS provider on 2026-07-27;
+Railway reports propagated DNS and a valid certificate. Production API rollout
+remains separately reviewable, and production catalog acquisition remains
+deferred.
