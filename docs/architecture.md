@@ -28,7 +28,6 @@ medicalbox.outoftokens.ai
 
 Railway private network
   ├─ API service
-  ├─ Catalog synchronization cron
   └─ PostgreSQL
      ├─ Account and authentication tables
      ├─ Raw catalog records and run checkpoints
@@ -48,6 +47,6 @@ Production uses one host:
 - `/api/health/...`
 - `/.well-known/...`
 
-Staging uses `staging.medicalbox.outoftokens.ai` and requires an additional
-header for non-health API routes. Issuer, audience, signing key, PostgreSQL
-environment, and domain are different from production.
+The deployed system has no persistent staging environment. Local tests and
+GitHub Actions provide pre-production validation without a second database or
+public host.

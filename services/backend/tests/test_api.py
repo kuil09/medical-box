@@ -263,7 +263,6 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
         client.get("/api/v1/drugs/search", params={"q": "효소"}, headers=headers).status_code
         == 403
     )
-
     with SessionLocal() as db:
         user = db.get(User, uuid.UUID(session["account"]["id"]))
         assert user is not None
@@ -350,7 +349,6 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
         client.get("/api/v1/drugs/search", params={"q": "효소"}, headers=headers).status_code
         == 403
     )
-
 
 def test_server_schema_excludes_household_inventory(client: TestClient) -> None:
     table_names = set(inspect(engine).get_table_names())

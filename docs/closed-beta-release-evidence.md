@@ -66,9 +66,8 @@ The dedicated Google Cloud project `medical-box-503706` now has an external
 testing consent configuration, the account owner as a test user, production
 homepage/privacy/terms URLs, and `outoftokens.ai` as an authorized domain. Web,
 Android debug, and iOS OAuth clients were created. The Web client ID is
-configured on the Railway production and staging API services; both variable
-deployments reached `SUCCESS`, and a forged Google token now receives HTTP 401
-instead of a missing-configuration HTTP 503.
+configured on the Railway production API service, and a forged Google token
+receives HTTP 401 instead of a missing-configuration HTTP 503.
 
 Real Google provider exchange is not yet release evidence. The configured
 Android client is restricted to `com.medicalbox.app` and the current local debug
@@ -80,9 +79,10 @@ probe passes for each enabled provider, social-login E2E remains blocked.
 
 ## Android application QA
 
-The debug APK was built with Flutter 3.44.7 and the staging API base URL,
-installed on an API 35 Android emulator, and operated through the platform
-accessibility tree.
+The debug APK was built with Flutter 3.44.7, installed on an API 35 Android
+emulator, and operated through the platform accessibility tree. Distributed
+builds now use the production API; local backend overrides remain available for
+development.
 
 Observed passing flows:
 
@@ -144,3 +144,22 @@ rights, and emergency sharing.
 This preparation is not legal approval. External beta promotion remains blocked
 until a qualified Korean reviewer records dated approval and any required edits
 are implemented and reverified.
+
+## Catalog promotion and staging retirement
+
+On 2026-07-27, the validated catalog was promoted into the production
+PostgreSQL database after creating and verifying a pre-promotion logical
+backup. Counts and canonical fingerprints matched across all 13 catalog tables.
+Authentication rows matched a disposable restore of the backup, and production
+readiness, authentication enforcement, metadata, search, detail, and DUR probes
+passed.
+
+Production contains 78,090 products, 89,697 ingredient rows, 4,739 consumer
+information rows, 25,363 identification variants, 860,199 DUR rules, and
+1,102,783 raw source records. Database plus WAL measured 3,556,611,775 bytes on
+the 5 GB volume.
+
+The staging Railway environment and its custom domain, catalog-sync service,
+databases, and volumes were then retired. Production is the only persistent
+Railway environment. Automated full-catalog refresh remains disabled until
+capacity or transaction changes provide safe transient storage headroom.

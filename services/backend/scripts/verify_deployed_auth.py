@@ -1,8 +1,8 @@
-"""Verify a deployed provider exchange and catalog entitlement boundary.
+"""Verify the production provider exchange and catalog entitlement boundary.
 
-This script never prints provider, access, refresh, or staging tokens. It is
-intended for an operator-controlled test account whose provider token is passed
-through the environment.
+This script never prints provider, access, or refresh tokens. It is intended
+for an operator-controlled test account whose provider token is passed through
+the environment.
 """
 
 import os
@@ -17,7 +17,6 @@ class ProbeConfig:
     api_base_url: str
     provider: str
     provider_token: str
-    staging_key: str | None
     expect_catalog_access: bool
 
     @classmethod
@@ -26,7 +25,6 @@ class ProbeConfig:
             api_base_url=_required("MEDICAL_BOX_API_BASE_URL").rstrip("/"),
             provider=_required("MEDICAL_BOX_AUTH_PROVIDER").lower(),
             provider_token=_required("MEDICAL_BOX_PROVIDER_TOKEN"),
-            staging_key=os.getenv("MEDICAL_BOX_STAGING_ACCESS_KEY") or None,
             expect_catalog_access=_boolean("MEDICAL_BOX_EXPECT_CATALOG_ACCESS"),
         )
 
@@ -60,8 +58,6 @@ def _expect(response: httpx.Response, status_code: int, step: str) -> dict[str, 
 
 def run_probe(config: ProbeConfig) -> None:
     default_headers = {"accept": "application/json"}
-    if config.staging_key:
-        default_headers["x-staging-key"] = config.staging_key
 
     with httpx.Client(
         base_url=config.api_base_url,

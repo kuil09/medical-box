@@ -1,73 +1,65 @@
 # Railway project configuration
 
-This directory describes the complete `medical-box` Railway project. The same
-graph is rendered separately for the `staging` and `production` environments.
+This directory defines the persistent Railway production graph for
+`medical-box`.
 
 ## Deployment boundary
 
-- `medical-box` is the production API service and serves product pages, legal
-  pages, account authentication, the
-  permission-gated catalog API, health checks, and both app-link manifests.
-- The staging `catalog-sync` service runs at `18:10 UTC` every day and exits
-  when all configured official-source synchronizations finish.
-- Production catalog acquisition is intentionally deferred. Production IaC
-  deploys the API and PostgreSQL only until the catalog operational
-  prerequisites are explicitly re-enabled in source control.
-- The code services deploy from the `kuil09/medical-box` GitHub source with
-  `services/backend` as their root directory.
-- `.railway/railway.ts` is the sole Railway configuration model; a service-level
-  `railway.json` must not be reintroduced because it would override cron
-  settings during local uploads.
-- Production uses `Postgres`; staging uses `Postgres-staging-v2`. The stopped
-  `Postgres-staging` service retains the failed first-import volume for
-  recovery evidence and must not be reattached to the API.
-- PostgreSQL stores only account/authentication data and the public catalog.
-- All compute and PostgreSQL resources are placed in Railway's Singapore region.
-- The custom domain belongs to `medical-box`. No separate API subdomain is
-  declared.
-- Railway's beta TypeScript IaC cannot register custom domains, so domain
-  attachment remains an approval-gated dashboard operation.
+- `medical-box` serves product and legal pages, account authentication,
+  permission-gated catalog APIs, health checks, and app-link manifests.
+- `Postgres` stores account/authentication data and the promoted public
+  medicine catalog.
+- Both resources run in Railway's Singapore region and communicate over
+  Railway private networking.
+- The public host is `medicalbox.outoftokens.ai`; there is no separate API or
+  staging host.
+- `.railway/railway.ts` is the sole Railway configuration model. Do not add a
+  service-level `railway.json` that can override this graph.
+- Railway's TypeScript IaC cannot register custom domains, so the production
+  domain remains an explicitly verified dashboard and DNS-provider resource.
+- Automated full-catalog refresh is disabled. The current catalog fits the
+  5 GB production volume, but a full refresh can create unsafe transient WAL
+  and bloat. Increase storage or implement bounded replacement transactions
+  before reintroducing a scheduled ingestion service.
+
+The former staging environment, staging databases, `catalog-sync` service,
+staging custom domain, and staging access-key boundary were retired after the
+validated catalog was promoted to production on 2026-07-27. Local tests and
+GitHub Actions are the pre-production validation boundary.
 
 ## Required externally managed variables
 
-Create distinct service-variable values in each Railway environment before
-applying the plan. The IaC definition uses `preserve()` for credentials,
-provider identifiers, access-control inputs, and source URLs so an apply cannot
-replace an existing value with an unresolved shared-variable reference.
+The IaC definition uses `preserve()` for credentials, provider identifiers,
+access-control inputs, and source URLs so an apply cannot replace an existing
+value with an unresolved shared-variable reference.
 
 | Variable | Requirement |
 | --- | --- |
-| `JWT_SECRET` | Random secret of at least 32 characters; never reuse across environments |
+| `JWT_SECRET` | Production random secret of at least 32 characters |
 | `CATALOG_ACCESS_EMAIL_ALLOWLIST` | Comma-separated verified beta emails that receive `catalog:read` at sign-in; empty means deny by default |
 | `DATA_GO_KR_SERVICE_KEY` | Encoded public-data portal service key |
 | `GOOGLE_CLIENT_ID` | Google OIDC client ID |
 | `KAKAO_APP_ID` | Kakao REST/OpenID Connect app ID |
 | `APPLE_TEAM_ID` | Apple Developer team ID |
-| `ANDROID_CERT_SHA256` | Production or internal signing certificate fingerprint |
+| `ANDROID_CERT_SHA256` | Production signing-certificate fingerprint |
 | `MFDS_RECALL_URL` | Confirmed official recall/suspension API endpoint |
 | `MFDS_SHORTAGE_URL` | Confirmed official supply-interruption API endpoint |
 | `HIRA_PRICE_URL` | Confirmed official HIRA price endpoint |
 | `HIRA_STANDARD_CODE_URL` | Confirmed official HIRA standard-code file endpoint |
-| `STAGING_ACCESS_KEY` | Staging only; random key injected into CI/internal builds |
 
-The unresolved source URLs are intentionally not guessed. Confirm the current
-official public-data resource and redistribution terms before setting them.
+Unresolved source URLs must not be guessed. Confirm the official resource and
+redistribution terms before configuring or loading a source.
 
-## Approval-gated rollout
+## Production change workflow
 
-1. Create the `medical-box` Railway project with `staging` and `production`.
-2. Link this repository and select one environment.
-3. Run `npm ci` at the repository root to install the pinned Railway IaC SDK.
-4. Add the required environment-specific service variables.
-5. Run `railway config plan` and review the exact resource changes.
-6. Apply only after explicit approval of that plan.
-7. Have the Railway account owner install `pg_trgm` once in each database with
-   the approved extension-management workflow.
-8. Configure Railway daily/weekly/monthly backups and perform a staging restore.
-9. Add the Railway-provided CNAME targets at the DNS provider for
-   `medicalbox.outoftokens.ai` and `staging.medicalbox.outoftokens.ai`.
-10. Verify automatic TLS, health checks, HSTS, host filtering, and both app-link
-   manifests before distributing an internal build.
+1. Run the complete local and CI validation suites.
+2. Run `railway config plan --environment production`.
+3. Review the plan for changes to `medical-box` and `Postgres` only.
+4. Apply only after explicit approval of the exact plan.
+5. Verify `/api/health/ready`, authentication boundaries, catalog metadata,
+   search, detail, and DUR responses.
+6. Verify automatic TLS, HSTS, host filtering, and app-link manifests.
+7. Maintain recoverable database backups and exercise a disposable restore.
 
 Grant or revoke an existing account by exact user ID from an API service shell:
 
@@ -79,10 +71,3 @@ medical-box-access revoke 00000000-0000-0000-0000-000000000000
 If an email remains in `CATALOG_ACCESS_EMAIL_ALLOWLIST`, a later provider
 sign-in grants access again. Remove the email from the allowlist before
 revoking that account.
-
-The staging IaC graph was applied after explicit approval on 2026-07-27,
-including migration of `Postgres-staging-v2` to Singapore. The staging domain
-and Railway verification record were added at the DNS provider on 2026-07-27;
-Railway reports propagated DNS and a valid certificate. Production API rollout
-remains separately reviewable, and production catalog acquisition remains
-deferred.

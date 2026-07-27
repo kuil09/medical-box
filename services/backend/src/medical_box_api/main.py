@@ -1,8 +1,5 @@
-import secrets
-
 from fastapi import FastAPI, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
@@ -23,16 +20,6 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_li
 @app.middleware("http")
 async def security_boundary(request: Request, call_next: RequestResponseEndpoint) -> Response:
     path = request.url.path
-    if (
-        settings.app_env == "staging"
-        and path.startswith("/api/")
-        and not path.startswith("/api/health/")
-    ):
-        supplied = request.headers.get("x-staging-key", "")
-        if not settings.staging_access_key or not secrets.compare_digest(
-            supplied, settings.staging_access_key
-        ):
-            return JSONResponse(status_code=404, content={"detail": "Not found."})
     response = await call_next(request)
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["X-Content-Type-Options"] = "nosniff"
