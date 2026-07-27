@@ -305,10 +305,30 @@ growth and 96 MiB retained WAL to the production baseline predicts
 capacity. This preserves the 750 MB synchronization reserve with approximately
 318 MB additional margin.
 
-The production PostgreSQL `max_wal_size` must be changed from 1 GB to 96 MB
-before the first standard-code run and verified after it. The approved-source
-cron runs at `18:10 UTC` and excludes recall, supply interruption, and price
-until their production API applications return authorized responses.
+## Standard-code production load
+
+Production PostgreSQL was changed from `max_wal_size=1GB` and
+`min_wal_size=80MB` to 96 MB and 32 MB before the first standard-code run. The
+official file then completed in 746.69 seconds through the public database
+endpoint used only for the controlled one-off command.
+
+| Production measurement | Result |
+| --- | ---: |
+| Run status | succeeded |
+| Sync pages | 612 |
+| Raw and active standard-code rows | 305,522 |
+| Normalized standard codes | 305,522 |
+| Product count before and after | 78,090 |
+| Invalid indexes | 0 |
+| Database bytes | 3,765,049,023 |
+| Retained WAL bytes | 100,663,296 |
+| Remaining configured capacity | 1,134,287,681 bytes |
+
+The checkpoint hash matches the downloaded official file:
+`8f177ced6a93fefa439535125aeb4f626e9d386fa5700271094ca26bdcb50ff0`.
+The approved-source cron is deployed and runs at `18:10 UTC`. Recall, supply
+interruption, and price remain excluded until their production API applications
+return authorized responses.
 
 After these checks, the staging domain, services, databases, volumes, and
 Railway environment were authorized for deletion. The production database is
