@@ -54,7 +54,7 @@ Pass result: blocked
 
 ## Pass 3 — Interactive pouch and CRUD revision
 
-- Source visual truth: `/Users/gun9/.codex/generated_images/019f9640-31b2-7fb0-82d9-fa208831f2cf/call_RPOhhUXmngaFPSUacVU8jEwj.png` (`853 × 1844`, normalized to `393 × 852`).
+- Source visual truth: private design-generation artifact (`853 × 1844`, normalized to `393 × 852`).
 - Browser-rendered implementation: `public/qa/interactive-home.png` (`393 × 852`).
 - Full browser capture: `interactive-home-full.png` (`1400 × 1200`).
 - Combined comparison evidence: `qa-interactive-comparison.png`.
@@ -91,7 +91,7 @@ final result: passed
 
 ## Pass 4 — Interactive shared medicine tray revision
 
-- Source visual truth: `/Users/gun9/.codex/generated_images/019f9640-31b2-7fb0-82d9-fa208831f2cf/call_RPOhhUXmngaFPSUacVU8jEwj.png` (`853 × 1844`, normalized to `393 × 852`).
+- Source visual truth: private design-generation artifact (`853 × 1844`, normalized to `393 × 852`).
 - Browser-rendered implementation: `public/qa/interactive-tray-home.png` (`393 × 852`).
 - Full browser capture: `interactive-tray-full.png` (`1400 × 1200`).
 - Combined comparison evidence: `qa-interactive-tray-comparison.png`.
@@ -128,7 +128,7 @@ final result: passed
 
 ## Pass 5 — Top-level personal pouch tabs
 
-- Source visual truth: `/Users/gun9/.codex/generated_images/019f9640-31b2-7fb0-82d9-fa208831f2cf/call_RPOhhUXmngaFPSUacVU8jEwj.png` (`853 × 1844`, normalized to `393 × 852`).
+- Source visual truth: private design-generation artifact (`853 × 1844`, normalized to `393 × 852`).
 - Browser-rendered shared state: `public/qa/top-tabs-shared.png` (`393 × 852`).
 - Browser-rendered member state: `public/qa/top-tabs-member.png` (`393 × 852`).
 - Full browser captures: `top-tabs-shared-full.png` and `top-tabs-member-full.png` (`1400 × 1200` each).

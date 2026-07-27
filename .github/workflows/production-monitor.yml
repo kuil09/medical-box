@@ -2,7 +2,7 @@ name: Production monitor
 
 on:
   schedule:
-    - cron: "3,18,33,48 * * * *"
+    - cron: "18 */4 * * *"
   workflow_dispatch:
 
 permissions:
