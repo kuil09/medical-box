@@ -12,11 +12,11 @@ sources remains a separate release gate.
 
 ## Production deployment
 
-Railway API deployment `8e3888d1-b19c-4d68-8677-51a00ffeb80f` first shipped
-the catalog-safety release for commit
-`9efed852a6eff664efccb30c65827b4d5c84a559`. The current active deployment,
-`6df8debc-b8ac-479b-81fe-672f585e65ca`, then completed successfully for commit
-`e205941a65281bcb713c5e9832d1f1cb366f7563`. The running API uses:
+The initial Railway API deployment shipped the catalog-safety release for
+commit `9efed852a6eff664efccb30c65827b4d5c84a559`. Its successor then completed
+successfully for commit `e205941a65281bcb713c5e9832d1f1cb366f7563`.
+Deployment identifiers are retained in the private Railway audit log rather
+than this public evidence record. The running API uses:
 
 - repository root directory `services/backend`;
 - the Dockerfile builder;
@@ -26,9 +26,9 @@ the catalog-safety release for commit
 
 Railway IaC created the `catalog-sync` function, linked its public-data key to
 the existing API secret without printing it, and scheduled approved sources at
-`18:10 UTC` daily. Deployment `01514a9a-cddd-4497-bb64-c917ef2cced7`
-successfully built the cron image. A final `railway config plan` reported no
-drift from `.railway/railway.ts`.
+`18:10 UTC` daily. The corresponding deployment successfully built the cron
+image. A final `railway config plan` reported no drift from
+`.railway/railway.ts`.
 
 The following production paths returned HTTP 200:
 

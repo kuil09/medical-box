@@ -64,6 +64,30 @@ Follow `docs/auth-provider-setup.md` before testing social login.
 Closed-beta evidence and the external legal-review checklist are maintained in
 `docs/closed-beta-release-evidence.md` and `docs/legal-review-packet.md`.
 
+## Security
+
+Report vulnerabilities through GitHub private vulnerability reporting as
+described in `SECURITY.md`. Never place credentials, production data, household
+records, or signing material in a public issue.
+
+Runtime secrets belong in Railway variables, GitHub environment secrets, or a
+local ignored `.env` file. The repository intentionally contains public client
+identifiers, API contracts, domains, and source attribution, but no production
+database or private signing material.
+
+## Contributing
+
+See `CONTRIBUTING.md` for the privacy, medical-safety, testing, and language
+requirements that apply to contributions.
+
+## License and data
+
+Original source code and documentation are available under the Apache License
+2.0. Product Design template assets, software dependencies, and official Korean
+medicine data retain separate terms described in `THIRD_PARTY_NOTICES.md`.
+Production catalog records and medicine image binaries are not distributed in
+this repository.
+
 ## Verification
 
 ```bash
