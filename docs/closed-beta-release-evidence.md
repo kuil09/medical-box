@@ -256,5 +256,7 @@ to date, and the readiness endpoint returned HTTP 200.
 `.github/workflows/production-monitor.yml` probes the product, legal, support,
 health, well-known, authentication-boundary, HSTS, and `nosniff` behavior every
 15 minutes and on manual dispatch. Manual run `30276771772` completed
-successfully after the workflow was merged. A scheduled run remains required
-to prove the GitHub scheduler path independently of manual dispatch.
+successfully after the workflow was merged. Scheduled run `30281631480` then
+completed successfully for commit
+`cce7671dbe67a8b4342a7429c38e2c5aaebfee98`, independently proving the GitHub
+scheduler path.
