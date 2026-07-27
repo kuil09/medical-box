@@ -25,6 +25,12 @@ are intentionally excluded.
   for that source and leaves the last successful catalog active.
 - PostgreSQL advisory locks prevent overlapping runs for the same source.
 - Unchanged record hashes skip normalization writes.
+- DUR API queries only expose records whose owning sync run has succeeded.
+  Initial DUR bootstraps may commit bounded inactive batches without exposing a
+  partial snapshot.
+- Recurring DUR runs prefetch raw records once per page and do not rewrite
+  unchanged records. This prevents a large unchanged source from generating a
+  full-table WAL burst.
 - HIRA standard-code downloads accept CSV, XLSX, or ZIP containers, detect
   Korean header rows, and are capped at 250 MiB per file.
 - A standard-code file whose SHA-256 matches its checkpoint is recorded as
@@ -36,9 +42,9 @@ are intentionally excluded.
   upstream natural identifiers are not unique across all rule variants.
 - Byte-identical duplicate DUR rows count toward the official response total
   but are stored once. Semantically different variants remain separate.
-- Stale DUR rules are removed with a correlated active-source check rather than
-  a key-list `NOT IN` clause, so cleanup is not bounded by a database parameter
-  limit.
+- Stale DUR rules are derived from the complete set of keys observed in the
+  successful run and deleted in bounded primary-key batches, so cleanup is not
+  bounded by a database parameter limit.
 - Pill image URLs may be referenced, but binaries must not be copied to owned
   storage until redistribution rights are confirmed.
 - HIRA attribution and applicable Korea Open Government License text must stay
@@ -128,8 +134,8 @@ correlated active-record existence check; the retry committed successfully.
 SQLite is suitable as local verification evidence, but the measured duration
 and 10.54 GB file size make row-by-row ORM upserts inappropriate for the Railway
 production job. The PostgreSQL implementation must use page-sized bulk upserts,
-retain one transaction per source snapshot, and preserve the same active-snapshot
-and rollback invariants.
+use a successful-run visibility gate for bounded initial DUR commits, and
+preserve the same active-snapshot and rollback invariants.
 
 The pill-identification development application was approved on 2026-07-26.
 Its current official endpoint is
@@ -170,3 +176,46 @@ least-privileged and rotated after suspected exposure. Production release should
 track an MFDS/data.go.kr request for a functioning HTTPS route; the HTTP route is
 an explicit upstream security exception, not a general allowance for plaintext
 API traffic.
+
+## Railway staging snapshot
+
+The replacement staging database completed its first compact PostgreSQL import
+on 2026-07-27. This snapshot is independent of the earlier local SQLite
+measurements above.
+
+| Staging measurement | Count |
+| --- | ---: |
+| Products | 78,090 |
+| Product ingredients | 89,697 |
+| Consumer-information rows | 4,739 |
+| Identification variants | 25,346 |
+| DUR official response rows | 860,371 |
+| DUR unique raw records and normalized rules | 860,199 |
+| DUR byte-identical duplicate rows | 172 |
+
+The product-level concomitant source returned exactly 795,000 unique rows over
+1,590 pages. Its first activation attempt updated all raw `active` flags in one
+statement, generated an approximately 890 MiB WAL burst, filled the 5 GB
+volume, and caused PostgreSQL crash recovery. Every page batch remained
+preserved and inactive. Recovery verified 795,000 raw records, 795,000 rules,
+one owning run, and checkpoint page 1,590 before finalizing the owning run.
+
+The catalog now uses successful `sync_runs` as the atomic DUR visibility gate,
+so finalization updates one run row instead of every raw record. PostgreSQL
+`max_wal_size` is set to 256 MiB for this constrained staging volume. A normal
+`VACUUM (ANALYZE)` reclaimed the rolled-back row versions; the final filesystem
+measurement was 3,607 MiB used and 992 MiB available on the 4,615 MiB usable
+filesystem.
+
+The API and catalog-sync services use the replacement database and their
+staging database password, JWT secret, and staging access key were rotated
+after deployment verification. The public-data service key must be reissued in
+the data.go.kr portal after its terminal exposure.
+
+The recall endpoint is configured but returned HTTP 403 for the current public
+data key. Supply interruption and HIRA price access also remain unauthorized,
+and the HIRA standard-code source URL remains unresolved. These sources are not
+reported as loaded. Railway native daily, weekly, and monthly backup schedules
+also remain unset because the current API token or plan returned
+`Not Authorized`; configure them in the database service Backups tab before a
+beta release.
