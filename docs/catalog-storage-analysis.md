@@ -98,6 +98,20 @@ Migration `20260726_0004` explicitly sets LZ4 compression on
 server's default TOAST compression setting. The production import must still
 be preceded by a staging import and a live `pg_total_relation_size` check.
 
+## Railway staging validation
+
+The complete authorized staging snapshot was measured on 2026-07-27 after
+loading 78,090 products, 266,033 active non-DUR raw records, and 860,199 DUR
+rules. The 5 GB Railway volume exposed 4,615 MiB of usable filesystem space and
+ended at 3,607 MiB used with 992 MiB available.
+
+An initial full-table DUR activation generated approximately 890 MiB of WAL and
+filled the filesystem even though the steady-state catalog fit. The recovery
+changed DUR visibility to a single successful-run gate, removed the full-table
+activation, and set staging PostgreSQL `max_wal_size` to 256 MiB. Capacity
+checks must therefore measure both steady-state relations and transient WAL;
+logical database size alone is not a sufficient release criterion.
+
 ## Compression evidence
 
 Representative UTF-8 JSON samples were compressed independently per row with
