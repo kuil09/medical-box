@@ -19,10 +19,14 @@ independent of release credentials.
 
 ## Protected GitHub environment
 
-Create a GitHub environment named `closed-beta` and require an account-owner
-approval before deployment. Store the following values as environment secrets.
-Do not use repository variables or committed files for signing passwords,
-certificate archives, provisioning profiles, or provider configuration.
+Create a GitHub environment named `closed-beta`, disable administrator bypass,
+and permit deployment only from `main`. When the repository billing plan
+supports required reviewers, require an account-owner approval before
+deployment. Until then, workflow dispatch itself is restricted to repository
+writers and store promotion remains a separate manual approval. Store the
+following values as environment secrets. Do not use repository variables or
+committed files for signing passwords, certificate archives, provisioning
+profiles, or provider configuration.
 
 ### Shared provider configuration
 
