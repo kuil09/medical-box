@@ -115,11 +115,18 @@ jobs:
         working-directory: apps/mobile
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          flutter-version: "3.44.7"
-          channel: stable
-          cache: true
+      - name: Install pinned Flutter SDK
+        env:
+          FLUTTER_COMMIT: 84fc5cbb223bc12f83d65b647ff8a56caf779ffd # 3.44.7
+          FLUTTER_HOME: ${{ runner.temp }}/flutter
+        run: |
+          set -euo pipefail
+          git init "${FLUTTER_HOME}"
+          git -C "${FLUTTER_HOME}" remote add origin https://github.com/flutter/flutter.git
+          git -C "${FLUTTER_HOME}" fetch --depth 1 origin "${FLUTTER_COMMIT}"
+          git -C "${FLUTTER_HOME}" checkout --detach FETCH_HEAD
+          echo "${FLUTTER_HOME}/bin" >> "${GITHUB_PATH}"
+          "${FLUTTER_HOME}/bin/flutter" config --no-analytics
       - run: flutter pub get
       - run: dart run build_runner build
       - run: git diff --exit-code lib/data/local/app_database.g.dart
@@ -137,10 +144,17 @@ jobs:
         working-directory: apps/mobile
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          flutter-version: "3.44.7"
-          channel: stable
-          cache: true
+      - name: Install pinned Flutter SDK
+        env:
+          FLUTTER_COMMIT: 84fc5cbb223bc12f83d65b647ff8a56caf779ffd # 3.44.7
+          FLUTTER_HOME: ${{ runner.temp }}/flutter
+        run: |
+          set -euo pipefail
+          git init "${FLUTTER_HOME}"
+          git -C "${FLUTTER_HOME}" remote add origin https://github.com/flutter/flutter.git
+          git -C "${FLUTTER_HOME}" fetch --depth 1 origin "${FLUTTER_COMMIT}"
+          git -C "${FLUTTER_HOME}" checkout --detach FETCH_HEAD
+          echo "${FLUTTER_HOME}/bin" >> "${GITHUB_PATH}"
+          "${FLUTTER_HOME}/bin/flutter" config --no-analytics
       - run: flutter pub get
       - run: flutter build ios --debug --no-codesign
