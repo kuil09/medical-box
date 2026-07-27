@@ -14,14 +14,14 @@ class PouchScreen extends ConsumerWidget {
   const PouchScreen({super.key});
 
   Future<void> _addPouch(BuildContext context, WidgetRef ref) async {
-    final controller = TextEditingController();
+    var input = '';
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('가족 구성원 추가'),
-        content: TextField(
-          controller: controller,
+        content: TextFormField(
           autofocus: true,
+          onChanged: (value) => input = value,
           decoration: const InputDecoration(
             labelText: '가족 이름',
             hintText: '예: 엄마',
@@ -33,13 +33,12 @@ class PouchScreen extends ConsumerWidget {
             child: const Text('취소'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            onPressed: () => Navigator.pop(context, input.trim()),
             child: const Text('추가'),
           ),
         ],
       ),
     );
-    controller.dispose();
     if (name == null || name.isEmpty) return;
     final database = ref.read(databaseProvider);
     final household = await database.select(database.households).getSingle();
@@ -77,14 +76,15 @@ class PouchScreen extends ConsumerWidget {
     final currentName = pouch.name.endsWith(' 파우치')
         ? pouch.name.substring(0, pouch.name.length - 4)
         : pouch.name;
-    final controller = TextEditingController(text: currentName);
+    var input = currentName;
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('가족 이름 바꾸기'),
-        content: TextField(
-          controller: controller,
+        content: TextFormField(
+          initialValue: currentName,
           autofocus: true,
+          onChanged: (value) => input = value,
           decoration: const InputDecoration(labelText: '가족 이름'),
         ),
         actions: [
@@ -93,13 +93,12 @@ class PouchScreen extends ConsumerWidget {
             child: const Text('취소'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            onPressed: () => Navigator.pop(context, input.trim()),
             child: const Text('저장'),
           ),
         ],
       ),
     );
-    controller.dispose();
     if (name == null || name.isEmpty) return;
     final database = ref.read(databaseProvider);
     await database.transaction(() async {

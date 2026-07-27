@@ -7,6 +7,9 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../api/api_client.dart';
 import '../local/database_key_store.dart';
 
+const googleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+const googleIosClientId = String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
+
 enum LoginProvider { kakao, apple, google }
 
 extension LoginProviderApiName on LoginProvider {
@@ -125,7 +128,7 @@ class AuthRepository {
     }
     await _keyStore.clearTokens();
     _account = null;
-    await GoogleSignIn().signOut();
+    await _googleSignIn(requireConfiguration: false).signOut();
   }
 
   Future<void> deleteAccount(LoginProvider provider) async {
@@ -185,7 +188,7 @@ class AuthRepository {
   Future<String> _providerToken(LoginProvider provider) async {
     switch (provider) {
       case LoginProvider.google:
-        final user = await GoogleSignIn(scopes: const ['email']).signIn();
+        final user = await _googleSignIn().signIn();
         final token = (await user?.authentication)?.idToken;
         if (token == null) throw StateError('Google sign-in was cancelled.');
         return token;
@@ -211,5 +214,23 @@ class AuthRepository {
         }
         return token.idToken!;
     }
+  }
+
+  GoogleSignIn _googleSignIn({bool requireConfiguration = true}) {
+    if (requireConfiguration && googleServerClientId.isEmpty) {
+      throw StateError('GOOGLE_SERVER_CLIENT_ID is not configured.');
+    }
+    if (requireConfiguration && Platform.isIOS && googleIosClientId.isEmpty) {
+      throw StateError('GOOGLE_IOS_CLIENT_ID is not configured.');
+    }
+    return GoogleSignIn(
+      scopes: const ['email'],
+      serverClientId: googleServerClientId.isEmpty
+          ? null
+          : googleServerClientId,
+      clientId: Platform.isIOS && googleIosClientId.isNotEmpty
+          ? googleIosClientId
+          : null,
+    );
   }
 }

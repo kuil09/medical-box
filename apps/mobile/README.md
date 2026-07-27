@@ -41,3 +41,10 @@ Local Android emulator QA may inject
 `http://10.0.2.2:8000/api` through `MEDICAL_BOX_API_BASE_URL`. Plain HTTP is
 allowed only by the debug manifest; release builds keep the production HTTPS
 boundary.
+
+Google builds must inject the Web OAuth client ID as
+`GOOGLE_SERVER_CLIENT_ID`. iOS builds must additionally inject the iOS OAuth
+client ID as `GOOGLE_IOS_CLIENT_ID`. Kakao builds must provide
+`KAKAO_NATIVE_APP_KEY` both as a build environment variable and a Dart define.
+Provider client IDs are configuration values, not secrets, but they remain
+environment-specific and are not hard-coded in the application.
