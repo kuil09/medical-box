@@ -28,8 +28,8 @@ Evidence date: 2026-07-27
 - [x] DNS CNAME, automatic TLS, HSTS, allowed-host filtering, web/legal/API/health,
   and both `/.well-known` paths verified
 - [x] Approved-source catalog cron deployed for `18:10 UTC` daily
-- [ ] At least one GitHub Actions scheduled production-monitor run passes.
-  Manual run `30276771772` passed; the scheduler has not emitted a run yet.
+- [x] GitHub Actions manual production-monitor run `30276771772` and scheduled
+  run `30281631480` pass
 
 ## Product and privacy gates
 
