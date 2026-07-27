@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_env: Literal["development", "test", "production"] = "development"
+    app_role: Literal["api", "catalog_sync"] = "api"
     database_url: str = "sqlite+pysqlite:///./medical_box.db"
     public_origin: str = "https://medicalbox.outoftokens.ai"
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
@@ -16,6 +17,9 @@ class Settings(BaseSettings):
     jwt_issuer: str = "medicalbox.outoftokens.ai"
     jwt_audience: str = "com.medicalbox.app"
     catalog_access_email_allowlist: str = ""
+    catalog_sync_source_allowlist: str = ""
+    catalog_database_capacity_bytes: int = 0
+    catalog_min_free_bytes: int = 750_000_000
 
     google_client_id: str | None = None
     apple_client_id: str = "com.medicalbox.app"
@@ -44,7 +48,10 @@ class Settings(BaseSettings):
     mfds_dur_ingredient_base_url: str = (
         "https://apis.data.go.kr/1471000/DURIrdntInfoService03"
     )
-    mfds_recall_url: str | None = None
+    mfds_recall_url: str | None = (
+        "https://apis.data.go.kr/1471000/"
+        "MdcinRtrvlSleStpgeInfoService04/getMdcinRtrvlSleStpgelList03"
+    )
     mfds_shortage_url: str | None = (
         "https://apis.data.go.kr/1471000/"
         "MdcinPrdctnIncmeSuplyService2/getMdcinPrdctnIncmeSuplyList"
@@ -53,7 +60,11 @@ class Settings(BaseSettings):
         "https://apis.data.go.kr/B551182/"
         "dgamtCrtrInfoService1.2/getDgamtList"
     )
-    hira_standard_code_url: str | None = None
+    hira_standard_code_url: str | None = (
+        "https://www.data.go.kr/cmm/cmm/fileDownload.do"
+        "?atchFileId=FILE_000000003550228"
+        "&fileDetailSn=1&insertDataPrcus=N"
+    )
 
     apple_team_id: str | None = None
     android_cert_sha256: str | None = None
@@ -74,7 +85,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_deploy_secrets(self) -> "Settings":
-        if self.app_env == "production" and len(self.jwt_secret) < 32:
+        if (
+            self.app_env == "production"
+            and self.app_role == "api"
+            and len(self.jwt_secret) < 32
+        ):
             raise ValueError(
                 "JWT_SECRET must contain at least 32 characters outside local development."
             )
@@ -90,6 +105,14 @@ class Settings(BaseSettings):
             email.strip().casefold()
             for email in self.catalog_access_email_allowlist.split(",")
             if email.strip()
+        )
+
+    @property
+    def catalog_sync_source_allowlist_set(self) -> frozenset[str]:
+        return frozenset(
+            source.strip()
+            for source in self.catalog_sync_source_allowlist.split(",")
+            if source.strip()
         )
 
 

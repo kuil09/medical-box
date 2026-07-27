@@ -5,6 +5,7 @@
 *.medicalbox
 *.pem
 *.p8
+.backups/
 GoogleService-Info.plist
 google-services.json
 

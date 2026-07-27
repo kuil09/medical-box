@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import typer
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -33,6 +33,8 @@ from .sources import SourceDefinition, official_sources
 app = typer.Typer(no_args_is_help=True)
 
 BOOTSTRAP_DUR_COMMIT_INTERVAL_PAGES = 10
+BOOTSTRAP_CODE_COMMIT_INTERVAL_PAGES = 10
+STALE_RECORD_BATCH_SIZE = 500
 
 
 def canonical_hash(payload: dict[str, Any]) -> str:
@@ -297,12 +299,14 @@ def normalize(
     identification_variant_cache: (
         dict[tuple[str, str], DrugIdentificationVariant] | None
     ) = None,
+    drug_code_cache: dict[str, DrugCode] | None = None,
 ) -> None:
     key = source_record.record_key
     product = (
-        None
-        if source.kind == "dur"
-        else ensure_product(db, payload, product_cache)
+        ensure_product(db, payload, product_cache)
+        if source.kind
+        in {"product", "product_ingredient", "consumer", "identification"}
+        else None
     )
     sequence = product.item_seq if product else item_seq(payload)
     if source.kind == "product" and product:
@@ -468,9 +472,15 @@ def normalize(
         price.effective_date = _date(first_value(payload, "applyDt", "effectiveDate", "적용일자"))
         price.source_record = source_record
     elif source.kind == "code":
-        code = db.scalar(
-            select(DrugCode).where(DrugCode.code_type == "standard", DrugCode.code == key)
-        )
+        if drug_code_cache is not None:
+            code = drug_code_cache.get(key)
+        else:
+            code = db.scalar(
+                select(DrugCode).where(
+                    DrugCode.code_type == "standard",
+                    DrugCode.code == key,
+                )
+            )
         if code is None:
             code = DrugCode(
                 code_type="standard",
@@ -478,6 +488,8 @@ def normalize(
                 source_record=source_record,
             )
             db.add(code)
+            if drug_code_cache is not None:
+                drug_code_cache[key] = code
         code.item_seq = sequence
         code.source_record = source_record
 
@@ -498,6 +510,56 @@ def _release_source_lock(db: Session, source_code: str) -> None:
     if db.bind is None or db.bind.dialect.name != "postgresql":
         return
     db.scalar(select(func.pg_advisory_unlock(_advisory_lock_key(source_code))))
+
+
+def _postgres_storage_usage_bytes(db: Session) -> int | None:
+    if db.bind is None or db.bind.dialect.name != "postgresql":
+        return None
+    value = db.scalar(
+        text(
+            """
+            SELECT pg_database_size(current_database())
+                 + COALESCE((SELECT SUM(size) FROM pg_ls_waldir()), 0)
+            """
+        )
+    )
+    return int(value) if value is not None else None
+
+
+def _require_catalog_storage_headroom(db: Session, source_code: str) -> None:
+    settings = get_settings()
+    capacity = settings.catalog_database_capacity_bytes
+    if capacity <= 0:
+        return
+    used = _postgres_storage_usage_bytes(db)
+    if used is None:
+        return
+    remaining = capacity - used
+    if remaining < settings.catalog_min_free_bytes:
+        raise RuntimeError(
+            "Catalog synchronization stopped before exhausting PostgreSQL "
+            f"storage for {source_code}: {remaining} bytes remain, below the "
+            f"{settings.catalog_min_free_bytes}-byte safety reserve."
+        )
+
+
+def _stale_source_record_ids(
+    db: Session,
+    source_code: str,
+    seen_keys: set[str],
+    *,
+    active_only: bool,
+) -> list[int]:
+    statement = select(SourceRecord.id, SourceRecord.record_key).where(
+        SourceRecord.source_code == source_code,
+    )
+    if active_only:
+        statement = statement.where(SourceRecord.active.is_(True))
+    return [
+        record_id
+        for record_id, key in db.execute(statement)
+        if key not in seen_keys
+    ]
 
 
 def sync_source(db: Session, source: SourceDefinition, fetcher: PublicDataFetcher) -> SyncRun:
@@ -537,12 +599,17 @@ def _sync_source_locked(
         .limit(1)
     )
     try:
+        _require_catalog_storage_headroom(db, source.code)
         checkpoint = db.get(SyncCheckpoint, source.code)
         file_content_hash: str | None = None
         file_updated_at: str | None = None
         page_stream: Iterable[tuple[int, list[dict[str, Any]], int]]
         if source.kind == "code":
-            file_content_hash, file_updated_at, records = fetcher.tabular_file(source)
+            (
+                file_content_hash,
+                file_updated_at,
+                file_pages,
+            ) = fetcher.tabular_file_pages(source)
             if checkpoint is not None and checkpoint.content_hash == file_content_hash:
                 checkpoint.source_updated_at = file_updated_at or checkpoint.source_updated_at
                 run.status = "skipped"
@@ -551,7 +618,7 @@ def _sync_source_locked(
                 run.finished_at = datetime.now(UTC)
                 db.commit()
                 return run
-            page_stream = [(1, records, len(records))]
+            page_stream = file_pages
         else:
             page_stream = fetcher.pages(source)
 
@@ -576,6 +643,8 @@ def _sync_source_locked(
             is None
         )
         batch_dur_bootstrap = source.kind == "dur" and previous_count is None
+        batch_code_bootstrap = source.kind == "code" and previous_count is None
+        batch_source_bootstrap = batch_dur_bootstrap or batch_code_bootstrap
         identification_variants_are_absent = source.kind == "identification" and (
             db.scalar(
                 select(DrugIdentificationVariant.id)
@@ -586,7 +655,7 @@ def _sync_source_locked(
         )
         if source.kind == "identification":
             db.execute(delete(DrugIdentification))
-        for page, records, total in page_stream:
+        for page, records, _total in page_stream:
             pages = page
             source_record_cache: dict[str, SourceRecord] | None = None
             product_cache: dict[str, DrugProduct] | None = None
@@ -598,6 +667,7 @@ def _sync_source_locked(
             identification_variant_cache: (
                 dict[tuple[str, str], DrugIdentificationVariant] | None
             ) = None
+            drug_code_cache: dict[str, DrugCode] | None = None
             if not source_records_are_absent:
                 page_record_keys = {
                     record_key(source, payload)
@@ -680,6 +750,21 @@ def _sync_source_locked(
                         }
                     else:
                         identification_variant_cache = {}
+                elif source.kind == "code":
+                    page_code_keys = {
+                        record_key(source, payload)
+                        for payload in records
+                        if has_required_record_key(source, payload)
+                    }
+                    drug_code_cache = {
+                        code.code: code
+                        for code in db.scalars(
+                            select(DrugCode).where(
+                                DrugCode.code_type == "standard",
+                                DrugCode.code.in_(page_code_keys),
+                            )
+                        ).all()
+                    }
             for payload in records:
                 if not has_required_record_key(source, payload):
                     raise RuntimeError(
@@ -723,10 +808,16 @@ def _sync_source_locked(
                         existing.payload = payload
                         existing.last_seen_run_id = run.id
                         existing.last_seen_at = datetime.now(UTC)
-                    elif source.kind != "dur" or batch_dur_bootstrap:
+                    elif batch_source_bootstrap or (
+                        source.kind != "dur" and not existing.active
+                    ):
                         existing.last_seen_run_id = run.id
                         existing.last_seen_at = datetime.now(UTC)
-                    if source.kind != "dur":
+                    if (
+                        source.kind != "dur"
+                        and not batch_source_bootstrap
+                        and not existing.active
+                    ):
                         existing.active = True
                 if is_new or not unchanged or source.kind == "identification":
                     normalize(
@@ -745,49 +836,57 @@ def _sync_source_locked(
                         identification_variant_cache=(
                             identification_variant_cache
                         ),
+                        drug_code_cache=drug_code_cache,
                     )
                 count += 1
             if checkpoint is None:
                 checkpoint = SyncCheckpoint(source_code=source.code)
                 db.add(checkpoint)
             checkpoint.page = page
-            if file_content_hash:
-                checkpoint.content_hash = file_content_hash
-                checkpoint.source_updated_at = file_updated_at
             db.flush()
+            _require_catalog_storage_headroom(db, source.code)
             if (
                 batch_dur_bootstrap
                 and page % BOOTSTRAP_DUR_COMMIT_INTERVAL_PAGES == 0
+            ) or (
+                batch_code_bootstrap
+                and page % BOOTSTRAP_CODE_COMMIT_INTERVAL_PAGES == 0
             ):
                 db.commit()
-            if page * fetcher.page_size >= total:
-                break
 
         if previous_count and previous_count >= 100 and count < previous_count * 0.5:
             raise RuntimeError(
                 f"Record count collapsed from {previous_count} to {count}; keeping prior snapshot."
             )
+        stale_source_record_ids = _stale_source_record_ids(
+            db,
+            source.code,
+            seen_keys,
+            active_only=source.kind != "dur",
+        )
         if source.kind != "dur":
-            db.execute(
-                update(SourceRecord)
-                .where(
-                    SourceRecord.source_code == source.code,
-                    SourceRecord.last_seen_run_id != run.id,
+            for offset in range(
+                0,
+                len(stale_source_record_ids),
+                STALE_RECORD_BATCH_SIZE,
+            ):
+                stale_batch = stale_source_record_ids[
+                    offset : offset + STALE_RECORD_BATCH_SIZE
+                ]
+                db.execute(
+                    update(SourceRecord)
+                    .where(SourceRecord.id.in_(stale_batch))
+                    .values(active=False)
                 )
-                .values(active=False)
-            )
         elif not dur_rules_are_absent:
-            stale_source_record_ids = [
-                record_id
-                for record_id, key in db.execute(
-                    select(SourceRecord.id, SourceRecord.record_key).where(
-                        SourceRecord.source_code == source.code,
-                    )
-                )
-                if key not in seen_keys
-            ]
-            for offset in range(0, len(stale_source_record_ids), 500):
-                stale_batch = stale_source_record_ids[offset : offset + 500]
+            for offset in range(
+                0,
+                len(stale_source_record_ids),
+                STALE_RECORD_BATCH_SIZE,
+            ):
+                stale_batch = stale_source_record_ids[
+                    offset : offset + STALE_RECORD_BATCH_SIZE
+                ]
                 db.execute(
                     delete(DurRule).where(
                         DurRule.source_code == source.code,
@@ -820,6 +919,9 @@ def _sync_source_locked(
         run.record_count = count
         run.page_count = pages
         run.finished_at = datetime.now(UTC)
+        if checkpoint is not None and file_content_hash:
+            checkpoint.content_hash = file_content_hash
+            checkpoint.source_updated_at = file_updated_at
         db.commit()
         return run
     except Exception as exc:
@@ -835,7 +937,12 @@ def _sync_source_locked(
         raise
 
 
-def seed_source_registry(db: Session, sources: list[SourceDefinition]) -> None:
+def seed_source_registry(
+    db: Session,
+    sources: list[SourceDefinition],
+    *,
+    enabled_codes: frozenset[str] | set[str] | None = None,
+) -> None:
     for source in sources:
         row = db.scalar(select(SourceRegistry).where(SourceRegistry.code == source.code))
         if row is None:
@@ -850,7 +957,9 @@ def seed_source_registry(db: Session, sources: list[SourceDefinition]) -> None:
         row.api_url = source.api_url
         row.license_name = source.license_name
         row.attribution = source.attribution
-        row.enabled = bool(source.api_url)
+        row.enabled = bool(source.api_url) and (
+            enabled_codes is None or source.code in enabled_codes
+        )
     db.commit()
 
 
@@ -860,11 +969,25 @@ def all_sources() -> None:
     if not settings.data_go_kr_service_key:
         raise typer.BadParameter("DATA_GO_KR_SERVICE_KEY is required.")
     sources = official_sources(settings)
+    allowlist = settings.catalog_sync_source_allowlist_set
+    selected_sources = [
+        source for source in sources if not allowlist or source.code in allowlist
+    ]
+    unknown_sources = allowlist - {source.code for source in sources}
+    if unknown_sources:
+        raise typer.BadParameter(
+            "Unknown sources in CATALOG_SYNC_SOURCE_ALLOWLIST: "
+            + ", ".join(sorted(unknown_sources))
+        )
     fetcher = PublicDataFetcher(settings.data_go_kr_service_key)
     failures = 0
     with SessionLocal() as db:
-        seed_source_registry(db, sources)
-        for source in sources:
+        seed_source_registry(
+            db,
+            sources,
+            enabled_codes={source.code for source in selected_sources},
+        )
+        for source in selected_sources:
             try:
                 run = sync_source(db, source, fetcher)
                 typer.echo(f"{source.code}: {run.status} ({run.record_count} records)")
@@ -878,15 +1001,25 @@ def all_sources() -> None:
 @app.command()
 def one(source_code: str) -> None:
     settings = get_settings()
-    if not settings.data_go_kr_service_key:
-        raise typer.BadParameter("DATA_GO_KR_SERVICE_KEY is required.")
     sources = {source.code: source for source in official_sources(settings)}
     source = sources.get(source_code)
     if source is None:
         raise typer.BadParameter(f"Unknown source: {source_code}")
+    if source.kind != "code" and not settings.data_go_kr_service_key:
+        raise typer.BadParameter("DATA_GO_KR_SERVICE_KEY is required.")
     with SessionLocal() as db:
-        seed_source_registry(db, list(sources.values()))
-        run = sync_source(db, source, PublicDataFetcher(settings.data_go_kr_service_key))
+        seed_source_registry(
+            db,
+            list(sources.values()),
+            enabled_codes=(
+                settings.catalog_sync_source_allowlist_set or None
+            ),
+        )
+        run = sync_source(
+            db,
+            source,
+            PublicDataFetcher(settings.data_go_kr_service_key or ""),
+        )
         typer.echo(f"{source.code}: {run.status} ({run.record_count} records)")
 
 
@@ -902,7 +1035,13 @@ def source_kind(source_kind: str) -> None:
     fetcher = PublicDataFetcher(settings.data_go_kr_service_key)
     failures = 0
     with SessionLocal() as db:
-        seed_source_registry(db, all_sources)
+        seed_source_registry(
+            db,
+            all_sources,
+            enabled_codes=(
+                settings.catalog_sync_source_allowlist_set or None
+            ),
+        )
         for source in sources:
             try:
                 run = sync_source(db, source, fetcher)

@@ -1,10 +1,13 @@
 import csv
 import hashlib
 import io
+import re
 import zipfile
 from collections.abc import Iterator
+from itertools import chain, islice
 from pathlib import PurePosixPath
 from typing import Any
+from urllib.parse import unquote
 
 import httpx
 from openpyxl import load_workbook
@@ -74,6 +77,60 @@ class PublicDataFetcher:
             response.headers.get("last-modified"),
             records,
         )
+
+    def tabular_file_pages(
+        self,
+        source: SourceDefinition,
+    ) -> tuple[
+        str,
+        str | None,
+        Iterator[tuple[int, list[dict[str, Any]], int]],
+    ]:
+        if not source.api_url:
+            raise SourceResponseError("Tabular source URL is not configured.")
+        response = self._get_file(source.api_url)
+        content = response.content
+        filename = self._response_filename(response)
+        content_type = response.headers.get("content-type", "")
+        content_hash = hashlib.sha256(content).hexdigest()
+        last_modified = response.headers.get("last-modified")
+        if (
+            not zipfile.is_zipfile(io.BytesIO(content))
+            and PurePosixPath(filename).suffix.casefold() != ".xlsx"
+            and "spreadsheetml" not in content_type.casefold()
+        ):
+            pages = self._csv_pages(content, self.page_size)
+        else:
+            records = self._extract_tabular_records(
+                content,
+                filename=filename,
+                content_type=content_type,
+            )
+            if not records:
+                raise SourceResponseError("Tabular source did not contain data rows.")
+            pages = self._record_pages(records, self.page_size)
+        return content_hash, last_modified, pages
+
+    @staticmethod
+    def _response_filename(response: httpx.Response) -> str:
+        disposition = response.headers.get("content-disposition", "")
+        match = re.search(
+            r"filename\*?=(?:UTF-8''|\"?)([^\";]+)",
+            disposition,
+            flags=re.IGNORECASE,
+        )
+        if match:
+            return unquote(match.group(1).strip())
+        return PurePosixPath(response.url.path).name
+
+    @staticmethod
+    def _record_pages(
+        records: list[dict[str, Any]],
+        page_size: int,
+    ) -> Iterator[tuple[int, list[dict[str, Any]], int]]:
+        total = len(records)
+        for offset in range(0, total, page_size):
+            yield offset // page_size + 1, records[offset : offset + page_size], total
 
     @retry(
         retry=retry_if_exception_type((httpx.HTTPError, SourceResponseError)),
@@ -196,25 +253,66 @@ class PublicDataFetcher:
 
     @staticmethod
     def _csv_records(content: bytes) -> list[dict[str, Any]]:
-        text: str | None = None
-        for encoding in ("utf-8-sig", "cp949", "euc-kr"):
+        return [
+            record
+            for _, records, _ in PublicDataFetcher._csv_pages(content, 1_000)
+            for record in records
+        ]
+
+    @staticmethod
+    def _csv_pages(
+        content: bytes,
+        page_size: int,
+    ) -> Iterator[tuple[int, list[dict[str, Any]], int]]:
+        encoding: str | None = None
+        for candidate in ("utf-8-sig", "cp949", "euc-kr"):
             try:
-                text = content.decode(encoding)
+                content[: 1024 * 1024].decode(candidate)
+                encoding = candidate
                 break
             except UnicodeDecodeError:
                 continue
-        if text is None:
+        if encoding is None:
             raise SourceResponseError("CSV encoding is not UTF-8, CP949, or EUC-KR.")
+        text_stream = io.TextIOWrapper(
+            io.BytesIO(content),
+            encoding=encoding,
+            newline="",
+        )
+        sample = text_stream.read(8192)
+        text_stream.seek(0)
         try:
-            dialect = csv.Sniffer().sniff(text[:8192], delimiters=",\t;|")
-            reader = csv.reader(io.StringIO(text), dialect)
+            dialect = csv.Sniffer().sniff(sample, delimiters=",\t;|")
+            reader = csv.reader(text_stream, dialect)
         except csv.Error:
-            delimiter = max((",", "\t", ";", "|"), key=text.count)
-            if text.count(delimiter) == 0:
+            delimiter = max((",", "\t", ";", "|"), key=sample.count)
+            if sample.count(delimiter) == 0:
                 raise SourceResponseError("CSV delimiter could not be identified.") from None
-            reader = csv.reader(io.StringIO(text), delimiter=delimiter)
-        rows = [tuple(row) for row in reader]
-        return PublicDataFetcher._rows_to_records(rows)
+            reader = csv.reader(text_stream, delimiter=delimiter)
+        prefix = [tuple(row) for row in islice(reader, 30)]
+        header_index = PublicDataFetcher._header_index(prefix)
+        if header_index is None:
+            raise SourceResponseError("Tabular source header row could not be identified.")
+        headers = PublicDataFetcher._unique_headers(prefix[header_index])
+        records: list[dict[str, Any]] = []
+        page = 1
+        rows = chain(prefix[header_index + 1 :], (tuple(row) for row in reader))
+        for row in rows:
+            values = list(row) + [None] * max(0, len(headers) - len(row))
+            record = {
+                header: value
+                for header, value in zip(headers, values, strict=False)
+                if value not in (None, "")
+            }
+            if not record:
+                continue
+            records.append(record)
+            if len(records) == page_size:
+                yield page, records, 0
+                records = []
+                page += 1
+        if records:
+            yield page, records, 0
 
     @staticmethod
     def _rows_to_records(rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
