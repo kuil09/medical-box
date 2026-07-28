@@ -8,7 +8,7 @@ import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -49,6 +49,7 @@ BACKUP_LOCK_KEY = int.from_bytes(
     "big",
 ) & 0x7FFF_FFFF_FFFF_FFFF
 BACKUP_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{12}$")
+ORPHAN_OBJECT_GRACE = timedelta(hours=6)
 RESTORE_CONFIRMATION = "restore-disposable-database"
 
 
@@ -485,16 +486,27 @@ def load_valid_manifests(
     prefix: str,
     hmac_key: bytes,
 ) -> list[BackupManifest]:
+    objects = store.list_objects(prefix)
+    objects_by_key = {item.key: item for item in objects}
     manifests: list[BackupManifest] = []
-    for item in store.list_objects(prefix):
+    for item in objects:
         if not item.key.endswith(".manifest.json"):
             continue
         try:
             manifest = parse_manifest(store.get_bytes(item.key), hmac_key=hmac_key)
         except (ValueError, OSError):
             continue
-        if manifest.manifest_key.startswith(f"{prefix}/"):
-            manifests.append(manifest)
+        encrypted_object = objects_by_key.get(manifest.object_key)
+        if (
+            manifest.manifest_key != item.key
+            or not manifest.manifest_key.startswith(f"{prefix}/")
+            or encrypted_object is None
+            or encrypted_object.size != manifest.encrypted_size
+            or store.object_sha256(manifest.object_key)
+            != manifest.encrypted_sha256
+        ):
+            continue
+        manifests.append(manifest)
     return manifests
 
 
@@ -506,6 +518,7 @@ def prune_backups(
     daily: int,
     weekly: int,
     monthly: int,
+    now: datetime | None = None,
 ) -> tuple[str, ...]:
     manifests = load_valid_manifests(store, prefix=prefix, hmac_key=hmac_key)
     keep = retention_backup_ids(
@@ -514,13 +527,31 @@ def prune_backups(
         weekly=weekly,
         monthly=monthly,
     )
-    deleted: list[str] = []
+    deleted: set[str] = set()
     for manifest in manifests:
         if manifest.backup_id in keep:
             continue
-        deleted.extend([manifest.object_key, manifest.manifest_key])
-    store.delete_objects(deleted)
-    return tuple(sorted(deleted))
+        deleted.update([manifest.object_key, manifest.manifest_key])
+
+    valid_object_keys = {manifest.object_key for manifest in manifests}
+    cutoff = (now or datetime.now(UTC)).astimezone(UTC) - ORPHAN_OBJECT_GRACE
+    object_prefix = f"{prefix}/"
+    object_suffix = ".dump.gpg"
+    for item in store.list_objects(prefix):
+        if (
+            item.key in valid_object_keys
+            or not item.key.startswith(object_prefix)
+            or not item.key.endswith(object_suffix)
+            or item.last_modified.astimezone(UTC) > cutoff
+        ):
+            continue
+        backup_id = item.key[len(object_prefix) : -len(object_suffix)]
+        if BACKUP_ID_PATTERN.fullmatch(backup_id):
+            deleted.add(item.key)
+
+    ordered_deleted = tuple(sorted(deleted))
+    store.delete_objects(ordered_deleted)
+    return ordered_deleted
 
 
 def create_backup(
@@ -600,6 +631,17 @@ def create_backup(
                 },
             )
             try:
+                uploaded_copy = working / f"{backup_id}.uploaded.dump.gpg"
+                store.get_file(object_key, uploaded_copy)
+                if (
+                    uploaded_copy.stat().st_size != encrypted_size
+                    or sha256_file(uploaded_copy) != encrypted_sha256
+                ):
+                    raise RuntimeError(
+                        "Uploaded encrypted backup failed remote read-after-write "
+                        "verification."
+                    )
+                uploaded_copy.unlink()
                 store.put_bytes(
                     manifest_key,
                     manifest.signed_bytes(),
@@ -617,6 +659,7 @@ def create_backup(
             daily=settings.backup_daily_retention,
             weekly=settings.backup_weekly_retention,
             monthly=settings.backup_monthly_retention,
+            now=datetime.now(UTC),
         )
     return BackupResult(manifest=manifest, deleted_object_keys=deleted)
 
@@ -633,12 +676,14 @@ def latest_manifest(
     return max(manifests, key=lambda item: item.created_at)
 
 
-def _database_identity(database_url: str) -> tuple[str, int, str, str]:
+def _database_identity(database_url: str) -> tuple[str, int, str]:
     parsed = urlsplit(database_url)
+    host = (parsed.hostname or "").casefold()
+    if host in {"127.0.0.1", "::1", "localhost"}:
+        host = "loopback"
     return (
-        parsed.hostname or "",
+        host,
         parsed.port or 5432,
-        unquote(parsed.username or ""),
         unquote(parsed.path.removeprefix("/")),
     )
 
@@ -648,13 +693,28 @@ def require_disposable_restore_target(
     source_database_url: str,
     target_database_url: str,
     confirmation: str | None,
+    app_env: str,
+    app_role: str,
 ) -> None:
     if confirmation != RESTORE_CONFIRMATION:
         raise RuntimeError(
             f"Restore requires BACKUP_RESTORE_CONFIRMATION={RESTORE_CONFIRMATION}."
         )
+    if app_env != "test" or app_role != "backup_verify":
+        raise RuntimeError(
+            "Restore verification requires APP_ENV=test and APP_ROLE=backup_verify."
+        )
     if _database_identity(source_database_url) == _database_identity(target_database_url):
         raise RuntimeError("Restore target is the production backup source.")
+    target_host = urlsplit(target_database_url).hostname or ""
+    disposable_host = target_host in {"127.0.0.1", "::1", "localhost"} or bool(
+        re.fullmatch(
+            r"medical-box-(?:backup-restore|production-restore-db)-\d+-\d+",
+            target_host,
+        )
+    )
+    if not disposable_host:
+        raise RuntimeError("Restore target is not an approved disposable host.")
     if os.getenv("RAILWAY_ENVIRONMENT_NAME", "").casefold() == "production":
         raise RuntimeError("Restore verification may not run in the production environment.")
 
@@ -664,8 +724,12 @@ def _target_is_empty(database_url: str) -> bool:
         row = connection.execute(
             """
             SELECT count(*)
-            FROM pg_catalog.pg_tables
-            WHERE schemaname = 'public'
+            FROM pg_catalog.pg_class AS relation
+            JOIN pg_catalog.pg_namespace AS namespace
+              ON namespace.oid = relation.relnamespace
+            WHERE namespace.nspname NOT LIKE 'pg_%'
+              AND namespace.nspname <> 'information_schema'
+              AND relation.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
             """
         ).fetchone()
         return row is not None and int(row[0]) == 0
@@ -787,6 +851,8 @@ def verify_backup(
                 source_database_url=source_url,
                 target_database_url=target_url,
                 confirmation=settings.backup_restore_confirmation,
+                app_env=settings.app_env,
+                app_role=settings.app_role,
             )
             run_pg_restore(
                 executable=settings.backup_pg_restore_path,

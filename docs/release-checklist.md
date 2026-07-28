@@ -17,7 +17,8 @@ Evidence date: 2026-07-28
 
 ## Infrastructure gates
 
-- [x] Railway production plan reports no drift and no unexpected deletes
+- [x] Railway production plan reports no unexpected deletes. The pending
+  backup-resource creates remain unapplied until cost and legal approval.
 - [x] API and PostgreSQL run in Railway Singapore
 - [ ] Railway-native or approved off-device daily, weekly, and monthly backups
   enabled. The encrypted bucket worker, signed manifests, retention logic, and
@@ -31,7 +32,9 @@ Evidence date: 2026-07-28
 - [x] `pg_trgm` activated once in production
 - [x] DNS CNAME, automatic TLS, HSTS, allowed-host filtering, web/legal/API/health,
   and both `/.well-known` paths verified
-- [x] Approved-source catalog cron deployed for `18:10 UTC` daily
+- [ ] Approved-source recurring catalog mutation enabled. The `18:10 UTC`
+  trigger currently executes a deliberate no-op until the capacity reserve and
+  isolated recurring-run canary pass.
 - [x] GitHub Actions manual production-monitor run `30276771772` and scheduled
   run `30281631480` pass
 

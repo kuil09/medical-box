@@ -671,7 +671,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
-    { name = "boto3" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "openpyxl" },
@@ -685,8 +684,11 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-dev = [
+backup = [
+    { name = "boto3" },
     { name = "boto3-stubs", extra = ["s3"] },
+]
+dev = [
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -697,8 +699,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.16.4,<2.0" },
-    { name = "boto3", specifier = ">=1.40.0,<2.0" },
-    { name = "boto3-stubs", extras = ["s3"], marker = "extra == 'dev'", specifier = ">=1.40.0,<2.0" },
+    { name = "boto3", marker = "extra == 'backup'", specifier = ">=1.40.0,<2.0" },
+    { name = "boto3-stubs", extras = ["s3"], marker = "extra == 'backup'", specifier = ">=1.40.0,<2.0" },
     { name = "fastapi", specifier = ">=0.140.7,<1.0" },
     { name = "httpx", specifier = ">=0.28.1,<1.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=2.3.0,<3.0" },
@@ -715,7 +717,7 @@ requires-dist = [
     { name = "types-openpyxl", marker = "extra == 'dev'", specifier = ">=3.1.5.20250602" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.51.0,<1.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["backup", "dev"]
 
 [[package]]
 name = "mypy"

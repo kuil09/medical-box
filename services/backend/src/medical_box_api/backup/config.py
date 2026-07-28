@@ -9,6 +9,7 @@ class BackupSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_env: Literal["development", "test", "production"] = "development"
+    app_role: Literal["backup", "backup_verify"] = "backup"
     database_url: SecretStr
 
     backup_store: Literal["s3", "local"] = "s3"

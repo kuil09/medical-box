@@ -14,31 +14,32 @@ concurrency:
 
 jobs:
   restore:
+    if: github.ref == 'refs/heads/main'
     runs-on: [self-hosted, linux, x64, medical-box-backup, singapore]
     timeout-minutes: 45
     environment: backup-restore
-    env:
-      APP_ENV: test
-      APP_ROLE: backup_verify
-      DATABASE_URL: postgresql://backup:unused@production.invalid:5432/medical_box
-      BACKUP_STORE: s3
-      BACKUP_PREFIX: medical-box/production
-      AWS_ENDPOINT_URL: ${{ secrets.AWS_ENDPOINT_URL }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
-      AWS_DEFAULT_REGION: sin
-      AWS_S3_ADDRESSING_STYLE: path
-      BACKUP_GPG_PRIVATE_KEY_BASE64: ${{ secrets.BACKUP_GPG_PRIVATE_KEY_BASE64 }}
-      BACKUP_GPG_PASSPHRASE: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
-      BACKUP_MANIFEST_HMAC_KEY_BASE64: ${{ secrets.BACKUP_MANIFEST_HMAC_KEY_BASE64 }}
-      BACKUP_RESTORE_DATABASE_URL: postgresql://postgres:restore-verification-only@127.0.0.1:5432/medical_box
-      BACKUP_RESTORE_CONFIRMATION: restore-disposable-database
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Restore and verify the newest signed backup
         id: restore
         shell: bash
+        env:
+          APP_ENV: test
+          APP_ROLE: backup_verify
+          DATABASE_URL: postgresql://backup:unused@production.invalid:5432/medical_box
+          BACKUP_STORE: s3
+          BACKUP_PREFIX: medical-box/production
+          AWS_ENDPOINT_URL: ${{ secrets.AWS_ENDPOINT_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
+          AWS_DEFAULT_REGION: ${{ vars.AWS_DEFAULT_REGION }}
+          AWS_S3_ADDRESSING_STYLE: ${{ vars.AWS_S3_ADDRESSING_STYLE }}
+          BACKUP_GPG_PRIVATE_KEY_BASE64: ${{ secrets.BACKUP_GPG_PRIVATE_KEY_BASE64 }}
+          BACKUP_GPG_PASSPHRASE: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
+          BACKUP_MANIFEST_HMAC_KEY_BASE64: ${{ secrets.BACKUP_MANIFEST_HMAC_KEY_BASE64 }}
+          BACKUP_RESTORE_DATABASE_URL: postgresql://postgres:restore-verification-only@127.0.0.1:5432/medical_box
+          BACKUP_RESTORE_CONFIRMATION: restore-disposable-database
         run: |
           set -euo pipefail
           key_directory="$(mktemp -d)"

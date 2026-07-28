@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import shutil
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -44,6 +45,8 @@ class BackupStore(Protocol):
     def get_file(self, key: str, destination: Path) -> None: ...
 
     def get_bytes(self, key: str) -> bytes: ...
+
+    def object_sha256(self, key: str) -> str | None: ...
 
     def list_objects(self, prefix: str) -> list[StoredObject]: ...
 
@@ -92,6 +95,13 @@ class LocalBackupStore:
 
     def get_bytes(self, key: str) -> bytes:
         return self._path(key).read_bytes()
+
+    def object_sha256(self, key: str) -> str:
+        digest = hashlib.sha256()
+        with self._path(key).open("rb") as source:
+            while chunk := source.read(1024 * 1024):
+                digest.update(chunk)
+        return digest.hexdigest()
 
     def list_objects(self, prefix: str) -> list[StoredObject]:
         directory = self._path(prefix)
@@ -180,6 +190,12 @@ class S3BackupStore:
     def get_bytes(self, key: str) -> bytes:
         response = self.client.get_object(Bucket=self.bucket_name, Key=key)
         return response["Body"].read()
+
+    def object_sha256(self, key: str) -> str | None:
+        response = self.client.head_object(Bucket=self.bucket_name, Key=key)
+        metadata = response.get("Metadata", {})
+        value = metadata.get("sha256")
+        return str(value) if value is not None else None
 
     def list_objects(self, prefix: str) -> list[StoredObject]:
         objects: list[StoredObject] = []

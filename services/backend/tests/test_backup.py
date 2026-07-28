@@ -1,7 +1,9 @@
 import base64
+import hashlib
+import os
 import subprocess
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +15,7 @@ from medical_box_api.backup.manifest import BackupManifest, EncryptionMetadata
 from medical_box_api.backup.service import (
     DatabaseSnapshot,
     create_backup,
+    load_valid_manifests,
     parse_manifest,
     prune_backups,
     require_disposable_restore_target,
@@ -24,6 +27,7 @@ from medical_box_api.backup.store import LocalBackupStore, S3BackupStore
 HMAC_KEY = b"manifest-test-key-with-at-least-32-bytes"
 HMAC_KEY_BASE64 = base64.b64encode(HMAC_KEY).decode()
 FINGERPRINT = "0123456789ABCDEF0123456789ABCDEF01234567"
+ENCRYPTED_TEST_BYTES = b"e" * 120
 
 
 def backup_settings(tmp_path: Path) -> BackupSettings:
@@ -54,8 +58,8 @@ def manifest_for(created_at: datetime, suffix: str) -> BackupManifest:
         table_counts={"users": 1},
         plaintext_size=100,
         plaintext_sha256="a" * 64,
-        encrypted_size=120,
-        encrypted_sha256="b" * 64,
+        encrypted_size=len(ENCRYPTED_TEST_BYTES),
+        encrypted_sha256=hashlib.sha256(ENCRYPTED_TEST_BYTES).hexdigest(),
         encryption=EncryptionMetadata(recipient_fingerprint=FINGERPRINT),
     )
     manifest.sign(HMAC_KEY)
@@ -130,7 +134,7 @@ def test_prune_backups_deletes_expired_object_and_manifest_pairs(
     for manifest in (newest, earlier_manual, previous_day):
         store.put_bytes(
             manifest.object_key,
-            b"encrypted",
+            ENCRYPTED_TEST_BYTES,
             content_type="application/octet-stream",
             metadata={},
         )
@@ -159,6 +163,83 @@ def test_prune_backups_deletes_expired_object_and_manifest_pairs(
         newest.manifest_key,
         previous_day.object_key,
         previous_day.manifest_key,
+    }
+
+
+def test_retention_ignores_manifests_without_a_complete_encrypted_object(
+    tmp_path: Path,
+) -> None:
+    store = LocalBackupStore(tmp_path)
+    valid = manifest_for(datetime(2026, 7, 28, 20, tzinfo=UTC), "1")
+    missing = manifest_for(datetime(2026, 7, 27, 20, tzinfo=UTC), "2")
+    truncated = manifest_for(datetime(2026, 7, 26, 20, tzinfo=UTC), "3")
+    corrupted = manifest_for(datetime(2026, 7, 25, 20, tzinfo=UTC), "4")
+
+    store.put_bytes(
+        valid.object_key,
+        ENCRYPTED_TEST_BYTES,
+        content_type="application/octet-stream",
+        metadata={},
+    )
+    store.put_bytes(
+        truncated.object_key,
+        b"truncated",
+        content_type="application/octet-stream",
+        metadata={},
+    )
+    store.put_bytes(
+        corrupted.object_key,
+        b"x" * corrupted.encrypted_size,
+        content_type="application/octet-stream",
+        metadata={},
+    )
+    for manifest in (valid, missing, truncated, corrupted):
+        store.put_bytes(
+            manifest.manifest_key,
+            manifest.signed_bytes(),
+            content_type="application/json",
+            metadata={},
+        )
+
+    manifests = load_valid_manifests(
+        store,
+        prefix="medical-box/production",
+        hmac_key=HMAC_KEY,
+    )
+
+    assert [manifest.backup_id for manifest in manifests] == [valid.backup_id]
+
+
+def test_prune_removes_only_expired_orphaned_encrypted_objects(
+    tmp_path: Path,
+) -> None:
+    store = LocalBackupStore(tmp_path)
+    now = datetime.now(UTC)
+    old_orphan = manifest_for(now - timedelta(days=1), "1").object_key
+    fresh_orphan = manifest_for(now, "2").object_key
+    for key in (old_orphan, fresh_orphan):
+        store.put_bytes(
+            key,
+            b"orphan",
+            content_type="application/octet-stream",
+            metadata={},
+        )
+    old_timestamp = (now - timedelta(hours=7)).timestamp()
+    os.utime(tmp_path / old_orphan, (old_timestamp, old_timestamp))
+
+    deleted = prune_backups(
+        store,
+        prefix="medical-box/production",
+        hmac_key=HMAC_KEY,
+        daily=1,
+        weekly=1,
+        monthly=1,
+        now=now,
+    )
+
+    assert deleted == (old_orphan,)
+    assert {item.key for item in store.list_objects("medical-box/production")} == {
+        fresh_orphan
     }
 
 
@@ -218,19 +299,42 @@ def test_local_store_rejects_path_escape(tmp_path: Path) -> None:
 
 def test_restore_requires_explicit_disposable_target() -> None:
     source = "postgresql://backup:secret@source:5432/medical_box"
-    target = "postgresql://backup:secret@restore:5432/medical_box"
+    target = (
+        "postgresql://backup:secret@"
+        "medical-box-backup-restore-123-456:5432/medical_box"
+    )
 
     with pytest.raises(RuntimeError, match="requires BACKUP_RESTORE_CONFIRMATION"):
         require_disposable_restore_target(
             source_database_url=source,
             target_database_url=target,
             confirmation=None,
+            app_env="test",
+            app_role="backup_verify",
         )
     with pytest.raises(RuntimeError, match="production backup source"):
         require_disposable_restore_target(
             source_database_url=source,
             target_database_url=source,
             confirmation=service.RESTORE_CONFIRMATION,
+            app_env="test",
+            app_role="backup_verify",
+        )
+    with pytest.raises(RuntimeError, match="approved disposable host"):
+        require_disposable_restore_target(
+            source_database_url=source,
+            target_database_url="postgresql://other@production-alias:5432/medical_box",
+            confirmation=service.RESTORE_CONFIRMATION,
+            app_env="test",
+            app_role="backup_verify",
+        )
+    with pytest.raises(RuntimeError, match="APP_ENV=test"):
+        require_disposable_restore_target(
+            source_database_url=source,
+            target_database_url=target,
+            confirmation=service.RESTORE_CONFIRMATION,
+            app_env="production",
+            app_role="backup",
         )
 
 
