@@ -496,7 +496,7 @@ class _ConnectedCatalogCard extends StatelessWidget {
                     ? Image.network(
                         imageUri.toString(),
                         fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => PhosphorIcon(
+                        errorBuilder: (_, _, _) => PhosphorIcon(
                           PhosphorIconsDuotone.scan,
                           color: MedicalBoxColors.skyDeep,
                         ),
@@ -804,7 +804,7 @@ class _OfficialAppearanceCard extends StatelessWidget {
                   child: Image.network(
                     imageUri.toString(),
                     fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const _ImageUnavailable(),
+                    errorBuilder: (_, _, _) => const _ImageUnavailable(),
                   ),
                 ),
               ),

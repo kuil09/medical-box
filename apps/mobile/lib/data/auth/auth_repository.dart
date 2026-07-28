@@ -51,6 +51,8 @@ class AccountProfile {
 class AuthRepository {
   AuthRepository(this._api, this._keyStore);
 
+  static Future<void>? _googleInitialization;
+
   final ApiClient _api;
   final DatabaseKeyStore _keyStore;
   AccountProfile? _account;
@@ -128,7 +130,8 @@ class AuthRepository {
     }
     await _keyStore.clearTokens();
     _account = null;
-    await _googleSignIn(requireConfiguration: false).signOut();
+    final google = await _googleSignIn(requireConfiguration: false);
+    await google.signOut();
   }
 
   Future<void> deleteAccount(LoginProvider provider) async {
@@ -188,8 +191,9 @@ class AuthRepository {
   Future<String> _providerToken(LoginProvider provider) async {
     switch (provider) {
       case LoginProvider.google:
-        final user = await _googleSignIn().signIn();
-        final token = (await user?.authentication)?.idToken;
+        final google = await _googleSignIn();
+        final user = await google.authenticate(scopeHint: const ['email']);
+        final token = user.authentication.idToken;
         if (token == null) throw StateError('Google sign-in was cancelled.');
         return token;
       case LoginProvider.apple:
@@ -216,15 +220,15 @@ class AuthRepository {
     }
   }
 
-  GoogleSignIn _googleSignIn({bool requireConfiguration = true}) {
+  Future<GoogleSignIn> _googleSignIn({bool requireConfiguration = true}) async {
     if (requireConfiguration && googleServerClientId.isEmpty) {
       throw StateError('GOOGLE_SERVER_CLIENT_ID is not configured.');
     }
     if (requireConfiguration && Platform.isIOS && googleIosClientId.isEmpty) {
       throw StateError('GOOGLE_IOS_CLIENT_ID is not configured.');
     }
-    return GoogleSignIn(
-      scopes: const ['email'],
+    final google = GoogleSignIn.instance;
+    _googleInitialization ??= google.initialize(
       serverClientId: googleServerClientId.isEmpty
           ? null
           : googleServerClientId,
@@ -232,5 +236,7 @@ class AuthRepository {
           ? googleIosClientId
           : null,
     );
+    await _googleInitialization;
+    return google;
   }
 }
