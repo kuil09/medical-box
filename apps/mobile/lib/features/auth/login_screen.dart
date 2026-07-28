@@ -116,12 +116,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _working = true);
     var accountDeleted = false;
     try {
-      await repository.deleteAccount(provider);
-      ref.invalidate(authSessionProvider);
-      accountDeleted = true;
-      if (scope == _AccountDeletionScope.accountAndDevice) {
-        await ref.read(databaseProvider).deleteAllLocalData();
-      }
+      await ref
+          .read(accountDeletionCoordinatorProvider)
+          .delete(
+            deleteAccount: () async {
+              await repository.deleteAccount(provider);
+              ref.invalidate(authSessionProvider);
+              accountDeleted = true;
+            },
+            deleteDeviceData: scope == _AccountDeletionScope.accountAndDevice,
+          );
       if (mounted) {
         setState(
           () => _message = scope == _AccountDeletionScope.accountAndDevice
