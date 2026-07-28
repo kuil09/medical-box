@@ -7,6 +7,7 @@ from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
+from ..catalog.identity import catalog_identity_matches
 from ..db import get_db
 from ..models import (
     DrugCode,
@@ -190,12 +191,19 @@ def _summary(product: DrugProduct) -> DrugSummary:
     )
 
 
-def _active_product_exists() -> ColumnElement[bool]:
+def _active_product_exists(db: Session) -> ColumnElement[bool]:
     return (
         select(SourceRecord.id)
         .where(
             SourceRecord.source_code == "mfds_product",
             SourceRecord.record_key == DrugProduct.item_seq,
+            catalog_identity_matches(
+                db,
+                SourceRecord.source_code,
+                SourceRecord.record_key,
+                "mfds_product",
+                DrugProduct.item_seq,
+            ),
             SourceRecord.active.is_(True),
         )
         .exists()
@@ -205,7 +213,11 @@ def _active_product_exists() -> ColumnElement[bool]:
 @router.get("/catalog/meta", response_model=CatalogMeta)
 def catalog_meta(db: Session = Depends(get_db)) -> CatalogMeta:
     product_count = (
-        db.scalar(select(func.count()).select_from(DrugProduct).where(_active_product_exists()))
+        db.scalar(
+            select(func.count())
+            .select_from(DrugProduct)
+            .where(_active_product_exists(db))
+        )
         or 0
     )
     last_sync = db.scalar(
@@ -294,7 +306,7 @@ def search_drugs(
     statement = (
         select(DrugProduct)
         .where(
-            _active_product_exists(),
+            _active_product_exists(db),
             or_(
                 DrugProduct.item_name.ilike(pattern, escape="\\"),
                 DrugProduct.manufacturer.ilike(pattern, escape="\\"),
@@ -336,7 +348,7 @@ def get_drug_safety_rules(
         db.scalar(
             select(DrugProduct.item_seq).where(
                 DrugProduct.item_seq == item_seq,
-                _active_product_exists(),
+                _active_product_exists(db),
             )
         )
         is None
@@ -382,7 +394,7 @@ def get_drug(
         .options(selectinload(DrugProduct.ingredients), selectinload(DrugProduct.consumer_info))
         .where(
             DrugProduct.item_seq == item_seq,
-            _active_product_exists(),
+            _active_product_exists(db),
         )
     )
     if product is None:

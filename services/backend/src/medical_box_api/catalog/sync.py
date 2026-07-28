@@ -30,6 +30,10 @@ from ..models import (
     SyncRun,
 )
 from .fetcher import PublicDataFetcher, SourceTotalChangedError
+from .identity import (
+    catalog_identity_in,
+    catalog_identity_matches,
+)
 from .locking import catalog_mutation_lock
 from .sources import SourceDefinition, official_sources
 
@@ -743,6 +747,13 @@ def _sync_source_locked(
                         select(SourceRecord).where(
                             SourceRecord.source_code == source.code,
                             SourceRecord.record_key.in_(page_record_keys),
+                            catalog_identity_in(
+                                db,
+                                SourceRecord.source_code,
+                                SourceRecord.record_key,
+                                source.code,
+                                page_record_keys,
+                            ),
                         )
                     ).all()
                 }
@@ -825,6 +836,13 @@ def _sync_source_locked(
                             select(DrugCode).where(
                                 DrugCode.code_type == "standard",
                                 DrugCode.code.in_(page_code_keys),
+                                catalog_identity_in(
+                                    db,
+                                    DrugCode.code_type,
+                                    DrugCode.code,
+                                    "standard",
+                                    page_code_keys,
+                                ),
                             )
                         ).all()
                     }
@@ -976,6 +994,13 @@ def _sync_source_locked(
                     SourceRecord.source_code == source.code,
                     SourceRecord.record_key
                     == DrugIdentificationVariant.variant_key,
+                    catalog_identity_matches(
+                        db,
+                        SourceRecord.source_code,
+                        SourceRecord.record_key,
+                        source.code,
+                        DrugIdentificationVariant.variant_key,
+                    ),
                     SourceRecord.active.is_(True),
                 )
                 .exists()
