@@ -319,8 +319,15 @@ to date, and the readiness endpoint returned HTTP 200.
 
 `.github/workflows/production-monitor.yml` probes the product, legal, support,
 health, well-known, authentication-boundary, HSTS, and `nosniff` behavior every
-four hours and on manual dispatch. Manual run `30276771772` completed
-successfully after the workflow was merged. Scheduled run `30281631480` then
-completed successfully for commit
+four hours and on manual dispatch. It also parses the downloaded Apple and
+Android well-known JSON. The semantic gate rejects the placeholder Apple app
+ID, a missing application target, an empty Android certificate list, and a
+malformed SHA-256 fingerprint. This prevents HTTP 200 placeholder documents
+from being counted as release-ready metadata.
+
+Manual run `30276771772` completed successfully after the original workflow was
+merged. Scheduled run `30281631480` then completed successfully for commit
 `cce7671dbe67a8b4342a7429c38e2c5aaebfee98`, independently proving the GitHub
-scheduler path.
+scheduler path. Those runs predate the semantic metadata gate. A new passing
+run must be recorded after `APPLE_TEAM_ID` and the Play App Signing
+`ANDROID_CERT_SHA256` are configured.

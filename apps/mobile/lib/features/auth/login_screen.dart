@@ -133,8 +133,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(authSessionProvider);
-    final account =
-        ref.read(authRepositoryProvider).account ?? session.asData?.value;
+    final repository = ref.read(authRepositoryProvider);
+    final account = repository.account ?? session.asData?.value;
+    final supportedProviders = LoginProvider.values.where(
+      repository.supportsProvider,
+    );
     return Scaffold(
       appBar: AppBar(title: const Text('로그인 및 검색 권한')),
       body: ListView(
@@ -166,7 +169,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             style: const TextStyle(color: MedicalBoxColors.muted, height: 1.5),
           ),
           const SizedBox(height: 26),
-          for (final provider in LoginProvider.values)
+          for (final provider in supportedProviders)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: OutlinedButton(

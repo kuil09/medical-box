@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -15,6 +16,15 @@ extension LoginProviderApiName on LoginProvider {
     LoginProvider.kakao => 'kakao',
     LoginProvider.apple => 'apple',
     LoginProvider.google => 'google',
+  };
+}
+
+bool isLoginProviderSupported(LoginProvider provider, TargetPlatform platform) {
+  return switch (provider) {
+    // Android requires an Apple Service ID web flow, which is not implemented.
+    LoginProvider.apple => platform == TargetPlatform.iOS,
+    LoginProvider.google || LoginProvider.kakao =>
+      platform == TargetPlatform.iOS || platform == TargetPlatform.android,
   };
 }
 
@@ -47,16 +57,22 @@ class AccountProfile {
 }
 
 class AuthRepository {
-  AuthRepository(this._api, this._keyStore);
+  AuthRepository(this._api, this._keyStore, {TargetPlatform? targetPlatform})
+    : _targetPlatform = targetPlatform ?? defaultTargetPlatform;
 
   static Future<void>? _googleInitialization;
 
   final ApiClient _api;
   final DatabaseKeyStore _keyStore;
+  final TargetPlatform _targetPlatform;
   AccountProfile? _account;
   Future<String?>? _refreshInFlight;
 
   AccountProfile? get account => _account;
+
+  bool supportsProvider(LoginProvider provider) {
+    return isLoginProviderSupported(provider, _targetPlatform);
+  }
 
   Future<String?> accessToken() => _keyStore.readToken('access');
 
@@ -187,6 +203,12 @@ class AuthRepository {
   }
 
   Future<String> _providerToken(LoginProvider provider) async {
+    if (!supportsProvider(provider)) {
+      throw UnsupportedError(
+        '${provider.apiName} sign-in is not supported on '
+        '${_targetPlatform.name}.',
+      );
+    }
     switch (provider) {
       case LoginProvider.google:
         final google = await _googleSignIn();

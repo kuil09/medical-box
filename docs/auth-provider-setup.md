@@ -21,8 +21,15 @@ console configuration is required before the flows can complete.
   the deletion-time authorization code and revoke the resulting Apple token.
   It never stores the authorization code or provider token.
 - Verify `/.well-known/apple-app-site-association` after deployment.
-- Apple login remains iOS-only until an Apple Services ID, HTTPS callback, and
-  Android web-authentication flow are configured and independently tested.
+- The current mobile implementation offers native Apple sign-in only on iOS.
+  Android hides and rejects Apple sign-in because there is no Apple Service ID
+  web-authentication flow. Do not reuse the iOS app identifier as an Android
+  web client.
+- Enabling Apple sign-in on Android requires a registered Apple Service ID,
+  verified web domain and return URL, state and nonce validation, an explicit
+  `WebAuthenticationOptions` implementation, and Android integration tests.
+  The platform capability gate must remain closed until that complete flow
+  exists.
 
 ## Google
 
@@ -52,6 +59,12 @@ Account deletion must also prove that Google disconnect, Kakao unlink, and
 Apple server-side token revocation complete before the local session is
 cleared. A provider failure must preserve the server account and local session
 so the user can retry.
+
+`services/backend/scripts/verify_well_known_metadata.py` validates downloaded
+production metadata without making a network request. It rejects the
+`UNCONFIGURED` Apple app ID, an absent app target, empty Android fingerprint
+lists, and malformed SHA-256 fingerprints. The production monitor downloads
+both well-known documents and runs this semantic gate after the HTTP probes.
 
 The protected `Mobile release build` workflow injects provider configuration
 into signed store artifacts and fails before compilation when any required
