@@ -30,6 +30,7 @@ from ..models import (
     SyncRun,
 )
 from .fetcher import PublicDataFetcher, SourceTotalChangedError
+from .locking import catalog_mutation_lock
 from .sources import SourceDefinition, official_sources
 
 app = typer.Typer(no_args_is_help=True)
@@ -1055,7 +1056,7 @@ def all_sources() -> None:
         )
     fetcher = PublicDataFetcher(settings.data_go_kr_service_key)
     failures = 0
-    with SessionLocal() as db:
+    with SessionLocal() as db, catalog_mutation_lock(db):
         seed_source_registry(
             db,
             sources,
@@ -1064,7 +1065,9 @@ def all_sources() -> None:
         for source in selected_sources:
             try:
                 run = sync_source(db, source, fetcher)
-                typer.echo(f"{source.code}: {run.status} ({run.record_count} records)")
+                typer.echo(
+                    f"{source.code}: {run.status} ({run.record_count} records)"
+                )
             except Exception as exc:
                 failures += 1
                 typer.echo(f"{source.code}: failed ({exc})", err=True)
@@ -1081,7 +1084,7 @@ def one(source_code: str) -> None:
         raise typer.BadParameter(f"Unknown source: {source_code}")
     if source.kind != "code" and not settings.data_go_kr_service_key:
         raise typer.BadParameter("DATA_GO_KR_SERVICE_KEY is required.")
-    with SessionLocal() as db:
+    with SessionLocal() as db, catalog_mutation_lock(db):
         seed_source_registry(
             db,
             list(sources.values()),
@@ -1108,7 +1111,7 @@ def source_kind(source_kind: str) -> None:
         raise typer.BadParameter(f"Unknown source kind: {source_kind}")
     fetcher = PublicDataFetcher(settings.data_go_kr_service_key)
     failures = 0
-    with SessionLocal() as db:
+    with SessionLocal() as db, catalog_mutation_lock(db):
         seed_source_registry(
             db,
             all_sources,
@@ -1119,7 +1122,9 @@ def source_kind(source_kind: str) -> None:
         for source in sources:
             try:
                 run = sync_source(db, source, fetcher)
-                typer.echo(f"{source.code}: {run.status} ({run.record_count} records)")
+                typer.echo(
+                    f"{source.code}: {run.status} ({run.record_count} records)"
+                )
             except Exception as exc:
                 failures += 1
                 typer.echo(f"{source.code}: failed ({exc})", err=True)
@@ -1135,7 +1140,7 @@ def renormalize(source_code: str) -> None:
     if source is None:
         raise typer.BadParameter(f"Unknown source: {source_code}")
     count = 0
-    with SessionLocal() as db:
+    with SessionLocal() as db, catalog_mutation_lock(db):
         statement = select(SourceRecord).where(
             SourceRecord.source_code == source.code,
         )

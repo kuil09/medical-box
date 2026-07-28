@@ -1,0 +1,31 @@
+FROM python:3.13-slim-bookworm AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates curl gnupg \
+    && curl --fail --silent --show-error --location \
+        https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        | gpg --dearmor --output /usr/share/keyrings/postgresql.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install --yes --no-install-recommends postgresql-client-18 \
+    && apt-get purge --yes --auto-remove curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir uv==0.7.20
+
+COPY pyproject.toml uv.lock* ./
+RUN uv sync --frozen --no-dev --extra backup --no-install-project
+
+COPY src ./src
+RUN uv sync --frozen --no-dev --extra backup
+
+COPY alembic.ini ./
+COPY migrations ./migrations
+
+CMD ["uv", "run", "--no-sync", "medical-box-backup", "create"]

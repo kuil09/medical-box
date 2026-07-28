@@ -1,0 +1,105 @@
+name: Production backup restore verification
+
+on:
+  schedule:
+    - cron: "30 22 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-backup-restore
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, medical-box-backup, singapore]
+    timeout-minutes: 45
+    environment: backup-restore
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Restore and verify the newest signed backup
+        id: restore
+        shell: bash
+        env:
+          APP_ENV: test
+          APP_ROLE: backup_verify
+          DATABASE_URL: postgresql://backup:unused@production.invalid:5432/medical_box
+          BACKUP_STORE: s3
+          BACKUP_PREFIX: medical-box/production
+          AWS_ENDPOINT_URL: ${{ secrets.AWS_ENDPOINT_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_S3_BUCKET_NAME: ${{ secrets.AWS_S3_BUCKET_NAME }}
+          AWS_DEFAULT_REGION: ${{ vars.AWS_DEFAULT_REGION }}
+          AWS_S3_ADDRESSING_STYLE: ${{ vars.AWS_S3_ADDRESSING_STYLE }}
+          BACKUP_GPG_PRIVATE_KEY_BASE64: ${{ secrets.BACKUP_GPG_PRIVATE_KEY_BASE64 }}
+          BACKUP_GPG_PASSPHRASE: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
+          BACKUP_MANIFEST_HMAC_KEY_BASE64: ${{ secrets.BACKUP_MANIFEST_HMAC_KEY_BASE64 }}
+          BACKUP_RESTORE_DATABASE_URL: postgresql://postgres:restore-verification-only@127.0.0.1:5432/medical_box
+          BACKUP_RESTORE_CONFIRMATION: restore-disposable-database
+        run: |
+          set -euo pipefail
+          key_directory="$(mktemp -d)"
+          cleanup_pending=true
+
+          cleanup_key_directory() {
+            if [[ -e "${key_directory}" ]] &&
+              ! rm -rf -- "${key_directory}"; then
+              echo "Could not remove ephemeral backup key directory." >&2
+              return 1
+            fi
+            if [[ -e "${key_directory}" ]]; then
+              echo "Ephemeral backup key directory remains after cleanup." >&2
+              return 1
+            fi
+          }
+
+          cleanup_on_exit() {
+            local original_status=$?
+            local cleanup_status=0
+            trap - EXIT
+            if [[ "${cleanup_pending}" == true ]]; then
+              if cleanup_key_directory; then
+                cleanup_status=0
+              else
+                cleanup_status=$?
+              fi
+            fi
+            if [[ "${original_status}" -ne 0 ]]; then
+              exit "${original_status}"
+            fi
+            exit "${cleanup_status}"
+          }
+          trap cleanup_on_exit EXIT
+
+          umask 077
+          printf '%s' "${BACKUP_GPG_PRIVATE_KEY_BASE64}" |
+            base64 --decode >"${key_directory}/backup-private.gpg"
+          printf '%s' "${BACKUP_GPG_PASSPHRASE}" \
+            >"${key_directory}/backup-passphrase.txt"
+
+          restore_output="$(
+            services/backend/scripts/verify_production_backup_restore.sh \
+              "${key_directory}"
+          )"
+          printf '%s\n' "${restore_output}"
+          if [[ $'\n'"${restore_output}"$'\n' != *$'\ncleanup_verified=true\n'* ]]; then
+            echo "Restore script did not prove deterministic cleanup." >&2
+            exit 1
+          fi
+
+          if ! cleanup_key_directory; then
+            echo "Restore succeeded, but ephemeral key cleanup failed." >&2
+            exit 1
+          fi
+          cleanup_pending=false
+          trap - EXIT
+          printf 'cleanup_verified=true\n' >>"${GITHUB_OUTPUT}"
+      - name: Record verified cleanup
+        if: steps.restore.outputs.cleanup_verified == 'true'
+        run: >-
+          echo "Production restore verified; temporary containers, network,
+          and key directory were removed." >>"${GITHUB_STEP_SUMMARY}"

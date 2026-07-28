@@ -81,13 +81,14 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
-      - run: uv sync --frozen --extra dev
+      - run: uv sync --frozen --extra dev --extra backup
       - run: uv run ruff check .
       - run: uv run mypy
       - run: uv run pytest
       - run: uv run alembic upgrade head
       - run: PYTHONPATH=src uv run python scripts/export_openapi.py
       - run: git diff --exit-code openapi/openapi.json
+      - run: ./scripts/test_backup_roundtrip.sh
 
   product-design-prototype:
     needs: changes

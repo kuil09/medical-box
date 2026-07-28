@@ -18,6 +18,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+backup = [
+  "boto3>=1.40.0,<2.0",
+  "boto3-stubs[s3]>=1.40.0,<2.0",
+]
 dev = [
   "mypy>=2.3.0,<3.0",
   "pytest>=9.1.1,<10.0",
@@ -28,6 +32,7 @@ dev = [
 
 [project.scripts]
 medical-box-access = "medical_box_api.access:app"
+medical-box-backup = "medical_box_api.backup.cli:app"
 medical-box-sync = "medical_box_api.catalog.sync:app"
 
 [build-system]

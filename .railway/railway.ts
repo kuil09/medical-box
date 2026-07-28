@@ -1,4 +1,5 @@
 import {
+  bucket,
   defineRailway,
   fn,
   github,
@@ -27,6 +28,9 @@ export default defineRailway((ctx) => {
 
   const database = postgres("Postgres", {
     region: SINGAPORE,
+  });
+  const backupBucket = bucket("production-backups", {
+    region: "sin",
   });
 
   const catalogSyncSources = [
@@ -127,7 +131,11 @@ export default defineRailway((ctx) => {
         ".railway/railway.ts",
       ],
     },
-    start: "uv run --no-sync medical-box-sync all-sources",
+    // Keep the declared state fail-closed while the production canary and
+    // database-capacity checks are still pending. A dedicated catalog
+    // activation change must replace this command after those checks pass.
+    start:
+      '/bin/sh -c \'echo "Catalog sync temporarily paused while normalization safety is repaired"\'',
     replicas: { [SINGAPORE]: 1 },
     deploy: {
       cronSchedule: "10 18 * * *",
@@ -139,9 +147,50 @@ export default defineRailway((ctx) => {
     },
   });
 
+  const productionBackup = fn("production-backup", {
+    source: github("kuil09/medical-box"),
+    rootDirectory: BACKEND_ROOT,
+    build: {
+      builder: "DOCKERFILE",
+      dockerfilePath: "Dockerfile.backup",
+      watchPatterns: [
+        "services/backend/**",
+        ".railway/railway.ts",
+      ],
+    },
+    // The first backup and disposable restore must succeed before a separate,
+    // explicitly approved change enables the recurring worker.
+    start:
+      '/bin/sh -c \'echo "Production backup schedule paused pending first verified restore"\'',
+    replicas: { [SINGAPORE]: 1 },
+    deploy: {
+      restartPolicyType: "NEVER",
+    },
+    env: {
+      APP_ENV: "production",
+      APP_ROLE: "backup",
+      DATABASE_URL: database.env.DATABASE_URL,
+      BACKUP_STORE: "s3",
+      BACKUP_PREFIX: "medical-box/production",
+      BACKUP_DAILY_RETENTION: "7",
+      BACKUP_WEEKLY_RETENTION: "4",
+      BACKUP_MONTHLY_RETENTION: "12",
+      AWS_ENDPOINT_URL: preserve(),
+      AWS_ACCESS_KEY_ID: preserve(),
+      AWS_SECRET_ACCESS_KEY: preserve(),
+      AWS_S3_BUCKET_NAME: preserve(),
+      AWS_DEFAULT_REGION: preserve(),
+      AWS_S3_ADDRESSING_STYLE: preserve(),
+      BACKUP_GPG_PUBLIC_KEY_BASE64: preserve(),
+      BACKUP_GPG_RECIPIENT: preserve(),
+      BACKUP_MANIFEST_HMAC_KEY_BASE64: preserve(),
+    },
+  });
+
   const backend = group("Backend", [api, catalogSync, database]);
+  const operations = group("Operations", [productionBackup, backupBucket]);
 
   return project("medical-box", {
-    resources: [backend],
+    resources: [backend, operations],
   });
 });

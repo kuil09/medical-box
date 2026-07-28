@@ -9,8 +9,16 @@ This directory defines the persistent Railway production graph for
   permission-gated catalog APIs, health checks, and app-link manifests.
 - `Postgres` stores account/authentication data and the promoted public
   medicine catalog.
-- Both resources run in Railway's Singapore region and communicate over
-  Railway private networking.
+- `catalog-sync` remains a fail-closed production stub. Its declared start
+  command is a no-op until the capacity reserve and isolated recurring-run
+  canary both pass.
+- `production-backup` and `production-backups` are prepared, but must not be
+  created until the exact billable plan and backup-processing boundary are
+  approved.
+- The API, PostgreSQL, and dormant functions are placed in Railway's Singapore
+  region. Application services reach PostgreSQL over private networking.
+  Railway buckets use a public S3-compatible endpoint, so only encrypted
+  ciphertext leaves the backup worker.
 - The public host is `medicalbox.outoftokens.ai`; there is no separate API or
   staging host.
 - `.railway/railway.ts` is the sole Railway configuration model. Do not add a
@@ -22,16 +30,17 @@ This directory defines the persistent Railway production graph for
   and bloat. Increase storage or implement bounded replacement transactions
   before reintroducing a scheduled ingestion service.
 
-The former staging environment, staging databases, `catalog-sync` service,
-staging custom domain, and staging access-key boundary were retired after the
-validated catalog was promoted to production on 2026-07-27. Local tests and
-GitHub Actions are the pre-production validation boundary.
+The former staging environment, staging databases, staging `catalog-sync`
+service, staging custom domain, and staging access-key boundary were retired
+after the validated catalog was promoted to production on 2026-07-27. Local
+tests and GitHub Actions are the pre-production validation boundary.
 
 ## Required externally managed variables
 
 The IaC definition uses `preserve()` for credentials, provider identifiers,
-access-control inputs, and source URLs so an apply cannot replace an existing
-value with an unresolved shared-variable reference.
+and access-control inputs so an apply cannot replace an existing value with an
+unresolved shared-variable reference. Confirmed public-source endpoints remain
+explicit literals.
 
 | Variable | Requirement |
 | --- | --- |
@@ -46,6 +55,15 @@ value with an unresolved shared-variable reference.
 | `MFDS_SHORTAGE_URL` | Confirmed official supply-interruption API endpoint |
 | `HIRA_PRICE_URL` | Confirmed official HIRA price endpoint |
 | `HIRA_STANDARD_CODE_URL` | Confirmed official HIRA standard-code file endpoint |
+| `AWS_ENDPOINT_URL` | Railway bucket endpoint for the backup worker |
+| `AWS_ACCESS_KEY_ID` | Railway credentials for the production backup bucket |
+| `AWS_SECRET_ACCESS_KEY` | Secret paired with the bucket access key |
+| `AWS_S3_BUCKET_NAME` | Railway identifier for `production-backups` |
+| `AWS_DEFAULT_REGION` | Exact region returned by Railway bucket credentials |
+| `AWS_S3_ADDRESSING_STYLE` | Exact `urlStyle` returned by Railway (`auto`, `path`, or `virtual`) |
+| `BACKUP_GPG_PUBLIC_KEY_BASE64` | Public encryption key only; never the private key |
+| `BACKUP_GPG_RECIPIENT` | Full fingerprint of the approved backup recipient |
+| `BACKUP_MANIFEST_HMAC_KEY_BASE64` | Random 256-bit manifest authentication key |
 
 Unresolved source URLs must not be guessed. Confirm the official resource and
 redistribution terms before configuring or loading a source.
@@ -53,8 +71,10 @@ redistribution terms before configuring or loading a source.
 ## Production change workflow
 
 1. Run the complete local and CI validation suites.
-2. Run `railway config plan --environment production`.
-3. Review the plan for changes to `medical-box` and `Postgres` only.
+2. Verify the CLI link resolves to production and run `railway config plan`,
+   or use the task-specific fail-closed plan guard when activating backups.
+3. Review the plan for only the explicitly approved resources. Reject any
+   deletion, database replacement, catalog activation, or unrelated update.
 4. Apply only after explicit approval of the exact plan.
 5. Verify `/api/health/ready`, authentication boundaries, catalog metadata,
    search, detail, and DUR responses.

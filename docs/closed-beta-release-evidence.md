@@ -24,11 +24,12 @@ than this public evidence record. The running API uses:
 - the Singapore Railway region; and
 - the production PostgreSQL service through Railway private networking.
 
-Railway IaC created the `catalog-sync` function, linked its public-data key to
-the existing API secret without printing it, and scheduled approved sources at
-`18:10 UTC` daily. The corresponding deployment successfully built the cron
-image. A final `railway config plan` reported no drift from
-`.railway/railway.ts`.
+Railway IaC created the `catalog-sync` function and linked its public-data key
+to the existing API secret without printing it. A daily `18:10 UTC` trigger
+still exists, but the function start command is intentionally a no-op: no
+catalog refresh is scheduled to mutate production until the capacity reserve
+and isolated recurring-run canary pass. The corresponding deployment
+successfully built the dormant image.
 
 The following production paths returned HTTP 200:
 
@@ -318,7 +319,7 @@ to date, and the readiness endpoint returned HTTP 200.
 
 `.github/workflows/production-monitor.yml` probes the product, legal, support,
 health, well-known, authentication-boundary, HSTS, and `nosniff` behavior every
-15 minutes and on manual dispatch. Manual run `30276771772` completed
+four hours and on manual dispatch. Manual run `30276771772` completed
 successfully after the workflow was merged. Scheduled run `30281631480` then
 completed successfully for commit
 `cce7671dbe67a8b4342a7429c38e2c5aaebfee98`, independently proving the GitHub

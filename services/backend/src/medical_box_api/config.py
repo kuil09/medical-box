@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_env: Literal["development", "test", "production"] = "development"
-    app_role: Literal["api", "catalog_sync"] = "api"
+    app_role: Literal["api", "catalog_sync", "backup", "backup_verify"] = "api"
     database_url: str = "sqlite+pysqlite:///./medical_box.db"
     public_origin: str = "https://medicalbox.outoftokens.ai"
     allowed_hosts: str = "localhost,127.0.0.1,testserver"

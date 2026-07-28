@@ -75,6 +75,9 @@ The reviewer must confirm:
   Google sign-in;
 - whether the account deletion process and retention language match the actual
   immediate deletion behavior;
+- whether encrypted off-device backups, the GitHub workflow control plane, and
+  disposable restore verification on a dedicated Singapore runner require
+  additional processor, country, retention, or security disclosures;
 - whether terms acceptance versioning and re-consent rules are sufficient.
 
 No household inventory field is intended to cross the device boundary. A proxy
