@@ -655,7 +655,7 @@ def test_catalog_search_trims_and_escapes_like_wildcards(
                     source_code="mfds_product",
                     record_key="literal-wildcard",
                     content_hash="literal-wildcard-hash",
-                    payload={},
+                    public_data={},
                     active=True,
                     last_seen_run_id=uuid.uuid4(),
                 ),
@@ -663,7 +663,7 @@ def test_catalog_search_trims_and_escapes_like_wildcards(
                     source_code="mfds_product",
                     record_key="ordinary-product",
                     content_hash="ordinary-product-hash",
-                    payload={},
+                    public_data={},
                     active=True,
                     last_seen_run_id=uuid.uuid4(),
                 ),
@@ -717,7 +717,7 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             source_code="mfds_product",
             record_key="200000001",
             content_hash="product-hash",
-            payload={"ITEM_SEQ": "200000001"},
+            public_data={"ITEM_SEQ": "200000001"},
             active=True,
             last_seen_run_id=uuid.uuid4(),
         )
@@ -725,7 +725,7 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             source_code="mfds_pill",
             record_key="200000001|primary",
             content_hash="pill-hash",
-            payload={},
+            public_data={},
             last_seen_run_id=uuid.uuid4(),
         )
         pregnancy_run_id = uuid.uuid4()
@@ -740,7 +740,7 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             source_code="mfds_dur_product_pregnancy",
             record_key="pregnancy-1",
             content_hash="pregnancy-hash",
-            payload={
+            public_data={
                 "TYPE_NAME": "임부금기",
                 "INGR_NAME": "테스트성분",
                 "PROHBT_CONTENT": "공식 금기 내용",
@@ -752,7 +752,7 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             source_code="mfds_dur_product_concomitant",
             record_key="concomitant-1",
             content_hash="concomitant-hash",
-            payload={
+            public_data={
                 "TYPE_NAME": "병용금기",
                 "INGR_KOR_NAME": "테스트성분",
                 "MIXTURE_ITEM_SEQ": "200000002",
@@ -766,14 +766,14 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             source_code="mfds_dur_product_elderly",
             record_key="failed-1",
             content_hash="failed-hash",
-            payload={"TYPE_NAME": "노인주의"},
+            public_data={"TYPE_NAME": "노인주의"},
             last_seen_run_id=failed_run_id,
         )
         recall_source_record = SourceRecord(
             source_code="mfds_recall",
             record_key="recall-1",
             content_hash="recall-hash",
-            payload={
+            public_data={
                 "RTRVL_RESN": "품질 기준 확인을 위한 공식 회수",
                 "UPDATE_DATE": "20260726",
             },
@@ -785,7 +785,7 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             source_code="mfds_recall",
             record_key="recall-inactive",
             content_hash="inactive-recall-hash",
-            payload={"RTRVL_RESN": "이전 전체 동기화에서 사라진 이력"},
+            public_data={"RTRVL_RESN": "이전 전체 동기화에서 사라진 이력"},
             active=False,
             last_seen_run_id=recall_run_id,
             last_seen_at=catalog_seen_at,
@@ -794,7 +794,7 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             source_code="mfds_recall",
             record_key="recall-failed",
             content_hash="failed-recall-hash",
-            payload={"RTRVL_RESN": "완료되지 않은 동기화의 이력"},
+            public_data={"RTRVL_RESN": "완료되지 않은 동기화의 이력"},
             active=True,
             last_seen_run_id=failed_status_run_id,
             last_seen_at=catalog_seen_at,
@@ -803,7 +803,7 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             source_code="hira_price",
             record_key="price-1",
             content_hash="price-hash",
-            payload={"applyDt": "20260701", "UPDATE_DATE": "20260702"},
+            public_data={"applyDt": "20260701", "UPDATE_DATE": "20260702"},
             active=True,
             last_seen_run_id=price_run_id,
             last_seen_at=catalog_seen_at,
@@ -812,7 +812,7 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             source_code="hira_standard_code",
             record_key="8801234567890",
             content_hash="code-hash",
-            payload={
+            public_data={
                 "표준코드": "8801234567890",
                 "제품코드(개정후)": "645700010",
                 "UPDATE_DATE": "20260703",
@@ -1194,7 +1194,7 @@ def test_catalog_detail_projections_are_bounded_and_deterministic(
                 source_code="mfds_product",
                 record_key="bounded-product",
                 content_hash="bounded-product-hash",
-                payload={},
+                public_data={},
                 active=True,
                 last_seen_run_id=uuid.uuid4(),
             )
@@ -1204,7 +1204,7 @@ def test_catalog_detail_projections_are_bounded_and_deterministic(
                 source_code="mfds_product",
                 record_key="empty-projection-product",
                 content_hash="empty-projection-product-hash",
-                payload={},
+                public_data={},
                 active=True,
                 last_seen_run_id=uuid.uuid4(),
             )
@@ -1275,7 +1275,7 @@ def test_catalog_detail_projections_are_bounded_and_deterministic(
                 source_code=event_source_code,
                 record_key=f"event-{index:02d}",
                 content_hash=f"event-hash-{index:02d}",
-                payload=(
+                public_data=(
                     {"SUSPEND_REASON": "공식 생산·수입·공급 중단 사유"} if index == 21 else {}
                 ),
                 active=True,
@@ -1299,7 +1299,7 @@ def test_catalog_detail_projections_are_bounded_and_deterministic(
                 source_code="hira_price",
                 record_key=f"price-{index:02d}",
                 content_hash=f"price-hash-{index:02d}",
-                payload={},
+                public_data={},
                 active=True,
                 last_seen_run_id=price_run_id,
             )
@@ -1318,7 +1318,7 @@ def test_catalog_detail_projections_are_bounded_and_deterministic(
                 source_code="hira_standard_code",
                 record_key=f"code-{index:02d}",
                 content_hash=f"code-hash-{index:02d}",
-                payload={},
+                public_data={},
                 active=True,
                 last_seen_run_id=code_run_id,
             )
@@ -1337,7 +1337,7 @@ def test_catalog_detail_projections_are_bounded_and_deterministic(
                 source_code="mfds_pill",
                 record_key=f"variant-{index:02d}",
                 content_hash=f"variant-hash-{index:02d}",
-                payload={},
+                public_data={},
                 active=True,
                 last_seen_run_id=uuid.uuid4(),
             )

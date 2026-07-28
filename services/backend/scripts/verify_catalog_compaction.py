@@ -1,4 +1,4 @@
-"""Verify that a compact SQLite catalog preserves the raw catalog identity."""
+"""Verify that a compact SQLite catalog preserves source-record identity."""
 
 import argparse
 import hashlib
@@ -72,7 +72,7 @@ def verify(original_path: Path, compact_path: Path) -> dict[str, object]:
         original_digest = _source_digest(original)
         compact_digest = _source_digest(compact)
         if original_digest != compact_digest:
-            raise RuntimeError("Raw source record identity changed during compaction.")
+            raise RuntimeError("Source-record identity changed during compaction.")
 
         integrity = compact.execute("PRAGMA integrity_check").fetchone()
         if integrity != ("ok",):
@@ -95,7 +95,7 @@ def verify(original_path: Path, compact_path: Path) -> dict[str, object]:
             ).fetchone()
             if missing is None or missing[0]:
                 raise RuntimeError(
-                    f"{table_name} contains rows without a raw source reference."
+                    f"{table_name} contains rows without a source-record reference."
                 )
 
     original_size = original_path.stat().st_size

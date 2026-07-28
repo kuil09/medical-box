@@ -16,13 +16,16 @@ drug suggestions, or treatment recommendations.
 | MFDS e약은요 consumer information | https://www.data.go.kr/data/15075057/openapi.do | Efficacy, use method, warnings, precautions, interactions, side effects, storage, source update date |
 | MFDS medicine identification information | https://www.data.go.kr/data/15057639/openapi.do | Shape, color, front/back imprint, official identification image URL |
 
-The existing catalog ingestion pipeline already retains the raw payload and
-content hash for these source records. `itemSeq` remains the primary join key.
+The catalog ingestion pipeline normalizes each upstream response in memory,
+retains its canonical content hash, and stores only the small allowlist of
+source fields required by public API responses. The complete upstream payload
+is discarded after a successful normalization. `itemSeq` remains the primary
+join key.
 As of the 2026-07-26 acquisition checkpoint, the product authorization and
 e약은요 services are approved and fully acquired. The e약은요 snapshot contains
-4,757 raw records for 4,740 unique products. Pill identification is approved and
+4,757 source records for 4,740 unique products. Pill identification is approved and
 fully acquired from the provider-published HTTP `Service03` endpoint: 25,349
-raw rows normalized to 25,349 variants across 25,332 products. The HTTPS route
+source rows normalized to 25,349 variants across 25,332 products. The HTTPS route
 still returns HTTP 500, so production synchronization must treat the HTTP-only
 provider route as a documented transport-security exception and keep the public
 data key strictly server-side.
@@ -30,7 +33,7 @@ data key strictly server-side.
 The product-level and ingredient-level DUR applications are also approved and
 fully acquired. Sixteen operations returned 863,771 official rows, which
 normalized to 863,599 current rules after removing 172 byte-identical duplicate
-rows. The normalized snapshot has no missing raw-to-rule mappings. DUR remains
+rows. The normalized snapshot has no missing source-to-rule mappings. DUR remains
 reference data: a product detail may show the applicable official caution or
 contraindication text, rule category, source, and update date, but the backend
 must not evaluate a household member, inventory item, prescription, or reminder

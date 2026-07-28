@@ -19,7 +19,9 @@ are intentionally excluded.
 ## Synchronization invariants
 
 - `itemSeq` is the primary product integration key.
-- Every raw payload and canonical SHA-256 content hash is retained.
+- Every upstream record keeps its canonical SHA-256 content hash, identity,
+  source attribution, and API-facing public fields. Complete source payloads
+  are normalized in memory and then discarded.
 - All pages are fetched before old records are marked inactive.
 - Count collapse, page failure, or schema failure rolls back normalized changes
   for that source and leaves the last successful catalog active.
@@ -28,18 +30,21 @@ are intentionally excluded.
 - DUR API queries only expose records whose owning sync run has succeeded.
   Initial DUR bootstraps may commit bounded inactive batches without exposing a
   partial snapshot.
-- Recurring DUR runs prefetch raw records once per page and do not rewrite
+- Recurring DUR runs prefetch source records once per page and do not rewrite
   unchanged records. This prevents a large unchanged source from generating a
   full-table WAL burst.
 - Recurring non-DUR runs also leave unchanged `source_records` untouched.
   Returning and stale records are updated in bounded batches, avoiding a
   full-source `last_seen_run_id` rewrite on every refresh.
-- Source-specific normalization versions reprocess unchanged raw records once
-  when normalized field mappings change. Product search and detail only expose
-  products backed by an active `mfds_product` raw record.
+- A normalization mapping change requires re-fetching the affected official
+  source because complete payloads are not retained. Product search and detail
+  only expose products backed by an active `mfds_product` source record.
 - Production synchronization measures PostgreSQL database plus WAL bytes before
   acquisition, after every page, and after each bounded cleanup batch. It
   aborts before the configured `CATALOG_MIN_FREE_BYTES` reserve is crossed.
+- Migration `20260729_0008` refuses to compact a source-record relation of at
+  least 1 GB when PostgreSQL `max_wal_size` exceeds 128 MiB. Production uses
+  96 MiB; complete a checkpoint and confirm volume headroom before deployment.
 - HIRA standard-code downloads accept CSV, XLSX, or ZIP containers, detect
   Korean header rows, stream CSV rows in 500-record pages, and are capped at
   250 MiB per file.
@@ -85,7 +90,7 @@ The following measurements were recorded on 2026-07-26 after the MFDS
 pharmaceutical product authorization and e약은요 development applications became
 active:
 
-| Dataset | Active raw records |
+| Dataset | Active source records |
 | --- | ---: |
 | Product authorization list | 42,957 |
 | Product authorization detail | 42,957 |
@@ -104,7 +109,7 @@ are retained as placeholder products instead of being silently dropped.
 
 The e약은요 source returned 4,740 unique `itemSeq` values. Fourteen products had
 multiple records, producing 17 additional variants. A full-payload comparison
-showed that the variants differed only by `itemImage`, so raw identity uses
+showed that the variants differed only by `itemImage`, so source identity uses
 `itemSeq` plus `itemImage` while normalized consumer information remains one row
 per `itemSeq`.
 
@@ -181,7 +186,7 @@ The corrected HTTP endpoint was acquired successfully:
 | Variants with a front imprint | 25,039 |
 | Variants with a back imprint | 12,512 |
 
-The raw identity uses `itemSeq`, image URL, and the canonical payload hash.
+The source identity uses `itemSeq`, image URL, and the canonical payload hash.
 This prevents distinct colors, strengths, dimensions, imprints, or images under
 one authorization product from overwriting each other. The legacy singular
 identification row is rebuilt deterministically from the latest source

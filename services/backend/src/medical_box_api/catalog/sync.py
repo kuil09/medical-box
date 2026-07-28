@@ -35,6 +35,7 @@ from .identity import (
     catalog_identity_matches,
 )
 from .locking import catalog_mutation_lock
+from .public_data import public_source_data
 from .sources import SourceDefinition, official_sources
 
 app = typer.Typer(no_args_is_help=True)
@@ -419,15 +420,18 @@ def normalize(
             db.add(identification)
             if identification_cache is not None:
                 identification_cache[sequence] = identification
-        current_payload = (
-            identification.source_record.payload
+        current_public_data = (
+            identification.source_record.public_data
             if identification.source_record is not None
             else None
         )
         if (
-            current_payload is None
-            or _identification_rank(payload)
-            >= _identification_rank(current_payload)
+            current_public_data is None
+            or _identification_rank(payload, content_hash=source_record.content_hash)
+            >= _identification_rank(
+                current_public_data,
+                content_hash=identification.source_record.content_hash,
+            )
         ):
             identification.shape = shape
             identification.color = color
@@ -853,6 +857,7 @@ def _sync_source_locked(
                     )
                 key = record_key(source, payload)
                 digest = canonical_hash(payload)
+                retained_public_data = public_source_data(source, payload)
                 if key in seen_keys:
                     if (
                         source.allow_identical_duplicates
@@ -877,7 +882,7 @@ def _sync_source_locked(
                         source_code=source.code,
                         record_key=key,
                         content_hash=digest,
-                        payload=payload,
+                        public_data=retained_public_data,
                         active=not batch_dur_bootstrap,
                         last_seen_run_id=run.id,
                     )
@@ -886,7 +891,6 @@ def _sync_source_locked(
                     unchanged = existing.content_hash == digest
                     if not unchanged:
                         existing.content_hash = digest
-                        existing.payload = payload
                         existing.last_seen_run_id = run.id
                         existing.last_seen_at = datetime.now(UTC)
                     elif batch_source_bootstrap or (
@@ -900,6 +904,7 @@ def _sync_source_locked(
                         and not existing.active
                     ):
                         existing.active = True
+                existing.public_data = retained_public_data
                 if (
                     is_new
                     or not unchanged
@@ -1159,50 +1164,26 @@ def source_kind(source_kind: str) -> None:
 
 @app.command()
 def renormalize(source_code: str) -> None:
-    settings = get_settings()
-    sources = {source.code: source for source in official_sources(settings)}
-    source = sources.get(source_code)
-    if source is None:
-        raise typer.BadParameter(f"Unknown source: {source_code}")
-    count = 0
-    with SessionLocal() as db, catalog_mutation_lock(db):
-        statement = select(SourceRecord).where(
-            SourceRecord.source_code == source.code,
-        )
-        if source.kind == "dur":
-            statement = statement.join(
-                SyncRun,
-                SyncRun.id == SourceRecord.last_seen_run_id,
-            ).where(SyncRun.status == "succeeded")
-        else:
-            statement = statement.where(
-                SourceRecord.active.is_(True),
-            )
-        records = db.scalars(statement).yield_per(500)
-        try:
-            for record in records:
-                if isinstance(record.payload, dict):
-                    normalize(db, source, record, record.payload)
-                    count += 1
-                if count and count % 500 == 0:
-                    db.flush()
-            db.commit()
-        except Exception:
-            db.rollback()
-            raise
-    typer.echo(f"{source.code}: renormalized ({count} records)")
+    raise typer.BadParameter(
+        "Raw source payloads are not retained. Re-fetch the official source "
+        f"with `catalog-sync one {source_code}` instead."
+    )
 
 
 def _string(value: Any) -> str | None:
     return str(value).strip() if value not in (None, "") else None
 
 
-def _identification_rank(payload: dict[str, Any]) -> tuple[str, str, str, str]:
+def _identification_rank(
+    payload: dict[str, Any],
+    *,
+    content_hash: str,
+) -> tuple[str, str, str, str]:
     return (
         _string(first_value(payload, "CHANGE_DATE", "changeDate")) or "",
         _string(first_value(payload, "IMG_REGIST_TS", "imgRegistTs")) or "",
         _string(first_value(payload, "ITEM_IMAGE", "itemImage")) or "",
-        canonical_hash(payload),
+        content_hash,
     )
 
 
