@@ -34,14 +34,18 @@ are intentionally excluded.
 - Recurring non-DUR runs also leave unchanged `source_records` untouched.
   Returning and stale records are updated in bounded batches, avoiding a
   full-source `last_seen_run_id` rewrite on every refresh.
+- Source-specific normalization versions reprocess unchanged raw records once
+  when normalized field mappings change. Product search and detail only expose
+  products backed by an active `mfds_product` raw record.
 - Production synchronization measures PostgreSQL database plus WAL bytes before
-  acquisition and after every page. It aborts before the configured
-  `CATALOG_MIN_FREE_BYTES` reserve is crossed.
+  acquisition, after every page, and after each bounded cleanup batch. It
+  aborts before the configured `CATALOG_MIN_FREE_BYTES` reserve is crossed.
 - HIRA standard-code downloads accept CSV, XLSX, or ZIP containers, detect
   Korean header rows, stream CSV rows in 500-record pages, and are capped at
   250 MiB per file.
-- A standard-code file whose SHA-256 matches its checkpoint is recorded as
-  skipped and does not update source rows or normalized codes.
+- A standard-code file whose content-disposition filename and positive content
+  length match its recent checkpoint is skipped without downloading. A full
+  SHA-256 verification is still forced at least every seven days.
 - The first standard-code load commits bounded run-gated batches. A failed run
   cannot become a successful source snapshot, its checkpoint hash is not
   published, and a retry can reuse quarantined rows without exposing partial
@@ -269,13 +273,15 @@ The production database measured 3,472,725,695 bytes after promotion. Database
 plus WAL measured 3,556,611,775 bytes on the 5 GB volume. This is sufficient
 for serving the current snapshot but not evidence that a full refresh can run
 within the same volume: the historical refresh generated large transient WAL.
-Automated full refresh therefore remains disabled until storage or the
-replacement transaction strategy is expanded.
+Automated full refresh remains operationally paused with a no-op start command
+until the current volume has at least the configured reserve and the repaired
+normalization path passes an isolated recurring-run canary.
 
 The replacement synchronization strategy avoids writes for unchanged non-DUR
-records, updates stale rows in 500-row batches, and enforces a 750,000,000-byte
-database-plus-WAL reserve against the configured 5,000,000,000-byte capacity.
-Its unit and ingestion regression tests pass.
+records, updates stale rows in 500-row batches, and enforces a
+1,200,000,000-byte database-plus-WAL reserve against the configured
+5,000,000,000-byte capacity. The larger reserve covers the observed gap between
+PostgreSQL-reported database-plus-WAL bytes and Railway volume usage.
 
 ## Standard-code production canary
 
@@ -302,8 +308,9 @@ bootstrap pages behind the owning `sync_runs.status == "succeeded"` visibility
 gate and does not create incomplete products. Applying the measured database
 growth and 96 MiB retained WAL to the production baseline predicts
 3,931,592,383 bytes in use, leaving 1,068,407,617 bytes on the configured 5 GB
-capacity. This preserves the 750 MB synchronization reserve with approximately
-318 MB additional margin.
+capacity. This historical canary preserved the former 750 MB reserve, but it
+does not satisfy the current 1.2 GB production reserve and therefore cannot by
+itself authorize recurring production synchronization.
 
 ## Standard-code production load
 

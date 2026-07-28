@@ -17,6 +17,7 @@ class SourceDefinition:
     rule_type: str | None = None
     hash_record_key: bool = False
     allow_identical_duplicates: bool = False
+    normalization_version: int = 1
 
 
 DUR_PRODUCT_OPERATIONS = (
@@ -199,6 +200,7 @@ def official_sources(settings: Settings) -> list[SourceDefinition]:
             kind="product_catalog",
             license_name="Public data, unrestricted use",
             attribution="Source: Ministry of Food and Drug Safety",
+            normalization_version=2,
         ),
         SourceDefinition(
             code="mfds_product_detail",
@@ -209,6 +211,7 @@ def official_sources(settings: Settings) -> list[SourceDefinition]:
             kind="product_detail",
             license_name="Public data, unrestricted use",
             attribution="Source: Ministry of Food and Drug Safety",
+            normalization_version=2,
         ),
         SourceDefinition(
             code="mfds_product_ingredient",

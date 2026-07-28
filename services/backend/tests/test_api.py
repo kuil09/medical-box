@@ -3,7 +3,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from sqlalchemy import inspect
+from sqlalchemy import inspect, select
 
 from medical_box_api.config import Settings, get_settings
 from medical_box_api.db import SessionLocal, engine
@@ -147,6 +147,14 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             use_method="제품 설명서를 확인하세요.",
         )
         db.add(product)
+        product_source_record = SourceRecord(
+            source_code="mfds_product",
+            record_key="200000001",
+            content_hash="product-hash",
+            payload={"ITEM_SEQ": "200000001"},
+            active=True,
+            last_seen_run_id=uuid.uuid4(),
+        )
         pill_source_record = SourceRecord(
             source_code="mfds_pill",
             record_key="200000001|primary",
@@ -192,6 +200,7 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
         )
         db.add_all(
             [
+                product_source_record,
                 pill_source_record,
                 pregnancy_source_record,
                 concomitant_source_record,
@@ -292,6 +301,12 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
     assert profile.status_code == 200
     assert profile.json()["permissions"] == ["catalog:read"]
 
+    meta = client.get("/api/v1/catalog/meta", headers=headers)
+    assert meta.status_code == 200
+    assert meta.json()["productCount"] == 1
+    assert meta.json()["failedSources"] == []
+    assert meta.json()["sources"][0]["lastAttemptStatus"] is None
+
     search = client.get("/api/v1/drugs/search", params={"q": "효소"}, headers=headers)
     assert search.status_code == 200
     assert search.json()["items"][0]["itemName"] == "테스트 효소제"
@@ -358,6 +373,28 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
         concomitant.json()["items"][0]["counterpartIngredientName"]
         == "상대성분"
     )
+
+    with SessionLocal() as db:
+        product_record = db.scalar(
+            select(SourceRecord).where(
+                SourceRecord.source_code == "mfds_product",
+                SourceRecord.record_key == "200000001",
+            )
+        )
+        assert product_record is not None
+        product_record.active = False
+        db.commit()
+    hidden_search = client.get(
+        "/api/v1/drugs/search",
+        params={"q": "효소"},
+        headers=headers,
+    )
+    assert hidden_search.status_code == 200
+    assert hidden_search.json()["items"] == []
+    assert client.get(
+        "/api/v1/drugs/200000001",
+        headers=headers,
+    ).status_code == 404
 
     with SessionLocal() as db:
         user = db.get(User, uuid.UUID(session["account"]["id"]))

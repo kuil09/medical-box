@@ -144,6 +144,13 @@
       },
       "CatalogMeta": {
         "properties": {
+          "failedSources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failedsources",
+            "type": "array"
+          },
           "lastSuccessfulSync": {
             "anyOf": [
               {
@@ -171,6 +178,7 @@
         "required": [
           "productCount",
           "lastSuccessfulSync",
+          "failedSources",
           "sources"
         ],
         "title": "CatalogMeta",
@@ -192,6 +200,41 @@
           "code": {
             "title": "Code",
             "type": "string"
+          },
+          "lastAttemptAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastattemptat"
+          },
+          "lastAttemptStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastattemptstatus"
+          },
+          "lastSuccessfulSync": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastsuccessfulsync"
           },
           "licenseName": {
             "anyOf": [
@@ -218,7 +261,10 @@
           "name",
           "portalUrl",
           "licenseName",
-          "attribution"
+          "attribution",
+          "lastSuccessfulSync",
+          "lastAttemptStatus",
+          "lastAttemptAt"
         ],
         "title": "CatalogSource",
         "type": "object"

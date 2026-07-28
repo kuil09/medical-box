@@ -20,7 +20,14 @@ class SourceResponseError(RuntimeError):
     pass
 
 
+class SourceTotalChangedError(SourceResponseError):
+    pass
+
+
 MAX_SOURCE_FILE_BYTES = 250 * 1024 * 1024
+SOURCE_API_TIMEOUT_SECONDS = 30
+SOURCE_FILE_TIMEOUT_SECONDS = 300
+SOURCE_FILE_HEAD_TIMEOUT_SECONDS = 15
 
 
 def unwrap_item_container(value: Any) -> Any:
@@ -40,12 +47,11 @@ class PublicDataFetcher:
         page = 1
         expected_total: int | None = None
         while True:
-            payload = self._get_json(source.api_url, page)
-            items, total = self._extract_items(payload)
+            items, total = self._get_items_page(source.api_url, page)
             if expected_total is None:
                 expected_total = total
             elif total != expected_total:
-                raise SourceResponseError(
+                raise SourceTotalChangedError(
                     f"Source total changed during pagination: {expected_total} to {total}."
                 )
             if not items and (page - 1) * self.page_size < total:
@@ -74,7 +80,7 @@ class PublicDataFetcher:
             raise SourceResponseError("Tabular source did not contain data rows.")
         return (
             hashlib.sha256(content).hexdigest(),
-            response.headers.get("last-modified"),
+            self._file_version_marker(response),
             records,
         )
 
@@ -93,7 +99,7 @@ class PublicDataFetcher:
         filename = self._response_filename(response)
         content_type = response.headers.get("content-type", "")
         content_hash = hashlib.sha256(content).hexdigest()
-        last_modified = response.headers.get("last-modified")
+        file_version = self._file_version_marker(response)
         if (
             not zipfile.is_zipfile(io.BytesIO(content))
             and PurePosixPath(filename).suffix.casefold() != ".xlsx"
@@ -109,10 +115,19 @@ class PublicDataFetcher:
             if not records:
                 raise SourceResponseError("Tabular source did not contain data rows.")
             pages = self._record_pages(records, self.page_size)
-        return content_hash, last_modified, pages
+        return content_hash, file_version, pages
+
+    def tabular_file_version(self, source: SourceDefinition) -> str | None:
+        if not source.api_url:
+            raise SourceResponseError("Tabular source URL is not configured.")
+        try:
+            response = self._head_file(source.api_url)
+        except (httpx.HTTPError, SourceResponseError):
+            return None
+        return self._file_version_marker(response)
 
     @staticmethod
-    def _response_filename(response: httpx.Response) -> str:
+    def _content_disposition_filename(response: httpx.Response) -> str | None:
         disposition = response.headers.get("content-disposition", "")
         match = re.search(
             r"filename\*?=(?:UTF-8''|\"?)([^\";]+)",
@@ -121,7 +136,36 @@ class PublicDataFetcher:
         )
         if match:
             return unquote(match.group(1).strip())
-        return PurePosixPath(response.url.path).name
+        return None
+
+    @classmethod
+    def _response_filename(cls, response: httpx.Response) -> str:
+        return cls._content_disposition_filename(response) or PurePosixPath(
+            response.url.path
+        ).name
+
+    @classmethod
+    def _file_version_marker(cls, response: httpx.Response) -> str | None:
+        filename = cls._content_disposition_filename(response)
+        raw_content_length = response.headers.get("content-length")
+        try:
+            content_length = int(raw_content_length or "0")
+        except ValueError:
+            return None
+        if not filename or content_length <= 0:
+            return None
+        etag = response.headers.get("etag")
+        last_modified = response.headers.get("last-modified")
+        identity_parts = [
+            f"filename={filename}",
+            f"bytes={content_length}",
+            f"etag={etag}" if etag else "",
+            f"last-modified={last_modified}" if last_modified else "",
+        ]
+        identity = "|".join(part for part in identity_parts if part)
+        if not identity:
+            return None
+        return f"file-version:{hashlib.sha256(identity.encode()).hexdigest()}"
 
     @staticmethod
     def _record_pages(
@@ -134,20 +178,71 @@ class PublicDataFetcher:
 
     @retry(
         retry=retry_if_exception_type((httpx.HTTPError, SourceResponseError)),
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=0.5, min=0.5, max=8),
+        reraise=True,
+    )
+    def _head_file(self, url: str) -> httpx.Response:
+        response = httpx.head(
+            url,
+            timeout=SOURCE_FILE_HEAD_TIMEOUT_SECONDS,
+            follow_redirects=True,
+        )
+        response.raise_for_status()
+        self._validate_declared_file_size(response)
+        return response
+
+    @retry(
+        retry=retry_if_exception_type((httpx.HTTPError, SourceResponseError)),
         stop=stop_after_attempt(4),
         wait=wait_exponential(multiplier=0.5, min=0.5, max=8),
         reraise=True,
     )
     def _get_file(self, url: str) -> httpx.Response:
-        response = httpx.get(url, timeout=120, follow_redirects=True)
+        response = httpx.get(
+            url,
+            timeout=httpx.Timeout(
+                SOURCE_FILE_TIMEOUT_SECONDS,
+                connect=SOURCE_API_TIMEOUT_SECONDS,
+                write=SOURCE_API_TIMEOUT_SECONDS,
+                pool=SOURCE_API_TIMEOUT_SECONDS,
+            ),
+            follow_redirects=True,
+        )
         response.raise_for_status()
+        self._validate_declared_file_size(response)
         declared_size = int(response.headers.get("content-length", "0") or "0")
         if declared_size > MAX_SOURCE_FILE_BYTES or len(response.content) > MAX_SOURCE_FILE_BYTES:
             raise SourceResponseError("Tabular source exceeds the 250 MiB safety limit.")
         return response
 
+    @staticmethod
+    def _validate_declared_file_size(response: httpx.Response) -> None:
+        raw_size = response.headers.get("content-length", "0") or "0"
+        try:
+            declared_size = int(raw_size)
+        except ValueError as exc:
+            raise SourceResponseError(
+                "Tabular source returned an invalid content length."
+            ) from exc
+        if declared_size > MAX_SOURCE_FILE_BYTES:
+            raise SourceResponseError("Tabular source exceeds the 250 MiB safety limit.")
+
     @retry(
-        retry=retry_if_exception_type((httpx.HTTPError, SourceResponseError)),
+        retry=retry_if_exception_type(SourceResponseError),
+        stop=stop_after_attempt(4),
+        wait=wait_exponential(multiplier=0.5, min=0.5, max=8),
+        reraise=True,
+    )
+    def _get_items_page(
+        self,
+        url: str,
+        page: int,
+    ) -> tuple[list[dict[str, Any]], int]:
+        return self._extract_items(self._get_json(url, page))
+
+    @retry(
+        retry=retry_if_exception_type(httpx.HTTPError),
         stop=stop_after_attempt(4),
         wait=wait_exponential(multiplier=0.5, min=0.5, max=8),
         reraise=True,
@@ -161,7 +256,7 @@ class PublicDataFetcher:
                 "numOfRows": self.page_size,
                 "type": "json",
             },
-            timeout=30,
+            timeout=SOURCE_API_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
         try:
@@ -198,7 +293,10 @@ class PublicDataFetcher:
             ]
         else:
             items = []
-        total = int(body.get("totalCount") or len(items))
+        try:
+            total = int(body.get("totalCount") or len(items))
+        except (TypeError, ValueError) as exc:
+            raise SourceResponseError("Source response has an invalid total count.") from exc
         return items, total
 
     @staticmethod
