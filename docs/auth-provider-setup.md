@@ -15,7 +15,14 @@ console configuration is required before the flows can complete.
 
 - Enable Sign in with Apple and Associated Domains for the app identifier.
 - Set `APPLE_TEAM_ID` and keep `APPLE_CLIENT_ID=com.medicalbox.app`.
+- Create a Sign in with Apple private key, then configure its identifier as
+  `APPLE_SIGN_IN_KEY_ID` and the base64-encoded `.p8` contents as the secret
+  `APPLE_SIGN_IN_PRIVATE_KEY_BASE64`. The API uses this key only to exchange
+  the deletion-time authorization code and revoke the resulting Apple token.
+  It never stores the authorization code or provider token.
 - Verify `/.well-known/apple-app-site-association` after deployment.
+- Apple login remains iOS-only until an Apple Services ID, HTTPS callback, and
+  Android web-authentication flow are configured and independently tested.
 
 ## Google
 
@@ -40,6 +47,11 @@ console configuration is required before the flows can complete.
 
 Provider success, cancellation, expiry, forged signature, and wrong-audience
 cases must all be tested on both platforms before external beta.
+
+Account deletion must also prove that Google disconnect, Kakao unlink, and
+Apple server-side token revocation complete before the local session is
+cleared. A provider failure must preserve the server account and local session
+so the user can retry.
 
 The protected `Mobile release build` workflow injects provider configuration
 into signed store artifacts and fails before compilation when any required
