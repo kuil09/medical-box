@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Verify public routes and security boundaries
         env:
           ORIGIN: https://medicalbox.outoftokens.ai
@@ -55,7 +56,35 @@ jobs:
           probe_status "/.well-known/assetlinks.json" "200"
           probe_status "/api/v1/catalog/meta" "401"
 
+          metadata_directory="$(mktemp -d)"
           headers="$(mktemp)"
+          trap 'rm -rf "${metadata_directory}" "${headers}"' EXIT
+          curl \
+            --silent \
+            --show-error \
+            --fail \
+            --location \
+            --retry 3 \
+            --retry-all-errors \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --output "${metadata_directory}/apple.json" \
+            "${ORIGIN}/.well-known/apple-app-site-association"
+          curl \
+            --silent \
+            --show-error \
+            --fail \
+            --location \
+            --retry 3 \
+            --retry-all-errors \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --output "${metadata_directory}/android.json" \
+            "${ORIGIN}/.well-known/assetlinks.json"
+          python services/backend/scripts/verify_well_known_metadata.py \
+            --apple "${metadata_directory}/apple.json" \
+            --android "${metadata_directory}/android.json"
+
           curl \
             --silent \
             --show-error \

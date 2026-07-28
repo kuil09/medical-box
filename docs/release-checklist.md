@@ -34,12 +34,17 @@ Evidence date: 2026-07-28
   recovery copy has not been authorized.
 - [x] `pg_trgm` activated once in production
 - [x] DNS CNAME, automatic TLS, HSTS, allowed-host filtering, web/legal/API/health,
-  and both `/.well-known` paths verified
+  and HTTP delivery of both `/.well-known` paths verified
+- [ ] Production well-known metadata passes the semantic release gate with a
+  configured Apple team app ID and at least one Play App Signing SHA-256
+  fingerprint. The monitor now fails closed on `UNCONFIGURED` and empty lists.
 - [ ] Approved-source recurring catalog mutation enabled. The `18:10 UTC`
   trigger currently executes a deliberate no-op until the capacity reserve and
   isolated recurring-run canary pass.
 - [x] GitHub Actions manual production-monitor run `30276771772` and scheduled
-  run `30281631480` pass
+  run `30281631480` passed the previous HTTP and header probes
+- [ ] A production-monitor run passes the strengthened well-known metadata
+  verifier after the provider identifiers are configured
 
 ## Product and privacy gates
 
@@ -86,6 +91,8 @@ Evidence date: 2026-07-28
   identifiers
 - [ ] Encrypted off-device recovery copy of the Android upload key retained
 - [ ] Real Apple login, reauthentication, and disposable-account deletion E2E
+- [x] Android neither offers nor invokes Apple sign-in while the required Apple
+  Service ID web flow is absent; native iOS behavior remains enabled
 - [ ] Real Kakao login, reauthentication, and disposable-account deletion E2E
 - [ ] Google Play developer-account verification and internal-test release
 - [ ] App Store Connect sign-in and TestFlight release
