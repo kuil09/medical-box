@@ -35,7 +35,24 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data
                     android:scheme="https"
-                    android:host="medicalbox.outoftokens.ai" />
+                    android:host="medicalbox.outoftokens.ai"
+                    android:path="/app" />
+                <data
+                    android:scheme="https"
+                    android:host="medicalbox.outoftokens.ai"
+                    android:path="/app/inventory" />
+                <data
+                    android:scheme="https"
+                    android:host="medicalbox.outoftokens.ai"
+                    android:path="/app/reminders" />
+                <data
+                    android:scheme="https"
+                    android:host="medicalbox.outoftokens.ai"
+                    android:path="/app/settings" />
+                <data
+                    android:scheme="https"
+                    android:host="medicalbox.outoftokens.ai"
+                    android:path="/app/login" />
             </intent-filter>
         </activity>
         <activity

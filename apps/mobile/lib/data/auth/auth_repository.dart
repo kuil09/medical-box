@@ -9,6 +9,8 @@ import 'social_auth_gateway.dart';
 
 export 'login_provider.dart';
 
+const currentTermsVersion = '2026-07-25';
+
 class AccountProfile {
   const AccountProfile({
     required this.id,
@@ -78,7 +80,13 @@ class AuthRepository {
     }
   }
 
-  Future<AccountProfile> signIn(LoginProvider provider) async {
+  Future<AccountProfile> signIn(
+    LoginProvider provider, {
+    required bool termsAccepted,
+  }) async {
+    if (!termsAccepted) {
+      throw StateError('The current terms must be accepted before sign-in.');
+    }
     final proof = await _socialAuthGateway.authenticate(
       provider,
       forceReauthentication: false,
@@ -87,7 +95,8 @@ class AuthRepository {
       '/v1/auth/exchange/${provider.apiName}',
       body: {
         'providerToken': proof.idToken,
-        'termsVersion': '2026-07-25',
+        'termsVersion': currentTermsVersion,
+        'termsAccepted': true,
         'deviceLabel': Platform.operatingSystem,
       },
     );

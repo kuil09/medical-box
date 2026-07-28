@@ -18,6 +18,7 @@ from medical_box_api.models import (
     SourceRecord,
     SourceRegistry,
     SyncRun,
+    TermsAcceptance,
     User,
 )
 from medical_box_api.security import create_reauth_grant
@@ -32,6 +33,7 @@ def create_account(
         json={
             "providerToken": f"valid-{provider}-token",
             "termsVersion": "2026-07-25",
+            "termsAccepted": True,
             "deviceLabel": "iPhone",
         },
     )
@@ -74,6 +76,7 @@ def test_web_health_and_security_headers(client: TestClient) -> None:
     assert ready.json() == {"status": "ready"}
     assert live.headers["x-content-type-options"] == "nosniff"
     assert "max-age=31536000" in live.headers["strict-transport-security"]
+    assert "시행일: 2026-07-25" in client.get("/terms").text
 
 
 def test_support_and_external_deletion_contact_are_configuration_gated(
@@ -104,6 +107,64 @@ def test_support_email_rejects_header_injection() -> None:
             _env_file=None,
             support_email="support@example.com\r\nBcc: attacker@example.com",
         )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "providerToken": "valid-google-token",
+            "termsVersion": "2026-07-25",
+        },
+        {
+            "providerToken": "valid-google-token",
+            "termsVersion": "2026-07-25",
+            "termsAccepted": False,
+        },
+    ],
+)
+def test_auth_exchange_requires_explicit_terms_acceptance(
+    client: TestClient,
+    payload: dict[str, object],
+) -> None:
+    response = client.post("/api/v1/auth/exchange/google", json=payload)
+
+    assert response.status_code == 422
+    with SessionLocal() as db:
+        assert db.scalar(select(User)) is None
+        assert db.scalar(select(TermsAcceptance)) is None
+
+
+def test_auth_exchange_rejects_stale_terms_without_creating_account(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/v1/auth/exchange/google",
+        json={
+            "providerToken": "valid-google-token",
+            "termsVersion": "2026-07-24",
+            "termsAccepted": True,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "The current terms must be accepted before sign-in."
+    )
+    with SessionLocal() as db:
+        assert db.scalar(select(User)) is None
+        assert db.scalar(select(TermsAcceptance)) is None
+
+
+def test_valid_auth_exchange_records_current_terms_acceptance(
+    client: TestClient,
+) -> None:
+    create_account(client)
+
+    with SessionLocal() as db:
+        acceptance = db.scalar(select(TermsAcceptance))
+        assert acceptance is not None
+        assert acceptance.version == "2026-07-25"
 
 
 def test_auth_refresh_profile_reauth_and_delete(client: TestClient) -> None:
@@ -591,6 +652,19 @@ def test_well_known_files(client: TestClient) -> None:
     apple = client.get("/.well-known/apple-app-site-association")
     android = client.get("/.well-known/assetlinks.json")
     assert apple.status_code == 200
-    assert apple.json()["applinks"]["details"][0]["appID"].endswith("com.medicalbox.app")
+    apple_detail = apple.json()["applinks"]["details"][0]
+    assert apple_detail["appID"].endswith("com.medicalbox.app")
+    assert apple_detail["paths"] == [
+        "/app",
+        "/app/inventory",
+        "/app/reminders",
+        "/app/settings",
+        "/app/login",
+    ]
     assert android.status_code == 200
     assert android.json()[0]["target"]["package_name"] == "com.medicalbox.app"
+
+    for path in apple_detail["paths"]:
+        fallback = client.get(path)
+        assert fallback.status_code == 200
+        assert "앱에서 열기" in fallback.text

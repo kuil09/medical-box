@@ -46,6 +46,7 @@ explicit literals.
 | --- | --- |
 | `JWT_SECRET` | Production random secret of at least 32 characters |
 | `SUPPORT_EMAIL` | Existing monitored address shown on support and external account-deletion pages; empty blocks external beta readiness |
+| `TERMS_VERSION` | Version shown by the app and accepted by the API; release both sides together when terms change |
 | `CATALOG_ACCESS_EMAIL_ALLOWLIST` | Comma-separated verified beta emails that receive `catalog:read` at sign-in; empty means deny by default |
 | `DATA_GO_KR_SERVICE_KEY` | Encoded public-data portal service key |
 | `GOOGLE_CLIENT_ID` | Google OIDC client ID |

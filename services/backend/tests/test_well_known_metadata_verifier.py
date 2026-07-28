@@ -23,13 +23,20 @@ validate_apple_app_site_association = SCRIPT_NAMESPACE[
 
 TEAM_ID = "AB12CD34EF"
 FINGERPRINT = ":".join(f"{value:02X}" for value in range(32))
+APP_LINK_PATHS = [
+    "/app",
+    "/app/inventory",
+    "/app/reminders",
+    "/app/settings",
+    "/app/login",
+]
 
 
 def _apple_payload(app_id: str = f"{TEAM_ID}.com.medicalbox.app") -> dict[str, Any]:
     return {
         "applinks": {
             "apps": [],
-            "details": [{"appID": app_id, "paths": ["*"]}],
+            "details": [{"appID": app_id, "paths": APP_LINK_PATHS}],
         }
     }
 
@@ -64,6 +71,14 @@ def test_unconfigured_apple_app_id_fails_closed() -> None:
         validate_apple_app_site_association(
             _apple_payload("UNCONFIGURED.com.medicalbox.app")
         )
+
+
+def test_wildcard_apple_app_links_fail_closed() -> None:
+    payload = _apple_payload()
+    payload["applinks"]["details"][0]["paths"] = ["*"]
+
+    with pytest.raises(MetadataValidationError, match="exact supported /app routes"):
+        validate_apple_app_site_association(payload)
 
 
 def test_empty_android_fingerprint_list_fails_closed() -> None:

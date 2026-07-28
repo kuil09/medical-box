@@ -1,3 +1,4 @@
+from datetime import date
 from functools import lru_cache
 from typing import Literal
 
@@ -13,6 +14,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+pysqlite:///./medical_box.db"
     public_origin: str = "https://medicalbox.outoftokens.ai"
     support_email: str | None = None
+    terms_version: str = "2026-07-25"
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
     jwt_secret: str = "development-only-secret-change-before-deploy"
     jwt_issuer: str = "medicalbox.outoftokens.ai"
@@ -88,6 +90,17 @@ class Settings(BaseSettings):
             or any(character in value for character in "\r\n\t <>")
         ):
             raise ValueError("SUPPORT_EMAIL must be a single plain email address.")
+        return value
+
+    @field_validator("terms_version")
+    @classmethod
+    def validate_terms_version(cls, value: str) -> str:
+        try:
+            parsed = date.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError("TERMS_VERSION must use YYYY-MM-DD format.") from exc
+        if parsed.isoformat() != value:
+            raise ValueError("TERMS_VERSION must use YYYY-MM-DD format.")
         return value
 
     @field_validator("database_url")

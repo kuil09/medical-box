@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/auth/auth_repository.dart';
 import '../../providers.dart';
@@ -15,15 +16,22 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _working = false;
+  bool _termsAccepted = false;
   String? _message;
 
   Future<void> _signIn(LoginProvider provider) async {
+    if (!_termsAccepted) {
+      setState(() => _message = '로그인 전에 이용약관과 개인정보 처리방침을 확인해 주세요.');
+      return;
+    }
     setState(() {
       _working = true;
       _message = null;
     });
     try {
-      final account = await ref.read(authRepositoryProvider).signIn(provider);
+      final account = await ref
+          .read(authRepositoryProvider)
+          .signIn(provider, termsAccepted: _termsAccepted);
       ref.invalidate(authSessionProvider);
       if (mounted) {
         setState(() {
@@ -38,6 +46,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     } finally {
       if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _openLegalDocument(String path) async {
+    final opened = await launchUrl(
+      Uri.parse('https://medicalbox.outoftokens.ai$path'),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      setState(() => _message = '문서를 열지 못했어요. 잠시 후 다시 시도해 주세요.');
     }
   }
 
@@ -169,11 +187,48 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             style: const TextStyle(color: MedicalBoxColors.muted, height: 1.5),
           ),
           const SizedBox(height: 26),
+          CheckboxListTile(
+            value: _termsAccepted,
+            onChanged: _working
+                ? null
+                : (value) {
+                    setState(() {
+                      _termsAccepted = value ?? false;
+                      _message = null;
+                    });
+                  },
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+            title: const Text(
+              '현재 이용약관과 개인정보 처리방침을 확인했고 로그인 처리에 동의합니다.',
+            ),
+          ),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            children: [
+              TextButton(
+                onPressed: _working
+                    ? null
+                    : () => _openLegalDocument('/terms'),
+                child: const Text('이용약관 보기'),
+              ),
+              TextButton(
+                onPressed: _working
+                    ? null
+                    : () => _openLegalDocument('/privacy'),
+                child: const Text('개인정보 처리방침 보기'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           for (final provider in supportedProviders)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: OutlinedButton(
-                onPressed: _working ? null : () => _signIn(provider),
+                onPressed: _working || !_termsAccepted
+                    ? null
+                    : () => _signIn(provider),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(54),
                   shape: RoundedRectangleBorder(

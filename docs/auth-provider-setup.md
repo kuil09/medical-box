@@ -8,6 +8,10 @@ console configuration is required before the flows can complete.
 - Register the exact application identifier `com.medicalbox.app`.
 - Configure the production OAuth/OIDC clients.
 - Register only `medicalbox.outoftokens.ai` as the callback/link origin.
+- Keep the app `currentTermsVersion`, backend `TERMS_VERSION`, and published
+  `/terms` document version synchronized. The login buttons remain disabled
+  until the user explicitly confirms the current terms and privacy notice, and
+  the API rejects a missing, false, or stale acceptance before account creation.
 - Never commit provider secrets, service files, signing keys, or certificate
   fingerprints.
 
@@ -78,8 +82,11 @@ logout and provider logout are best-effort, Kakao uses `logout()` rather than
 `services/backend/scripts/verify_well_known_metadata.py` validates downloaded
 production metadata without making a network request. It rejects the
 `UNCONFIGURED` Apple app ID, an absent app target, empty Android fingerprint
-lists, and malformed SHA-256 fingerprints. The production monitor downloads
-both well-known documents and runs this semantic gate after the HTTP probes.
+lists, malformed SHA-256 fingerprints, and wildcard Apple paths. Verified app
+links are limited to `/app`, `/app/inventory`, `/app/reminders`,
+`/app/settings`, and `/app/login`; privacy, terms, support, account deletion,
+and API paths always remain web routes. The production monitor downloads both
+well-known documents and runs this semantic gate after the HTTP probes.
 
 The protected `Mobile release build` workflow injects provider configuration
 into signed store artifacts and fails before compilation when any required

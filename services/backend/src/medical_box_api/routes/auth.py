@@ -78,6 +78,11 @@ def exchange_provider_token(
     settings: Settings = Depends(get_settings),
 ) -> AuthSession:
     provider = provider.lower()
+    if payload.terms_version != settings.terms_version:
+        raise HTTPException(
+            status_code=409,
+            detail="The current terms must be accepted before sign-in.",
+        )
     verified = validator.validate(provider, payload.provider_token)
     identity = db.scalar(
         select(AuthIdentity).where(

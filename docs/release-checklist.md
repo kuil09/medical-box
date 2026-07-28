@@ -13,6 +13,9 @@ Evidence date: 2026-07-28
 - [x] Account deletion fail-closed tests cover grant-provider linkage, Google
   and Kakao client revocation boundaries, and Apple authorization-code
   exchange, subject matching, and server-side token revocation
+- [x] Login requires an explicit current terms/privacy confirmation, and the
+  API rejects missing, false, or stale terms acceptance before creating an
+  account
 - [x] Catalog routes return `401` without a token, `403` without `catalog:read`,
   and `200` only after an explicit entitlement grant
 - [x] Catalog pagination, retry, duplicate, schema, partial-failure, and count-drop
