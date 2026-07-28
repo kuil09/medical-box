@@ -39,12 +39,24 @@ jobs:
       run:
         working-directory: apps/mobile
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.44.7
-          channel: stable
-          cache: true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install pinned Flutter SDK
+        env:
+          FLUTTER_COMMIT: 84fc5cbb223bc12f83d65b647ff8a56caf779ffd # 3.44.7
+          FLUTTER_HOME: ${{ runner.temp }}/flutter
+          FLUTTER_VERSION: 3.44.7
+        run: |
+          set -euo pipefail
+          git init "${FLUTTER_HOME}"
+          git -C "${FLUTTER_HOME}" remote add origin https://github.com/flutter/flutter.git
+          git -C "${FLUTTER_HOME}" fetch \
+            --depth 1 \
+            origin \
+            "refs/tags/${FLUTTER_VERSION}:refs/tags/${FLUTTER_VERSION}"
+          git -C "${FLUTTER_HOME}" checkout --detach "refs/tags/${FLUTTER_VERSION}"
+          test "$(git -C "${FLUTTER_HOME}" rev-parse HEAD)" = "${FLUTTER_COMMIT}"
+          echo "${FLUTTER_HOME}/bin" >> "${GITHUB_PATH}"
+          "${FLUTTER_HOME}/bin/flutter" config --no-analytics
       - name: Validate release inputs
         env:
           BUILD_NAME: ${{ inputs.build_name }}
@@ -117,7 +129,7 @@ jobs:
           jarsigner -verify "${bundle}"
           keytool -printcert -jarfile "${bundle}" \
             > build/app/outputs/bundle/release/signing-certificate.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: medical-box-android-${{ inputs.build_number }}
           path: |
@@ -138,12 +150,24 @@ jobs:
       run:
         working-directory: apps/mobile
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.44.7
-          channel: stable
-          cache: true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install pinned Flutter SDK
+        env:
+          FLUTTER_COMMIT: 84fc5cbb223bc12f83d65b647ff8a56caf779ffd # 3.44.7
+          FLUTTER_HOME: ${{ runner.temp }}/flutter
+          FLUTTER_VERSION: 3.44.7
+        run: |
+          set -euo pipefail
+          git init "${FLUTTER_HOME}"
+          git -C "${FLUTTER_HOME}" remote add origin https://github.com/flutter/flutter.git
+          git -C "${FLUTTER_HOME}" fetch \
+            --depth 1 \
+            origin \
+            "refs/tags/${FLUTTER_VERSION}:refs/tags/${FLUTTER_VERSION}"
+          git -C "${FLUTTER_HOME}" checkout --detach "refs/tags/${FLUTTER_VERSION}"
+          test "$(git -C "${FLUTTER_HOME}" rev-parse HEAD)" = "${FLUTTER_COMMIT}"
+          echo "${FLUTTER_HOME}/bin" >> "${GITHUB_PATH}"
+          "${FLUTTER_HOME}/bin/flutter" config --no-analytics
       - name: Validate release inputs
         env:
           BUILD_NAME: ${{ inputs.build_name }}
@@ -244,7 +268,7 @@ jobs:
           codesign --verify --deep --strict "${app}"
           codesign -d --entitlements :- "${app}" \
             > build/ios/archive/Runner.xcarchive/medical-box-entitlements.plist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: medical-box-ios-${{ inputs.build_number }}
           path: |

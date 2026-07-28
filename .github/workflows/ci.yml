@@ -142,11 +142,10 @@ jobs:
       - run: flutter test
       - run: flutter build apk --debug
       - name: Verify Android release signing fails closed
-        working-directory: apps/mobile/android
         run: |
           set -euo pipefail
           log="${RUNNER_TEMP}/android-release-signing.log"
-          if ./gradlew :app:bundleRelease --dry-run > "${log}" 2>&1; then
+          if flutter build appbundle --release > "${log}" 2>&1; then
             echo "::error title=Release signing bypassed::Unsigned release task unexpectedly succeeded."
             cat "${log}"
             exit 1
