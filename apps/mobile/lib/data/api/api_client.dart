@@ -270,6 +270,114 @@ class DrugSafetyRulePage {
   final String? nextCursor;
 }
 
+class DrugStatusEventInfo {
+  const DrugStatusEventInfo({
+    required this.eventType,
+    required this.sourceCode,
+    required this.catalogUpdatedAt,
+    required this.source,
+    this.reason,
+    this.startedOn,
+    this.endedOn,
+    this.sourceUpdatedAt,
+  });
+
+  factory DrugStatusEventInfo.fromJson(Map<String, dynamic> json) {
+    return DrugStatusEventInfo(
+      eventType: json['eventType'] as String,
+      reason: json['reason'] as String?,
+      startedOn: json['startedOn'] as String?,
+      endedOn: json['endedOn'] as String?,
+      sourceCode: json['sourceCode'] as String,
+      sourceUpdatedAt: json['sourceUpdatedAt'] as String?,
+      catalogUpdatedAt: json['catalogUpdatedAt'] as String,
+      source: DrugSourceAttribution.fromJson(
+        (json['source'] as Map).cast<String, dynamic>(),
+      ),
+    );
+  }
+
+  final String eventType;
+  final String? reason;
+  final String? startedOn;
+  final String? endedOn;
+  final String sourceCode;
+  final String? sourceUpdatedAt;
+  final String catalogUpdatedAt;
+  final DrugSourceAttribution source;
+}
+
+class DrugPriceInfo {
+  const DrugPriceInfo({
+    required this.sourceCode,
+    required this.catalogUpdatedAt,
+    required this.source,
+    this.insuranceCode,
+    this.amount,
+    this.effectiveDate,
+    this.sourceUpdatedAt,
+  });
+
+  factory DrugPriceInfo.fromJson(Map<String, dynamic> json) {
+    return DrugPriceInfo(
+      insuranceCode: json['insuranceCode'] as String?,
+      amount: json['amount']?.toString(),
+      effectiveDate: json['effectiveDate'] as String?,
+      sourceCode: json['sourceCode'] as String,
+      sourceUpdatedAt: json['sourceUpdatedAt'] as String?,
+      catalogUpdatedAt: json['catalogUpdatedAt'] as String,
+      source: DrugSourceAttribution.fromJson(
+        (json['source'] as Map).cast<String, dynamic>(),
+      ),
+    );
+  }
+
+  final String? insuranceCode;
+  final String? amount;
+  final String? effectiveDate;
+  final String sourceCode;
+  final String? sourceUpdatedAt;
+  final String catalogUpdatedAt;
+  final DrugSourceAttribution source;
+}
+
+class DrugCodeInfo {
+  const DrugCodeInfo({
+    required this.codeType,
+    required this.code,
+    required this.sourceCode,
+    required this.catalogUpdatedAt,
+    required this.source,
+    this.validFrom,
+    this.validTo,
+    this.sourceUpdatedAt,
+  });
+
+  factory DrugCodeInfo.fromJson(Map<String, dynamic> json) {
+    return DrugCodeInfo(
+      codeType: json['codeType'] as String,
+      code: json['code'] as String,
+      validFrom: json['validFrom'] as String?,
+      validTo: json['validTo'] as String?,
+      sourceCode: json['sourceCode'] as String,
+      sourceUpdatedAt: json['sourceUpdatedAt'] as String?,
+      catalogUpdatedAt: json['catalogUpdatedAt'] as String,
+      source: DrugSourceAttribution.fromJson(
+        (json['source'] as Map).cast<String, dynamic>(),
+      ),
+    );
+  }
+
+  final String codeType;
+  final String code;
+  final String? validFrom;
+  final String? validTo;
+  final String sourceCode;
+  final String? sourceUpdatedAt;
+  final String catalogUpdatedAt;
+  final DrugSourceAttribution source;
+}
+
 class DrugDetail extends DrugSummary {
   const DrugDetail({
     required super.itemSeq,
@@ -284,6 +392,9 @@ class DrugDetail extends DrugSummary {
     this.identification,
     this.identificationVariants = const [],
     this.safetyOverview = DrugSafetyOverview.empty,
+    this.statusEvents = const [],
+    this.prices = const [],
+    this.codes = const [],
     this.efficacy,
     this.useMethod,
     this.warning,
@@ -322,6 +433,21 @@ class DrugDetail extends DrugSummary {
             )
           : DrugSafetyOverview.empty,
       ingredients: (json['ingredients'] as List? ?? const []).cast<String>(),
+      statusEvents: (json['statusEvents'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (event) =>
+                DrugStatusEventInfo.fromJson(event.cast<String, dynamic>()),
+          )
+          .toList(),
+      prices: (json['prices'] as List? ?? const [])
+          .whereType<Map>()
+          .map((price) => DrugPriceInfo.fromJson(price.cast<String, dynamic>()))
+          .toList(),
+      codes: (json['codes'] as List? ?? const [])
+          .whereType<Map>()
+          .map((code) => DrugCodeInfo.fromJson(code.cast<String, dynamic>()))
+          .toList(),
       efficacy: json['efficacy'] as String?,
       useMethod: json['useMethod'] as String?,
       warning: json['warning'] as String?,
@@ -346,6 +472,9 @@ class DrugDetail extends DrugSummary {
   final List<DrugAppearanceInfo> identificationVariants;
   final DrugSafetyOverview safetyOverview;
   final List<String> ingredients;
+  final List<DrugStatusEventInfo> statusEvents;
+  final List<DrugPriceInfo> prices;
+  final List<DrugCodeInfo> codes;
   final String? efficacy;
   final String? useMethod;
   final String? warning;
@@ -415,11 +544,7 @@ class CatalogRepository {
   }) async {
     final json = await _authorizedGet(
       '/v1/drugs/${Uri.encodeComponent(itemSeq)}/dur-rules',
-      query: {
-        'ruleType': ?ruleType,
-        'cursor': ?cursor,
-        'limit': '$limit',
-      },
+      query: {'ruleType': ?ruleType, 'cursor': ?cursor, 'limit': '$limit'},
     );
     return DrugSafetyRulePage.fromJson(json);
   }

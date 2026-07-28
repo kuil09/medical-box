@@ -89,6 +89,56 @@ void main() {
               ],
             },
             'ingredients': ['Ingredient A'],
+            'statusEvents': [
+              {
+                'eventType': 'recall',
+                'reason': 'Official recall reason',
+                'startedOn': '2026-07-25',
+                'endedOn': null,
+                'sourceCode': 'mfds_recall',
+                'sourceUpdatedAt': '20260726',
+                'catalogUpdatedAt': '2026-07-26T03:10:00Z',
+                'source': {
+                  'source': 'MFDS recall and sale suspension',
+                  'sourceUrl': 'https://example.com/recall',
+                  'licenseName': 'Public data',
+                  'attribution': 'Source: MFDS',
+                },
+              },
+            ],
+            'prices': [
+              {
+                'insuranceCode': '645700010',
+                'amount': '1234.00',
+                'effectiveDate': '2026-07-01',
+                'sourceCode': 'hira_price',
+                'sourceUpdatedAt': null,
+                'catalogUpdatedAt': '2026-07-26T03:10:00Z',
+                'source': {
+                  'source': 'HIRA reimbursement price',
+                  'sourceUrl': 'https://example.com/price',
+                  'licenseName': 'Korea Open Government License Type 1',
+                  'attribution': 'Source: HIRA',
+                },
+              },
+            ],
+            'codes': [
+              {
+                'codeType': 'standard',
+                'code': '8801234567890',
+                'validFrom': '2026-01-01',
+                'validTo': null,
+                'sourceCode': 'hira_standard_code',
+                'sourceUpdatedAt': '20260703',
+                'catalogUpdatedAt': '2026-07-26T03:10:00Z',
+                'source': {
+                  'source': 'HIRA medicine standard code',
+                  'sourceUrl': 'https://example.com/code',
+                  'licenseName': 'Korea Open Government License Type 1',
+                  'attribution': 'Source: HIRA',
+                },
+              },
+            ],
             'efficacy': 'Consumer information',
             'useMethod': null,
             'warning': null,
@@ -129,6 +179,13 @@ void main() {
       expect(detail.identificationVariants, hasLength(2));
       expect(detail.identificationVariants.last.variantKey, 'variant-b');
       expect(detail.safetyOverview.totalCount, 3);
+      expect(detail.statusEvents.single.eventType, 'recall');
+      expect(detail.statusEvents.single.reason, 'Official recall reason');
+      expect(detail.statusEvents.single.source.sourceUrl, contains('/recall'));
+      expect(detail.prices.single.insuranceCode, '645700010');
+      expect(detail.prices.single.amount, '1234.00');
+      expect(detail.codes.single.code, '8801234567890');
+      expect(detail.codes.single.sourceUpdatedAt, '20260703');
       expect(safety.items.single.sourceCode, 'DUR-001');
       expect(safety.nextCursor, 'next-page');
       expect(requests, hasLength(3));
@@ -174,6 +231,21 @@ void main() {
       );
     },
   );
+
+  test('drug detail treats absent optional projections as empty', () {
+    final detail = DrugDetail.fromJson({
+      'itemSeq': '123',
+      'itemName': 'Test medicine',
+      'manufacturer': null,
+      'status': null,
+      'ingredients': <String>[],
+      'sources': <Object?>[],
+    });
+
+    expect(detail.statusEvents, isEmpty);
+    expect(detail.prices, isEmpty);
+    expect(detail.codes, isEmpty);
+  });
 
   test('catalog refreshes once after an expired access token', () async {
     final requests = <http.Request>[];

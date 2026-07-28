@@ -248,6 +248,16 @@ scheduled allowlist and are not reported as loaded. Railway native daily,
 weekly, and monthly backup schedules remain unavailable on the current Hobby
 plan; see `docs/production-backup-restore.md`.
 
+`DrugDetail` projects normalized status events, reimbursement prices, and
+standard codes only from active source records owned by successful sync runs.
+Responses are deterministically limited to 20 status events, five price rows,
+and 20 codes. Each row carries its official source attribution, source update
+date when supplied, and the catalog observation timestamp. Missing rows are
+returned as empty lists and must not be interpreted as evidence that no recall,
+supply interruption, or reimbursement record exists. The client presents these
+records as non-personalized reference information, and the server never receives
+or combines them with device-local household inventory.
+
 ## Production promotion and retirement evidence
 
 The validated catalog was copied into production from a repeatable-read source

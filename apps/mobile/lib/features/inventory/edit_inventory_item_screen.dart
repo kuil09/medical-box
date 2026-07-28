@@ -12,6 +12,7 @@ import '../../data/api/api_client.dart';
 import '../../data/local/app_database.dart';
 import '../../providers.dart';
 import '../../theme.dart';
+import 'drug_catalog_projection_sections.dart';
 
 class EditInventoryItemScreen extends ConsumerStatefulWidget {
   const EditInventoryItemScreen({this.itemId, this.containerId, super.key});
@@ -342,7 +343,13 @@ class _EditInventoryItemScreenState
                     return ListTile(
                       dense: true,
                       title: Text(result.itemName),
-                      subtitle: Text(result.manufacturer ?? '제조사 정보 없음'),
+                      subtitle: Text(
+                        [
+                          result.manufacturer ?? '제조사 정보 없음',
+                          if (result.status?.isNotEmpty ?? false)
+                            result.status!,
+                        ].join(' · '),
+                      ),
                       onTap: () => _openDrugDetail(result),
                     );
                   }).toList(),
@@ -519,7 +526,7 @@ class _ConnectedCatalogCard extends StatelessWidget {
                     Text(
                       appearanceSummary?.isNotEmpty == true
                           ? appearanceSummary!
-                          : '품목기준코드 $itemSeq · 외형·복용·DUR 정보 보기',
+                          : '품목기준코드 $itemSeq · 외형·복용·안전·가격·코드 정보 보기',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -626,6 +633,7 @@ class _DrugDetailSheetState extends ConsumerState<_DrugDetailSheet> {
               overview: detail.safetyOverview,
             ),
           ],
+          DrugCatalogProjectionSections(detail: detail),
           _DetailSection(title: '보관 방법', body: detail.storageMethod),
           _DetailSection(title: '소비자 설명', body: detail.efficacy),
           _DetailSection(title: '사용 방법', body: detail.useMethod),

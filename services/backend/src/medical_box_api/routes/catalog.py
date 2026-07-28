@@ -1,5 +1,6 @@
 import base64
 from datetime import date, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import func, or_, select, tuple_
@@ -8,9 +9,12 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from ..db import get_db
 from ..models import (
+    DrugCode,
     DrugIdentification,
     DrugIdentificationVariant,
+    DrugPrice,
     DrugProduct,
+    DrugStatusEvent,
     DurRule,
     SourceRecord,
     SourceRegistry,
@@ -21,11 +25,14 @@ from ..schemas import (
     CatalogSource,
     CursorPage,
     DrugAppearanceInfo,
+    DrugCodeInfo,
     DrugDetail,
+    DrugPriceInfo,
     DrugSafetyCategory,
     DrugSafetyOverview,
     DrugSafetyRule,
     DrugSourceAttribution,
+    DrugStatusEventInfo,
     DrugSummary,
 )
 from ..security import require_catalog_read
@@ -46,6 +53,10 @@ SAFETY_RULE_TYPES = (
     "elderly_caution",
     "duration_caution",
 )
+STATUS_EVENT_TYPES = ("recall", "suspension", "shortage")
+STATUS_EVENT_LIMIT = 20
+PRICE_LIMIT = 5
+CODE_LIMIT = 20
 
 
 def _encode_cursor(name: str, item_seq: str) -> str:
@@ -87,6 +98,52 @@ def _payload_string(payload: dict[str, object], *keys: str) -> str | None:
         if value not in (None, ""):
             return str(value).strip()
     return None
+
+
+def _bounded_payload_string(
+    payload: dict[str, object],
+    *keys: str,
+    max_length: int = 2_000,
+) -> str | None:
+    value = _payload_string(payload, *keys)
+    if value is None:
+        return None
+    return value[:max_length]
+
+
+def _source_updated_at(record: SourceRecord) -> str | None:
+    return _bounded_payload_string(
+        record.payload,
+        "LAST_UPDT_DTM",
+        "lastUpdatedAt",
+        "UPDT_DT",
+        "updateDate",
+        "UPDATE_DATE",
+        "변경일자",
+        "자료갱신일",
+        max_length=80,
+    )
+
+
+def _source_attribution(source: SourceRegistry) -> DrugSourceAttribution:
+    return DrugSourceAttribution(
+        source=source.name,
+        source_url=source.portal_url,
+        license_name=source.license_name,
+        attribution=source.attribution,
+    )
+
+
+def _status_event_type(
+    value: str,
+) -> Literal["recall", "suspension", "shortage"]:
+    if value == "recall":
+        return "recall"
+    if value == "suspension":
+        return "suspension"
+    if value == "shortage":
+        return "shortage"
+    raise ValueError("Unsupported public status event type.")
 
 
 def _safety_rule(rule: DurRule) -> DrugSafetyRule:
@@ -143,11 +200,7 @@ def _active_product_exists() -> ColumnElement[bool]:
 @router.get("/catalog/meta", response_model=CatalogMeta)
 def catalog_meta(db: Session = Depends(get_db)) -> CatalogMeta:
     product_count = (
-        db.scalar(
-            select(func.count())
-            .select_from(DrugProduct)
-            .where(_active_product_exists())
-        )
+        db.scalar(select(func.count()).select_from(DrugProduct).where(_active_product_exists()))
         or 0
     )
     last_sync = db.scalar(
@@ -208,14 +261,10 @@ def catalog_meta(db: Session = Depends(get_db)) -> CatalogMeta:
                 attribution=source.attribution,
                 last_successful_sync=successful_syncs.get(source.code),
                 last_attempt_status=(
-                    latest_attempts[source.code][0]
-                    if source.code in latest_attempts
-                    else None
+                    latest_attempts[source.code][0] if source.code in latest_attempts else None
                 ),
                 last_attempt_at=(
-                    latest_attempts[source.code][1]
-                    if source.code in latest_attempts
-                    else None
+                    latest_attempts[source.code][1] if source.code in latest_attempts else None
                 ),
             )
             for source in sources
@@ -239,7 +288,7 @@ def search_drugs(
                 DrugProduct.item_name.ilike(pattern),
                 DrugProduct.manufacturer.ilike(pattern),
                 DrugProduct.item_seq == q.strip(),
-            )
+            ),
         )
         .order_by(DrugProduct.item_name, DrugProduct.item_seq)
     )
@@ -305,11 +354,7 @@ def get_drug_safety_rules(
     rules = list(db.scalars(statement.limit(limit + 1)).all())
     has_more = len(rules) > limit
     page_rules = rules[:limit]
-    next_cursor = (
-        _encode_rule_cursor(page_rules[-1].id)
-        if has_more and page_rules
-        else None
-    )
+    next_cursor = _encode_rule_cursor(page_rules[-1].id) if has_more and page_rules else None
     return CursorPage(
         items=[_safety_rule(rule) for rule in page_rules],
         next_cursor=next_cursor,
@@ -350,6 +395,99 @@ def get_drug(
         .group_by(DurRule.rule_type)
         .order_by(DurRule.rule_type)
     ).all()
+    status_events = list(
+        db.scalars(
+            select(DrugStatusEvent)
+            .join(SourceRecord, SourceRecord.id == DrugStatusEvent.source_record_id)
+            .join(SyncRun, SyncRun.id == SourceRecord.last_seen_run_id)
+            .join(SourceRegistry, SourceRegistry.code == DrugStatusEvent.source_code)
+            .options(selectinload(DrugStatusEvent.source_record))
+            .where(
+                DrugStatusEvent.item_seq == item_seq,
+                DrugStatusEvent.event_type.in_(STATUS_EVENT_TYPES),
+                SourceRecord.source_code == DrugStatusEvent.source_code,
+                SourceRecord.active.is_(True),
+                SyncRun.status == "succeeded",
+                SourceRegistry.enabled.is_(True),
+            )
+            .order_by(
+                DrugStatusEvent.started_on.desc().nulls_last(),
+                DrugStatusEvent.event_type,
+                DrugStatusEvent.source_code,
+                DrugStatusEvent.event_key,
+                DrugStatusEvent.id,
+            )
+            .limit(STATUS_EVENT_LIMIT)
+        ).all()
+    )
+    codes = list(
+        db.scalars(
+            select(DrugCode)
+            .join(SourceRecord, SourceRecord.id == DrugCode.source_record_id)
+            .join(SyncRun, SyncRun.id == SourceRecord.last_seen_run_id)
+            .join(SourceRegistry, SourceRegistry.code == SourceRecord.source_code)
+            .options(selectinload(DrugCode.source_record))
+            .where(
+                DrugCode.item_seq == item_seq,
+                SourceRecord.active.is_(True),
+                SyncRun.status == "succeeded",
+                SourceRegistry.enabled.is_(True),
+            )
+            .order_by(
+                DrugCode.valid_to.asc().nulls_first(),
+                DrugCode.valid_from.desc().nulls_last(),
+                DrugCode.code_type,
+                DrugCode.code,
+                DrugCode.id,
+            )
+            .limit(CODE_LIMIT)
+        ).all()
+    )
+    mapped_insurance_codes = sorted(
+        {
+            mapped_code
+            for code in codes
+            if (
+                mapped_code := _payload_string(
+                    code.source_record.payload,
+                    "제품코드(개정후)",
+                    "제품코드",
+                    "insuranceCode",
+                    "INSURANCE_CODE",
+                    "EDI_CODE",
+                    "ediCode",
+                )
+            )
+            is not None
+        }
+    )
+    price_item_match: ColumnElement[bool] = DrugPrice.item_seq == item_seq
+    if mapped_insurance_codes:
+        price_item_match = or_(
+            price_item_match,
+            DrugPrice.insurance_code.in_(mapped_insurance_codes),
+        )
+    prices = list(
+        db.scalars(
+            select(DrugPrice)
+            .join(SourceRecord, SourceRecord.id == DrugPrice.source_record_id)
+            .join(SyncRun, SyncRun.id == SourceRecord.last_seen_run_id)
+            .join(SourceRegistry, SourceRegistry.code == SourceRecord.source_code)
+            .options(selectinload(DrugPrice.source_record))
+            .where(
+                price_item_match,
+                SourceRecord.active.is_(True),
+                SyncRun.status == "succeeded",
+                SourceRegistry.enabled.is_(True),
+            )
+            .order_by(
+                DrugPrice.effective_date.desc().nulls_last(),
+                DrugPrice.insurance_code.asc().nulls_last(),
+                DrugPrice.id,
+            )
+            .limit(PRICE_LIMIT)
+        ).all()
+    )
     contributing_source_codes = {"mfds_product"}
     if any(
         (
@@ -380,6 +518,9 @@ def get_drug(
             .distinct()
         ).all()
     )
+    contributing_source_codes.update(event.source_code for event in status_events)
+    contributing_source_codes.update(price.source_record.source_code for price in prices)
+    contributing_source_codes.update(code.source_record.source_code for code in codes)
     sources = db.scalars(
         select(SourceRegistry)
         .where(
@@ -388,15 +529,14 @@ def get_drug(
         )
         .order_by(SourceRegistry.code)
     ).all()
+    sources_by_code = {source.code: source for source in sources}
     return DrugDetail(
         **_summary(product).model_dump(),
         permit_date=_date_string(product.permit_date),
         storage_method=product.storage_method,
         appearance=product.appearance,
         image_url=(
-            identification.image_url or product.image_url
-            if identification
-            else product.image_url
+            identification.image_url or product.image_url if identification else product.image_url
         ),
         identification=(
             DrugAppearanceInfo(
@@ -430,6 +570,55 @@ def get_drug(
             ],
         ),
         ingredients=[ingredient.name for ingredient in product.ingredients],
+        status_events=[
+            DrugStatusEventInfo(
+                event_type=_status_event_type(event.event_type),
+                reason=_bounded_payload_string(
+                    event.source_record.payload,
+                    "RTRVL_RESN",
+                    "recallReason",
+                    "RECALL_REASON",
+                    "회수사유",
+                    "PRDCTN_IMPRT_SUPLY_STOP_RSN",
+                    "PRDCTN_IMPRT_SUPPLY_STOP_RSN",
+                    "SUSPEND_REASON",
+                    "supplyStopReason",
+                    "공급중단사유",
+                ),
+                started_on=_date_string(event.started_on),
+                ended_on=_date_string(event.ended_on),
+                source_code=event.source_code,
+                source_updated_at=_source_updated_at(event.source_record),
+                catalog_updated_at=event.source_record.last_seen_at,
+                source=_source_attribution(sources_by_code[event.source_code]),
+            )
+            for event in status_events
+        ],
+        prices=[
+            DrugPriceInfo(
+                insurance_code=price.insurance_code,
+                amount=price.amount,
+                effective_date=_date_string(price.effective_date),
+                source_code=price.source_record.source_code,
+                source_updated_at=_source_updated_at(price.source_record),
+                catalog_updated_at=price.source_record.last_seen_at,
+                source=_source_attribution(sources_by_code[price.source_record.source_code]),
+            )
+            for price in prices
+        ],
+        codes=[
+            DrugCodeInfo(
+                code_type=code.code_type,
+                code=code.code,
+                valid_from=_date_string(code.valid_from),
+                valid_to=_date_string(code.valid_to),
+                source_code=code.source_record.source_code,
+                source_updated_at=_source_updated_at(code.source_record),
+                catalog_updated_at=code.source_record.last_seen_at,
+                source=_source_attribution(sources_by_code[code.source_record.source_code]),
+            )
+            for code in codes
+        ],
         efficacy=consumer.efficacy if consumer else None,
         use_method=consumer.use_method if consumer else None,
         warning=consumer.warning if consumer else None,
@@ -437,15 +626,7 @@ def get_drug(
         interactions=consumer.interactions if consumer else None,
         side_effects=consumer.side_effects if consumer else None,
         source_updated_at=product.source_updated_at,
-        sources=[
-            DrugSourceAttribution(
-                source=source.name,
-                source_url=source.portal_url,
-                license_name=source.license_name,
-                attribution=source.attribution,
-            )
-            for source in sources
-        ],
+        sources=[_source_attribution(source) for source in sources],
     )
 
 
