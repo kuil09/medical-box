@@ -3,6 +3,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from sqlalchemy import func, select
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 CATALOG_MUTATION_LOCK_KEY = int.from_bytes(
@@ -13,15 +14,23 @@ CATALOG_MUTATION_LOCK_KEY = int.from_bytes(
 
 @contextmanager
 def catalog_mutation_lock(db: Session) -> Iterator[None]:
-    if db.bind is None or db.bind.dialect.name != "postgresql":
+    bind = db.get_bind()
+    if bind.dialect.name != "postgresql":
         yield
         return
-    acquired = db.scalar(select(func.pg_try_advisory_lock(CATALOG_MUTATION_LOCK_KEY)))
-    if not acquired:
-        raise RuntimeError("Another catalog mutation or production backup is active.")
-    try:
-        yield
-    finally:
-        if not db.is_active:
-            db.rollback()
-        db.scalar(select(func.pg_advisory_unlock(CATALOG_MUTATION_LOCK_KEY)))
+    engine = bind.engine if isinstance(bind, Connection) else bind
+    with engine.connect() as lock_connection:
+        lock_connection = lock_connection.execution_options(
+            isolation_level="AUTOCOMMIT"
+        )
+        acquired = lock_connection.scalar(
+            select(func.pg_try_advisory_lock(CATALOG_MUTATION_LOCK_KEY))
+        )
+        if not acquired:
+            raise RuntimeError("Another catalog mutation or production backup is active.")
+        try:
+            yield
+        finally:
+            lock_connection.scalar(
+                select(func.pg_advisory_unlock(CATALOG_MUTATION_LOCK_KEY))
+            )

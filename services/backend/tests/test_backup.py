@@ -14,11 +14,12 @@ from medical_box_api.backup.service import (
     DatabaseSnapshot,
     create_backup,
     parse_manifest,
+    prune_backups,
     require_disposable_restore_target,
     require_expected_backup_tables,
     retention_backup_ids,
 )
-from medical_box_api.backup.store import LocalBackupStore
+from medical_box_api.backup.store import LocalBackupStore, S3BackupStore
 
 HMAC_KEY = b"manifest-test-key-with-at-least-32-bytes"
 HMAC_KEY_BASE64 = base64.b64encode(HMAC_KEY).decode()
@@ -100,6 +101,108 @@ def test_retention_is_union_of_daily_weekly_and_monthly_points() -> None:
         manifests[2].backup_id,
         manifests[4].backup_id,
     }
+
+
+def test_daily_retention_uses_distinct_utc_dates() -> None:
+    newest = manifest_for(datetime(2026, 7, 28, 20, tzinfo=UTC), "1")
+    earlier_manual = manifest_for(datetime(2026, 7, 28, 8, tzinfo=UTC), "2")
+    previous_day = manifest_for(datetime(2026, 7, 27, 20, tzinfo=UTC), "3")
+
+    kept = retention_backup_ids(
+        [earlier_manual, previous_day, newest],
+        daily=2,
+        weekly=1,
+        monthly=1,
+    )
+
+    assert newest.backup_id in kept
+    assert previous_day.backup_id in kept
+    assert earlier_manual.backup_id not in kept
+
+
+def test_prune_backups_deletes_expired_object_and_manifest_pairs(
+    tmp_path: Path,
+) -> None:
+    store = LocalBackupStore(tmp_path)
+    newest = manifest_for(datetime(2026, 7, 28, 20, tzinfo=UTC), "1")
+    earlier_manual = manifest_for(datetime(2026, 7, 28, 8, tzinfo=UTC), "2")
+    previous_day = manifest_for(datetime(2026, 7, 27, 20, tzinfo=UTC), "3")
+    for manifest in (newest, earlier_manual, previous_day):
+        store.put_bytes(
+            manifest.object_key,
+            b"encrypted",
+            content_type="application/octet-stream",
+            metadata={},
+        )
+        store.put_bytes(
+            manifest.manifest_key,
+            manifest.signed_bytes(),
+            content_type="application/json",
+            metadata={},
+        )
+
+    deleted = prune_backups(
+        store,
+        prefix="medical-box/production",
+        hmac_key=HMAC_KEY,
+        daily=2,
+        weekly=1,
+        monthly=1,
+    )
+
+    assert deleted == tuple(
+        sorted([earlier_manual.object_key, earlier_manual.manifest_key])
+    )
+    remaining = {item.key for item in store.list_objects("medical-box/production")}
+    assert remaining == {
+        newest.object_key,
+        newest.manifest_key,
+        previous_day.object_key,
+        previous_day.manifest_key,
+    }
+
+
+def test_s3_store_rejects_partial_delete_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class PartialDeleteClient:
+        def delete_objects(self, **kwargs: Any) -> dict[str, Any]:
+            del kwargs
+            return {
+                "Deleted": [{"Key": "medical-box/production/first"}],
+                "Errors": [
+                    {
+                        "Key": "medical-box/production/second",
+                        "Code": "AccessDenied",
+                        "Message": "denied",
+                    }
+                ],
+            }
+
+    client = PartialDeleteClient()
+    monkeypatch.setattr(
+        "medical_box_api.backup.store.boto3.client",
+        lambda *args, **kwargs: client,
+    )
+    store = S3BackupStore(
+        endpoint_url="https://storage.example.test",
+        access_key_id="access",
+        secret_access_key="secret",
+        bucket_name="backups",
+        region="auto",
+        addressing_style="path",
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match=r"medical-box/production/second \(AccessDenied\)",
+    ):
+        store.delete_objects(
+            [
+                "medical-box/production/first",
+                "medical-box/production/second",
+            ]
+        )
 
 
 def test_local_store_rejects_path_escape(tmp_path: Path) -> None:
@@ -246,3 +349,67 @@ def test_create_backup_uploads_signed_pair_and_prunes_after_success(
     )
     assert parsed.backup_id == result.manifest.backup_id
     assert parsed.table_counts == {"users": 1}
+
+
+def test_create_backup_removes_uploaded_pair_when_manifest_publish_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = backup_settings(tmp_path)
+    store = LocalBackupStore(tmp_path)
+    snapshot = DatabaseSnapshot(
+        snapshot_id="00000003-0000001B-1",
+        database_name="medical_box",
+        postgres_version="18.4",
+        alembic_version="20260726_0004",
+        table_counts={"users": 1},
+    )
+
+    @contextmanager
+    def fake_context(*args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        yield
+
+    @contextmanager
+    def fake_snapshot(*args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        yield snapshot
+
+    def fake_dump(**kwargs: Any) -> None:
+        kwargs["destination"].write_bytes(b"plain-dump")
+
+    def fake_encrypt(**kwargs: Any) -> None:
+        kwargs["destination"].write_bytes(b"encrypted-dump")
+
+    original_put_bytes = store.put_bytes
+
+    def fail_manifest_publish(
+        key: str,
+        content: bytes,
+        *,
+        content_type: str,
+        metadata: dict[str, str],
+    ) -> None:
+        original_put_bytes(
+            key,
+            content,
+            content_type=content_type,
+            metadata=metadata,
+        )
+        raise RuntimeError("manifest publish failed")
+
+    monkeypatch.setattr(service, "backup_advisory_lock", fake_context)
+    monkeypatch.setattr(service, "exported_database_snapshot", fake_snapshot)
+    monkeypatch.setattr(service, "run_pg_dump", fake_dump)
+    monkeypatch.setattr(service, "encrypt_dump", fake_encrypt)
+    monkeypatch.setattr(service, "command_version", lambda executable: f"{executable} 18.4")
+    monkeypatch.setattr(store, "put_bytes", fail_manifest_publish)
+
+    with pytest.raises(RuntimeError, match="manifest publish failed"):
+        create_backup(
+            settings,
+            store=store,
+            now=datetime(2026, 7, 28, 20, 30, tzinfo=UTC),
+        )
+
+    assert store.list_objects("medical-box/production") == []

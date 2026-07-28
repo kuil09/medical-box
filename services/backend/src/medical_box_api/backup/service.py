@@ -8,7 +8,7 @@ import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -444,11 +444,22 @@ def retention_backup_ids(
     monthly: int,
 ) -> set[str]:
     ordered = sorted(manifests, key=lambda item: item.created_at, reverse=True)
-    keep = {manifest.backup_id for manifest in ordered[:daily]}
+    keep: set[str] = set()
+
+    seen_days: set[date] = set()
+    for manifest in ordered:
+        created_at = manifest.created_at.astimezone(UTC)
+        day = created_at.date()
+        if day in seen_days:
+            continue
+        seen_days.add(day)
+        if len(seen_days) <= daily:
+            keep.add(manifest.backup_id)
 
     seen_weeks: set[tuple[int, int]] = set()
     for manifest in ordered:
-        calendar = manifest.created_at.isocalendar()
+        created_at = manifest.created_at.astimezone(UTC)
+        calendar = created_at.isocalendar()
         week = (calendar.year, calendar.week)
         if week in seen_weeks:
             continue
@@ -458,7 +469,8 @@ def retention_backup_ids(
 
     seen_months: set[tuple[int, int]] = set()
     for manifest in ordered:
-        month = (manifest.created_at.year, manifest.created_at.month)
+        created_at = manifest.created_at.astimezone(UTC)
+        month = (created_at.year, created_at.month)
         if month in seen_months:
             continue
         seen_months.add(month)
@@ -595,7 +607,7 @@ def create_backup(
                     metadata={"backup-id": backup_id, "format-version": "1"},
                 )
             except Exception:
-                store.delete_objects([object_key])
+                store.delete_objects([object_key, manifest_key])
                 raise
 
         deleted = prune_backups(

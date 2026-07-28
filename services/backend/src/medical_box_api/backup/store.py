@@ -206,6 +206,11 @@ class S3BackupStore:
                 )
                 errors = response.get("Errors", [])
                 if errors:
+                    details = ", ".join(
+                        f"{error.get('Key', '<unknown>')} "
+                        f"({error.get('Code', 'UnknownError')})"
+                        for error in errors
+                    )
                     raise RuntimeError(
-                        f"Failed to delete {len(errors)} backup objects."
+                        f"Failed to delete {len(errors)} backup objects: {details}."
                     )

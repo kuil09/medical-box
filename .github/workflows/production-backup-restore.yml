@@ -17,19 +17,6 @@ jobs:
     runs-on: [self-hosted, linux, x64, medical-box-backup, singapore]
     timeout-minutes: 45
     environment: backup-restore
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_DB: medical_box
-          POSTGRES_PASSWORD: restore-verification-only
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready --username postgres --dbname medical_box"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
     env:
       APP_ENV: test
       APP_ROLE: backup_verify
@@ -49,31 +36,69 @@ jobs:
       BACKUP_RESTORE_CONFIRMATION: restore-disposable-database
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Build the pinned PostgreSQL 18 backup runtime
-        run: >-
-          docker build
-          --file services/backend/Dockerfile.backup
-          --tag medical-box-backup:restore
-          services/backend
       - name: Restore and verify the newest signed backup
+        id: restore
+        shell: bash
         run: |
-          docker run --rm \
-            --network host \
-            --env APP_ENV \
-            --env APP_ROLE \
-            --env DATABASE_URL \
-            --env BACKUP_STORE \
-            --env BACKUP_PREFIX \
-            --env AWS_ENDPOINT_URL \
-            --env AWS_ACCESS_KEY_ID \
-            --env AWS_SECRET_ACCESS_KEY \
-            --env AWS_S3_BUCKET_NAME \
-            --env AWS_DEFAULT_REGION \
-            --env AWS_S3_ADDRESSING_STYLE \
-            --env BACKUP_GPG_PRIVATE_KEY_BASE64 \
-            --env BACKUP_GPG_PASSPHRASE \
-            --env BACKUP_MANIFEST_HMAC_KEY_BASE64 \
-            --env BACKUP_RESTORE_DATABASE_URL \
-            --env BACKUP_RESTORE_CONFIRMATION \
-            medical-box-backup:restore \
-            uv run --no-sync medical-box-backup verify --restore
+          set -euo pipefail
+          key_directory="$(mktemp -d)"
+          cleanup_pending=true
+
+          cleanup_key_directory() {
+            if [[ -e "${key_directory}" ]] &&
+              ! rm -rf -- "${key_directory}"; then
+              echo "Could not remove ephemeral backup key directory." >&2
+              return 1
+            fi
+            if [[ -e "${key_directory}" ]]; then
+              echo "Ephemeral backup key directory remains after cleanup." >&2
+              return 1
+            fi
+          }
+
+          cleanup_on_exit() {
+            local original_status=$?
+            local cleanup_status=0
+            trap - EXIT
+            if [[ "${cleanup_pending}" == true ]]; then
+              if cleanup_key_directory; then
+                cleanup_status=0
+              else
+                cleanup_status=$?
+              fi
+            fi
+            if [[ "${original_status}" -ne 0 ]]; then
+              exit "${original_status}"
+            fi
+            exit "${cleanup_status}"
+          }
+          trap cleanup_on_exit EXIT
+
+          umask 077
+          printf '%s' "${BACKUP_GPG_PRIVATE_KEY_BASE64}" |
+            base64 --decode >"${key_directory}/backup-private.gpg"
+          printf '%s' "${BACKUP_GPG_PASSPHRASE}" \
+            >"${key_directory}/backup-passphrase.txt"
+
+          restore_output="$(
+            services/backend/scripts/verify_production_backup_restore.sh \
+              "${key_directory}"
+          )"
+          printf '%s\n' "${restore_output}"
+          if [[ $'\n'"${restore_output}"$'\n' != *$'\ncleanup_verified=true\n'* ]]; then
+            echo "Restore script did not prove deterministic cleanup." >&2
+            exit 1
+          fi
+
+          if ! cleanup_key_directory; then
+            echo "Restore succeeded, but ephemeral key cleanup failed." >&2
+            exit 1
+          fi
+          cleanup_pending=false
+          trap - EXIT
+          printf 'cleanup_verified=true\n' >>"${GITHUB_OUTPUT}"
+      - name: Record verified cleanup
+        if: steps.restore.outputs.cleanup_verified == 'true'
+        run: >-
+          echo "Production restore verified; temporary containers, network,
+          and key directory were removed." >>"${GITHUB_STEP_SUMMARY}"
