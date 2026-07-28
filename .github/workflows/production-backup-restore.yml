@@ -48,7 +48,7 @@ jobs:
       BACKUP_RESTORE_DATABASE_URL: postgresql://postgres:restore-verification-only@127.0.0.1:5432/medical_box
       BACKUP_RESTORE_CONFIRMATION: restore-disposable-database
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the pinned PostgreSQL 18 backup runtime
         run: >-
           docker build
