@@ -119,6 +119,41 @@ measured 3,556,611,775 bytes. Scheduled full refresh remains disabled because
 the steady-state fit does not provide enough evidence of safe transient
 headroom on the 5 GB volume.
 
+## DUR identity index compaction
+
+A read-only production measurement on 2026-07-28 confirmed that all 860,198
+normalized DUR rules map one-to-one to 860,198 raw source records. The
+normalized table therefore does not need to repeat `source_code` and
+`rule_key`; both values remain available through `source_record_id`.
+
+| Production index | Measured size |
+| --- | ---: |
+| `dur_rules_source_code_rule_key_key` | 152,313,856 bytes |
+| `ix_dur_rules_source_record_id` | 19,341,312 bytes |
+
+Migration `20260728_0006` replaces the non-unique source-record index with a
+unique index, removes the redundant natural-key constraint, and drops the two
+duplicated columns. The existing and replacement source-record indexes are
+approximately the same size, so the 152,313,856-byte natural-key index is the
+expected production net reduction. No raw payload or normalized safety field
+is removed.
+
+The migration was replayed against 860,198 synthetic rows in an isolated
+PostgreSQL 18 container:
+
+| Canary measurement | Result |
+| --- | ---: |
+| Rows before and after | 860,198 |
+| Distinct source-record mappings | 860,198 |
+| Total bytes saved | 161,857,536 |
+| WAL generated | 14,925,824 bytes |
+| Migration elapsed time | 0.364 seconds |
+
+The benchmark is reproducible with
+`scripts/benchmark_dur_identity_compaction.py`. It requires both an explicit
+database URL and the exact expected disposable database name and refuses to
+run when the names do not match.
+
 ## Compression evidence
 
 Representative UTF-8 JSON samples were compressed independently per row with

@@ -176,7 +176,7 @@ def _safety_rule(rule: DurRule) -> DrugSafetyRule:
             "NOTIFICATION_DATE",
             "CHANGE_DATE",
         ),
-        source_code=rule.source_code,
+        source_code=rule.source_record.source_code,
     )
 
 
@@ -523,7 +523,8 @@ def get_drug(
         contributing_source_codes.add("mfds_pill")
     contributing_source_codes.update(
         db.scalars(
-            select(DurRule.source_code)
+            select(SourceRecord.source_code)
+            .select_from(DurRule)
             .join(SourceRecord, SourceRecord.id == DurRule.source_record_id)
             .join(SyncRun, SyncRun.id == SourceRecord.last_seen_run_id)
             .where(

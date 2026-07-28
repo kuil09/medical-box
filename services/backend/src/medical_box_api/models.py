@@ -313,7 +313,6 @@ class DrugPrice(Base):
 
 class DurRule(Base):
     __tablename__ = "dur_rules"
-    __table_args__ = (UniqueConstraint("source_code", "rule_key"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source_record_id: Mapped[int] = mapped_column(
@@ -323,10 +322,9 @@ class DurRule(Base):
             ondelete="CASCADE",
         ),
         index=True,
+        unique=True,
     )
     item_seq: Mapped[str | None] = mapped_column(String(40), index=True)
-    source_code: Mapped[str] = mapped_column(String(80))
-    rule_key: Mapped[str] = mapped_column(String(255))
     rule_type: Mapped[str | None] = mapped_column(String(120))
 
     source_record: Mapped[SourceRecord] = relationship()

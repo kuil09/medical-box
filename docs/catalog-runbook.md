@@ -346,13 +346,18 @@ endpoint used only for the controlled one-off command.
 
 The checkpoint hash matches the downloaded official file:
 `8f177ced6a93fefa439535125aeb4f626e9d386fa5700271094ca26bdcb50ff0`.
+The subsequent read-only DUR identity audit found 860,198 one-to-one
+source-record mappings and a 152,313,856-byte redundant natural-key index.
+Migration `20260728_0006` removes that index without rewriting raw payloads.
+After deployment, remeasure database plus WAL and the Railway volume before
+using the projected 1,286,601,537-byte remaining capacity as activation
+evidence.
+
 The production catalog stub is deployed with a no-op start command. The
-reviewed but unapplied desired-state plan removes its remote `18:10 UTC` cron
-and points its source watch only to the intentionally absent
-`.railway/catalog-sync-activation` sentinel. Until that exact plan is approved
-and applied, the remote cron can still start the no-op command. A separate,
-explicitly approved change may restore catalog mutation only after the current
-1.2 GB reserve and recurring-run canary pass.
+remote cron is removed and its source watch points only to the intentionally
+absent `.railway/catalog-sync-activation` sentinel. A separate, explicitly
+approved change may restore catalog mutation only after the current 1.2 GB
+reserve and recurring-run canary pass.
 Recall, supply
 interruption, and price remain excluded until their production API applications
 return authorized responses.

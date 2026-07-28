@@ -26,11 +26,11 @@ than this public evidence record. The running API uses:
 
 Railway IaC created the `catalog-sync` function and linked its public-data key
 to the existing API secret without printing it. Its start command is
-intentionally a no-op. The desired graph now removes its cron entirely, so the
-stub will consume no scheduled runtime after the reviewed plan is applied.
-Until then, the remote cron can still start the no-op command; it cannot mutate
-the catalog while the capacity reserve and isolated recurring-run canary remain
-blocked.
+intentionally a no-op. The reviewed five-change no-cost plan removed its cron
+and restricted source watching to the intentionally absent
+`.railway/catalog-sync-activation` sentinel. The stub cannot consume scheduled
+runtime or mutate the catalog while the capacity reserve and isolated
+recurring-run canary remain blocked.
 
 The following production paths returned HTTP 200:
 
@@ -355,7 +355,9 @@ anonymous metadata request remained HTTP 401 after the load.
 A read-only query against production returned one installed `pg_trgm`
 extension. The pre-no-cost-graph Railway IaC plan reported production up to
 date at that historical point, and the readiness endpoint returned HTTP 200.
-The later five-change no-cost plan described above remains unapplied.
+The later five-change no-cost plan was applied on 2026-07-28. The API and
+catalog stub deployments both reached `SUCCESS`, the follow-up Railway plan
+reported no pending changes, and the no-cost guard passed.
 
 ## Production monitoring
 

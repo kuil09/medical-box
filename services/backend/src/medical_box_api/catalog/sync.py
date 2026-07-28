@@ -433,17 +433,14 @@ def normalize(
             identification.source_record = source_record
     elif source.kind == "dur":
         rule = None
-        if not dur_rules_are_absent:
+        if not dur_rules_are_absent and source_record.id is not None:
             rule = db.scalar(
                 select(DurRule).where(
-                    DurRule.source_code == source.code,
-                    DurRule.rule_key == key,
+                    DurRule.source_record_id == source_record.id,
                 )
             )
         if rule is None:
             rule = DurRule(
-                source_code=source.code,
-                rule_key=key,
                 source_record=source_record,
             )
             db.add(rule)
@@ -697,7 +694,11 @@ def _sync_source_locked(
         dur_rules_are_absent = source.kind == "dur" and (
             db.scalar(
                 select(DurRule.id)
-                .where(DurRule.source_code == source.code)
+                .join(
+                    SourceRecord,
+                    SourceRecord.id == DurRule.source_record_id,
+                )
+                .where(SourceRecord.source_code == source.code)
                 .limit(1)
             )
             is None
@@ -958,7 +959,6 @@ def _sync_source_locked(
                 ]
                 db.execute(
                     delete(DurRule).where(
-                        DurRule.source_code == source.code,
                         DurRule.source_record_id.in_(stale_batch),
                     )
                 )
