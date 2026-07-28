@@ -90,6 +90,10 @@ Evidence date: 2026-07-28
   distribution certificate, provisioning profile, and production provider
   identifiers
 - [ ] Encrypted off-device recovery copy of the Android upload key retained
+- [x] The mobile provider lifecycle gateway uses Google disconnect, Kakao
+  forced login and unlink, and Apple authorization-code forwarding; repository
+  tests cover call ordering, failure-time session preservation, and
+  non-destructive logout
 - [ ] Real Apple login, reauthentication, and disposable-account deletion E2E
 - [x] Android neither offers nor invokes Apple sign-in while the required Apple
   Service ID web flow is absent; native iOS behavior remains enabled
