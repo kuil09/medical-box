@@ -35,13 +35,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${BASE_SHA}" =~ ^0+$ ]]; then
-            git diff-tree \
-              --no-commit-id \
-              --name-only \
-              --root \
-              -r "${HEAD_SHA}" |
-              .github/scripts/classify-ci-changes.sh >> "${GITHUB_OUTPUT}"
+          if [[ "${BASE_SHA}" =~ ^0+$ ]] ||
+            ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "::warning title=Unavailable base commit::Running every CI area."
+            {
+              echo "infrastructure=true"
+              echo "backend=true"
+              echo "prototype=true"
+              echo "mobile=true"
+            } >> "${GITHUB_OUTPUT}"
           else
             git diff --name-only "${BASE_SHA}" "${HEAD_SHA}" |
               .github/scripts/classify-ci-changes.sh >> "${GITHUB_OUTPUT}"
