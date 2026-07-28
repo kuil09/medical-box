@@ -37,21 +37,14 @@ class RemindersScreen extends ConsumerWidget {
       time.minute,
     );
     final id = const Uuid().v4();
-    final database = ref.read(databaseProvider);
-    await database
-        .into(database.reminders)
-        .insert(
-          RemindersCompanion.insert(
-            id: id,
-            kind: 'inventory_check',
-            scheduledAt: scheduled,
-            hidesMedicineName: const Value(true),
-          ),
+    await ref
+        .read(localDataLifecycleProvider)
+        .addReminder(
+          id: id,
+          kind: 'inventory_check',
+          scheduledAt: scheduled,
+          privateLabel: '보관함 확인',
         );
-    final reminder = await (database.select(
-      database.reminders,
-    )..where((row) => row.id.equals(id))).getSingle();
-    await ref.read(reminderSchedulerProvider).schedule(reminder);
   }
 
   @override
@@ -125,7 +118,9 @@ class RemindersScreen extends ConsumerWidget {
                   ),
                 ),
                 onDismissed: (_) async {
-                  await ref.read(reminderSchedulerProvider).cancel(reminder.id);
+                  await ref
+                      .read(localDataLifecycleProvider)
+                      .cancel(reminder.id);
                   final database = ref.read(databaseProvider);
                   await (database.delete(
                     database.reminders,
@@ -173,11 +168,11 @@ class RemindersScreen extends ConsumerWidget {
                       );
                       if (enabled) {
                         await ref
-                            .read(reminderSchedulerProvider)
+                            .read(localDataLifecycleProvider)
                             .schedule(reminder.copyWith(enabled: true));
                       } else {
                         await ref
-                            .read(reminderSchedulerProvider)
+                            .read(localDataLifecycleProvider)
                             .cancel(reminder.id);
                       }
                     },

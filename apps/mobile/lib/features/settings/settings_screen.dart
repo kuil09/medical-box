@@ -98,7 +98,7 @@ class SettingsScreen extends ConsumerWidget {
             : await File(selected.path!).readAsBytes());
     if (bytes == null) return;
     try {
-      await ref.read(exportServiceProvider).importExport(bytes, password);
+      await ref.read(localDataLifecycleProvider).importExport(bytes, password);
       if (context.mounted) {
         ScaffoldMessenger.of(
           context,
@@ -134,7 +134,7 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
-    await ref.read(databaseProvider).deleteAllLocalData();
+    await ref.read(localDataLifecycleProvider).deleteAllLocalData();
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('기기 데이터를 삭제했어요. 서버 계정은 그대로예요.')),
@@ -182,7 +182,7 @@ class SettingsScreen extends ConsumerWidget {
                       true,
                   onChanged: (value) async {
                     await ref
-                        .read(databaseProvider)
+                        .read(localDataLifecycleProvider)
                         .setNotificationPrivacy(value);
                     ref.invalidate(appSettingsProvider);
                   },

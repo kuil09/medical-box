@@ -7,6 +7,7 @@ import 'build_config.dart';
 import 'data/local/app_database.dart';
 import 'data/local/database_key_store.dart';
 import 'providers.dart';
+import 'services/local_data_lifecycle.dart';
 import 'services/reminder_scheduler.dart';
 
 Future<void> main() async {
@@ -18,10 +19,8 @@ Future<void> main() async {
   final keyStore = DatabaseKeyStore();
   final database = await openEncryptedDatabase(keyStore);
   final reminderScheduler = ReminderScheduler();
-  await reminderScheduler.initialize();
-  await reminderScheduler.rescheduleAll(
-    await database.select(database.reminders).get(),
-  );
+  final localDataLifecycle = LocalDataLifecycle(database, reminderScheduler);
+  await localDataLifecycle.initialize();
 
   runApp(
     ProviderScope(
@@ -29,6 +28,7 @@ Future<void> main() async {
         databaseProvider.overrideWithValue(database),
         databaseKeyStoreProvider.overrideWithValue(keyStore),
         reminderSchedulerProvider.overrideWithValue(reminderScheduler),
+        localDataLifecycleProvider.overrideWithValue(localDataLifecycle),
       ],
       child: const MedicalBoxApp(),
     ),
