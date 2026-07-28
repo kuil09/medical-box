@@ -935,22 +935,16 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             [
                 DurRule(
                     item_seq="200000001",
-                    source_code="mfds_dur_product_pregnancy",
-                    rule_key="pregnancy-1",
                     rule_type="pregnancy_contraindication",
                     source_record=pregnancy_source_record,
                 ),
                 DurRule(
                     item_seq="200000001",
-                    source_code="mfds_dur_product_concomitant",
-                    rule_key="concomitant-1",
                     rule_type="concomitant_contraindication",
                     source_record=concomitant_source_record,
                 ),
                 DurRule(
                     item_seq="200000001",
-                    source_code="mfds_dur_product_elderly",
-                    rule_key="failed-1",
                     rule_type="elderly_caution",
                     source_record=failed_source_record,
                 ),
