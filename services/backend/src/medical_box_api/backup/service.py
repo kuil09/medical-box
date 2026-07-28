@@ -266,13 +266,11 @@ def run_pg_dump(
         raise RuntimeError(f"pg_dump failed with exit code {result.returncode}.")
 
 
-def _decode_key(encoded: str, destination: Path) -> None:
+def _decode_key(encoded: str) -> bytes:
     try:
-        content = base64.b64decode(encoded, validate=True)
+        return base64.b64decode(encoded, validate=True)
     except ValueError as exc:
         raise ValueError("The configured GPG key is not valid Base64.") from exc
-    destination.write_bytes(content)
-    destination.chmod(0o600)
 
 
 def _gpg_fingerprints(executable: str, home: Path) -> set[str]:
@@ -304,8 +302,6 @@ def import_gpg_key(
     expected_fingerprint: str | None,
 ) -> None:
     home.mkdir(mode=0o700)
-    key_path = home / "key.asc"
-    _decode_key(encoded_key, key_path)
     result = subprocess.run(
         [
             executable,
@@ -313,12 +309,11 @@ def import_gpg_key(
             str(home),
             "--batch",
             "--import",
-            str(key_path),
         ],
+        input=_decode_key(encoded_key),
         check=False,
         capture_output=True,
     )
-    key_path.unlink(missing_ok=True)
     if result.returncode != 0:
         raise RuntimeError(f"GPG key import failed with exit code {result.returncode}.")
     if expected_fingerprint is not None and expected_fingerprint not in _gpg_fingerprints(
@@ -392,27 +387,26 @@ def decrypt_dump(
         "--output",
         str(destination),
     ]
-    passphrase_path: Path | None = None
-    try:
-        if passphrase is not None:
-            passphrase_path = gpg_home / "passphrase"
-            passphrase_path.write_text(passphrase)
-            passphrase_path.chmod(0o600)
-            command.extend(
-                [
-                    "--pinentry-mode",
-                    "loopback",
-                    "--passphrase-file",
-                    str(passphrase_path),
-                ]
-            )
-        command.extend(["--decrypt", str(source)])
-        result = subprocess.run(command, check=False, capture_output=True)
-        if result.returncode != 0:
-            raise RuntimeError(f"GPG decryption failed with exit code {result.returncode}.")
-    finally:
-        if passphrase_path is not None:
-            passphrase_path.unlink(missing_ok=True)
+    passphrase_input: bytes | None = None
+    if passphrase is not None:
+        command.extend(
+            [
+                "--pinentry-mode",
+                "loopback",
+                "--passphrase-fd",
+                "0",
+            ]
+        )
+        passphrase_input = f"{passphrase}\n".encode()
+    command.extend(["--decrypt", str(source)])
+    result = subprocess.run(
+        command,
+        input=passphrase_input,
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"GPG decryption failed with exit code {result.returncode}.")
 
 
 def _backup_keys(prefix: str, backup_id: str) -> tuple[str, str]:

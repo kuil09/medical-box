@@ -1,4 +1,5 @@
 import base64
+import subprocess
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -138,6 +139,62 @@ def test_backup_table_inventory_fails_closed_on_schema_drift() -> None:
         require_expected_backup_tables(expected | {"future_table"})
     with pytest.raises(RuntimeError, match="missing=users"):
         require_expected_backup_tables(expected - {"users"})
+
+
+def test_gpg_key_import_uses_stdin_without_plaintext_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, Any]] = []
+
+    def fake_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        calls.append({"command": command, **kwargs})
+        return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(service.subprocess, "run", fake_run)
+    gpg_home = tmp_path / "gpg"
+
+    service.import_gpg_key(
+        executable="gpg",
+        home=gpg_home,
+        encoded_key=base64.b64encode(b"private-key").decode(),
+        expected_fingerprint=None,
+    )
+
+    assert calls[0]["input"] == b"private-key"
+    assert calls[0]["command"][-1] == "--import"
+    assert not (gpg_home / "key.asc").exists()
+
+
+def test_gpg_passphrase_uses_stdin_without_plaintext_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, Any]] = []
+
+    def fake_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        calls.append({"command": command, **kwargs})
+        return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(service, "import_gpg_key", lambda **kwargs: None)
+    monkeypatch.setattr(service.subprocess, "run", fake_run)
+    gpg_home = tmp_path / "gpg"
+    gpg_home.mkdir()
+
+    service.decrypt_dump(
+        executable="gpg",
+        private_key_base64=base64.b64encode(b"private-key").decode(),
+        passphrase="test-passphrase",
+        source=tmp_path / "backup.dump.gpg",
+        destination=tmp_path / "backup.dump",
+        gpg_home=gpg_home,
+        expected_fingerprint=FINGERPRINT,
+    )
+
+    assert calls[0]["input"] == b"test-passphrase\n"
+    assert "--passphrase-fd" in calls[0]["command"]
+    assert "--passphrase-file" not in calls[0]["command"]
+    assert not (gpg_home / "passphrase").exists()
 
 
 def test_create_backup_uploads_signed_pair_and_prunes_after_success(
