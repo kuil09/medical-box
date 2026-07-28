@@ -327,6 +327,19 @@
       },
       "DeleteAccountRequest": {
         "properties": {
+          "appleAuthorizationCode": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Appleauthorizationcode"
+          },
           "reauthGrant": {
             "title": "Reauthgrant",
             "type": "string"

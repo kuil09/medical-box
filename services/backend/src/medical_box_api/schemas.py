@@ -39,6 +39,11 @@ class ReauthRequest(ApiModel):
 
 class DeleteAccountRequest(ApiModel):
     reauth_grant: str
+    apple_authorization_code: str | None = Field(
+        default=None,
+        min_length=8,
+        max_length=4096,
+    )
 
 
 class AccountPatch(ApiModel):

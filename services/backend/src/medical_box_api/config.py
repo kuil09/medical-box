@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     app_role: Literal["api", "catalog_sync", "backup", "backup_verify"] = "api"
     database_url: str = "sqlite+pysqlite:///./medical_box.db"
     public_origin: str = "https://medicalbox.outoftokens.ai"
+    support_email: str | None = None
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
     jwt_secret: str = "development-only-secret-change-before-deploy"
     jwt_issuer: str = "medicalbox.outoftokens.ai"
@@ -67,12 +68,27 @@ class Settings(BaseSettings):
     )
 
     apple_team_id: str | None = None
+    apple_sign_in_key_id: str | None = None
+    apple_sign_in_private_key_base64: SecretStr | None = None
     android_cert_sha256: str | None = None
 
     @field_validator("public_origin")
     @classmethod
     def remove_trailing_slash(cls, value: str) -> str:
         return value.rstrip("/")
+
+    @field_validator("support_email")
+    @classmethod
+    def validate_support_email(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        value = value.strip()
+        if (
+            value.count("@") != 1
+            or any(character in value for character in "\r\n\t <>")
+        ):
+            raise ValueError("SUPPORT_EMAIL must be a single plain email address.")
+        return value
 
     @field_validator("database_url")
     @classmethod

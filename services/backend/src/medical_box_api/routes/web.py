@@ -1,4 +1,5 @@
 from html import escape
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -37,6 +38,22 @@ def page(title: str, content: str) -> HTMLResponse:
 </head>
 <body><main><p>우리집 구급키트</p><h1>{escape(title)}</h1><article>{content}</article></main></body>
 </html>"""
+    )
+
+
+def support_email_link(settings: Settings, *, subject: str) -> str:
+    if settings.support_email is None:
+        return (
+            "<p><strong>외부 요청 연락처가 아직 구성되지 않았습니다.</strong> "
+            "이 상태에서는 외부 베타 배포를 진행하지 않습니다.</p>"
+        )
+    address = escape(settings.support_email, quote=True)
+    mailto = (
+        f"mailto:{quote(settings.support_email, safe='@._+-')}"
+        f"?subject={quote(subject)}"
+    )
+    return (
+        f'<p><a href="{escape(mailto, quote=True)}">{address}로 이메일 보내기</a></p>'
     )
 
 
@@ -87,23 +104,32 @@ def terms() -> HTMLResponse:
 
 
 @router.get("/support", response_class=HTMLResponse)
-def support() -> HTMLResponse:
+def support(settings: Settings = Depends(get_settings)) -> HTMLResponse:
     return page(
         "지원",
         "<p>앱 설정에서 기기 데이터 내보내기, 계정 삭제와 기기 데이터 삭제를 "
         "각각 실행할 수 있습니다.</p>"
-        "<p>지원 연락처는 베타 배포 전에 이 페이지에 추가됩니다.</p>",
+        + support_email_link(settings, subject="우리집 구급키트 지원 요청"),
     )
 
 
 @router.get("/account-deletion", response_class=HTMLResponse)
-def account_deletion() -> HTMLResponse:
+def account_deletion(settings: Settings = Depends(get_settings)) -> HTMLResponse:
     return page(
         "계정 삭제 안내",
+        "<h2>앱에서 삭제</h2>"
         "<p>앱의 설정 → 계정 → 계정 삭제에서 소셜 로그인을 다시 확인한 뒤 "
         "계정을 삭제할 수 있습니다.</p>"
+        "<h2>앱을 사용할 수 없는 경우</h2>"
+        "<p>아래 이메일로 계정 삭제를 요청할 수 있습니다. 가입에 사용한 "
+        "로그인 제공자와 이메일 주소만 적어 주세요. 비밀번호, 인증 토큰, "
+        "의약품 또는 건강 정보는 보내지 마세요. 본인 확인 방법과 처리 결과는 "
+        "회신으로 안내합니다.</p>"
+        + support_email_link(settings, subject="우리집 구급키트 계정 삭제 요청")
+        + "<h2>기기 데이터</h2>"
         "<p>기기에 저장된 구급키트 데이터는 별도로 삭제하거나 계정 삭제와 함께 "
-        "삭제할 수 있습니다.</p>",
+        "삭제할 수 있습니다. 이 데이터는 서버로 전송되지 않으므로 운영자가 "
+        "원격으로 삭제할 수 없습니다.</p>",
     )
 
 

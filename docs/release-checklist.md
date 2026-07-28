@@ -10,6 +10,9 @@ Evidence date: 2026-07-28
 - [x] Ruff, MyPy, Pytest, Alembic upgrade, and OpenAPI drift check
 - [x] Local inventory CRUD and encrypted export/import round trip
 - [x] Provider token and refresh-token rotation/reuse tests
+- [x] Account deletion fail-closed tests cover grant-provider linkage, Google
+  and Kakao client revocation boundaries, and Apple authorization-code
+  exchange, subject matching, and server-side token revocation
 - [x] Catalog routes return `401` without a token, `403` without `catalog:read`,
   and `200` only after an explicit entitlement grant
 - [x] Catalog pagination, retry, duplicate, schema, partial-failure, and count-drop

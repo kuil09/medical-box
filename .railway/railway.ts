@@ -80,6 +80,7 @@ export default defineRailway((ctx) => {
     APP_ROLE: "api",
     DATA_GO_KR_SERVICE_KEY: preserve(),
     PUBLIC_ORIGIN: publicOrigin,
+    SUPPORT_EMAIL: preserve(),
     ALLOWED_HOSTS: allowedHosts,
     JWT_ISSUER: "https://medicalbox.outoftokens.ai",
     JWT_AUDIENCE: "com.medicalbox.app",
@@ -89,6 +90,8 @@ export default defineRailway((ctx) => {
     APPLE_CLIENT_ID: "com.medicalbox.app",
     KAKAO_APP_ID: preserve(),
     APPLE_TEAM_ID: preserve(),
+    APPLE_SIGN_IN_KEY_ID: preserve(),
+    APPLE_SIGN_IN_PRIVATE_KEY_BASE64: preserve(),
     ANDROID_CERT_SHA256: preserve(),
   };
 

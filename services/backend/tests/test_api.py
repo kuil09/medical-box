@@ -1,6 +1,7 @@
 import uuid
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy import inspect, select
@@ -19,13 +20,17 @@ from medical_box_api.models import (
     SyncRun,
     User,
 )
+from medical_box_api.security import create_reauth_grant
 
 
-def create_account(client: TestClient) -> dict[str, object]:
+def create_account(
+    client: TestClient,
+    provider: str = "google",
+) -> dict[str, object]:
     response = client.post(
-        "/api/v1/auth/exchange/google",
+        f"/api/v1/auth/exchange/{provider}",
         json={
-            "providerToken": "valid-google-token",
+            "providerToken": f"valid-{provider}-token",
             "termsVersion": "2026-07-25",
             "deviceLabel": "iPhone",
         },
@@ -71,6 +76,36 @@ def test_web_health_and_security_headers(client: TestClient) -> None:
     assert "max-age=31536000" in live.headers["strict-transport-security"]
 
 
+def test_support_and_external_deletion_contact_are_configuration_gated(
+    client: TestClient,
+) -> None:
+    settings = get_settings()
+    previous_email = settings.support_email
+    try:
+        settings.support_email = None
+        unavailable = client.get("/account-deletion")
+        assert "외부 요청 연락처가 아직 구성되지 않았습니다." in unavailable.text
+
+        settings.support_email = "helpdesk@example.com"
+        support = client.get("/support")
+        deletion = client.get("/account-deletion")
+    finally:
+        settings.support_email = previous_email
+
+    assert "mailto:helpdesk@example.com" in support.text
+    assert "mailto:helpdesk@example.com" in deletion.text
+    assert "비밀번호, 인증 토큰, 의약품 또는 건강 정보는 보내지 마세요." in deletion.text
+    assert "운영자가 원격으로 삭제할 수 없습니다." in deletion.text
+
+
+def test_support_email_rejects_header_injection() -> None:
+    with pytest.raises(ValidationError, match="SUPPORT_EMAIL"):
+        Settings(
+            _env_file=None,
+            support_email="support@example.com\r\nBcc: attacker@example.com",
+        )
+
+
 def test_auth_refresh_profile_reauth_and_delete(client: TestClient) -> None:
     session = create_account(client)
     access = session["accessToken"]
@@ -113,6 +148,138 @@ def test_auth_refresh_profile_reauth_and_delete(client: TestClient) -> None:
     )
     assert deleted.status_code == 204
     assert client.get("/api/v1/me", headers=fresh_headers).status_code == 401
+
+
+def test_delete_rejects_apple_code_for_google_and_preserves_account(
+    client: TestClient,
+) -> None:
+    session = create_account(client)
+    headers = {"Authorization": f"Bearer {session['accessToken']}"}
+    reauth = client.post(
+        "/api/v1/auth/reauth/google",
+        headers=headers,
+        json={"providerToken": "valid-google-token"},
+    )
+
+    deleted = client.request(
+        "DELETE",
+        "/api/v1/me",
+        headers=headers,
+        json={
+            "reauthGrant": reauth.json()["grant"],
+            "appleAuthorizationCode": "unexpected-apple-code",
+        },
+    )
+
+    assert deleted.status_code == 400
+    assert client.get("/api/v1/me", headers=headers).status_code == 200
+
+
+def test_delete_rejects_grant_for_unlinked_provider(
+    client: TestClient,
+) -> None:
+    session = create_account(client)
+    headers = {"Authorization": f"Bearer {session['accessToken']}"}
+    grant = create_reauth_grant(
+        uuid.UUID(str(session["account"]["id"])),
+        "apple",
+        get_settings(),
+    )
+
+    deleted = client.request(
+        "DELETE",
+        "/api/v1/me",
+        headers=headers,
+        json={
+            "reauthGrant": grant,
+            "appleAuthorizationCode": "one-time-authorization-code",
+        },
+    )
+
+    assert deleted.status_code == 403
+    assert client.get("/api/v1/me", headers=headers).status_code == 200
+
+
+def test_apple_delete_requires_authorization_code_and_preserves_account(
+    client: TestClient,
+) -> None:
+    session = create_account(client, "apple")
+    headers = {"Authorization": f"Bearer {session['accessToken']}"}
+    reauth = client.post(
+        "/api/v1/auth/reauth/apple",
+        headers=headers,
+        json={"providerToken": "valid-apple-token"},
+    )
+
+    deleted = client.request(
+        "DELETE",
+        "/api/v1/me",
+        headers=headers,
+        json={"reauthGrant": reauth.json()["grant"]},
+    )
+
+    assert deleted.status_code == 400
+    assert client.get("/api/v1/me", headers=headers).status_code == 200
+
+
+def test_apple_revocation_failure_preserves_account(
+    client: TestClient,
+    apple_revoker,
+) -> None:
+    apple_revoker.error = HTTPException(
+        status_code=502,
+        detail="Apple account revocation failed.",
+    )
+    session = create_account(client, "apple")
+    headers = {"Authorization": f"Bearer {session['accessToken']}"}
+    reauth = client.post(
+        "/api/v1/auth/reauth/apple",
+        headers=headers,
+        json={"providerToken": "valid-apple-token"},
+    )
+
+    deleted = client.request(
+        "DELETE",
+        "/api/v1/me",
+        headers=headers,
+        json={
+            "reauthGrant": reauth.json()["grant"],
+            "appleAuthorizationCode": "one-time-authorization-code",
+        },
+    )
+
+    assert deleted.status_code == 502
+    assert apple_revoker.calls == []
+    assert client.get("/api/v1/me", headers=headers).status_code == 200
+
+
+def test_apple_revocation_success_deletes_account(
+    client: TestClient,
+    apple_revoker,
+) -> None:
+    session = create_account(client, "apple")
+    headers = {"Authorization": f"Bearer {session['accessToken']}"}
+    reauth = client.post(
+        "/api/v1/auth/reauth/apple",
+        headers=headers,
+        json={"providerToken": "valid-apple-token"},
+    )
+
+    deleted = client.request(
+        "DELETE",
+        "/api/v1/me",
+        headers=headers,
+        json={
+            "reauthGrant": reauth.json()["grant"],
+            "appleAuthorizationCode": "one-time-authorization-code",
+        },
+    )
+
+    assert deleted.status_code == 204
+    assert apple_revoker.calls == [
+        ("apple-subject", "one-time-authorization-code")
+    ]
+    assert client.get("/api/v1/me", headers=headers).status_code == 401
 
 
 def test_verified_allowlisted_email_receives_catalog_access(client: TestClient) -> None:

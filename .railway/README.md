@@ -45,11 +45,14 @@ explicit literals.
 | Variable | Requirement |
 | --- | --- |
 | `JWT_SECRET` | Production random secret of at least 32 characters |
+| `SUPPORT_EMAIL` | Existing monitored address shown on support and external account-deletion pages; empty blocks external beta readiness |
 | `CATALOG_ACCESS_EMAIL_ALLOWLIST` | Comma-separated verified beta emails that receive `catalog:read` at sign-in; empty means deny by default |
 | `DATA_GO_KR_SERVICE_KEY` | Encoded public-data portal service key |
 | `GOOGLE_CLIENT_ID` | Google OIDC client ID |
 | `KAKAO_APP_ID` | Kakao REST/OpenID Connect app ID |
 | `APPLE_TEAM_ID` | Apple Developer team ID |
+| `APPLE_SIGN_IN_KEY_ID` | Sign in with Apple private-key identifier used only for account revocation |
+| `APPLE_SIGN_IN_PRIVATE_KEY_BASE64` | Base64-encoded Sign in with Apple `.p8` private key; store only as a secret |
 | `ANDROID_CERT_SHA256` | Production signing-certificate fingerprint |
 | `MFDS_RECALL_URL` | Confirmed official recall/suspension API endpoint |
 | `MFDS_SHORTAGE_URL` | Confirmed official supply-interruption API endpoint |

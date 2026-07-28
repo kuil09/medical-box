@@ -9,9 +9,14 @@ os.environ["JWT_SECRET"] = "test-secret-that-is-long-enough-for-signing"
 import pytest
 from fastapi.testclient import TestClient
 
+from medical_box_api.apple_account import get_apple_authorization_revoker
 from medical_box_api.db import Base, engine
 from medical_box_api.main import app
-from medical_box_api.providers import VerifiedProviderIdentity, get_provider_validator
+from medical_box_api.providers import (
+    ProviderValidator,
+    VerifiedProviderIdentity,
+    get_provider_validator,
+)
 
 
 class FakeProviderValidator:
@@ -23,11 +28,35 @@ class FakeProviderValidator:
         )
 
 
+class FakeAppleAuthorizationRevoker:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+        self.error: Exception | None = None
+
+    def revoke(
+        self,
+        *,
+        provider_subject: str,
+        authorization_code: str,
+        validator: ProviderValidator,
+    ) -> None:
+        del validator
+        if self.error is not None:
+            raise self.error
+        self.calls.append((provider_subject, authorization_code))
+
+
 @pytest.fixture
-def client() -> Generator[TestClient]:
+def apple_revoker() -> FakeAppleAuthorizationRevoker:
+    return FakeAppleAuthorizationRevoker()
+
+
+@pytest.fixture
+def client(apple_revoker: FakeAppleAuthorizationRevoker) -> Generator[TestClient]:
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     app.dependency_overrides[get_provider_validator] = lambda: FakeProviderValidator()
+    app.dependency_overrides[get_apple_authorization_revoker] = lambda: apple_revoker
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
