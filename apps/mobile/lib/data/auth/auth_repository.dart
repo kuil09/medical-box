@@ -1,32 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
-import '../../build_config.dart';
 import '../api/api_client.dart';
 import '../local/database_key_store.dart';
+import 'login_provider.dart';
+import 'social_auth_gateway.dart';
 
-enum LoginProvider { kakao, apple, google }
-
-extension LoginProviderApiName on LoginProvider {
-  String get apiName => switch (this) {
-    LoginProvider.kakao => 'kakao',
-    LoginProvider.apple => 'apple',
-    LoginProvider.google => 'google',
-  };
-}
-
-bool isLoginProviderSupported(LoginProvider provider, TargetPlatform platform) {
-  return switch (provider) {
-    // Android requires an Apple Service ID web flow, which is not implemented.
-    LoginProvider.apple => platform == TargetPlatform.iOS,
-    LoginProvider.google || LoginProvider.kakao =>
-      platform == TargetPlatform.iOS || platform == TargetPlatform.android,
-  };
-}
+export 'login_provider.dart';
 
 class AccountProfile {
   const AccountProfile({
@@ -57,21 +38,25 @@ class AccountProfile {
 }
 
 class AuthRepository {
-  AuthRepository(this._api, this._keyStore, {TargetPlatform? targetPlatform})
-    : _targetPlatform = targetPlatform ?? defaultTargetPlatform;
-
-  static Future<void>? _googleInitialization;
+  AuthRepository(
+    this._api,
+    this._keyStore, {
+    TargetPlatform? targetPlatform,
+    SocialAuthGateway? socialAuthGateway,
+  }) : _socialAuthGateway =
+           socialAuthGateway ??
+           SdkSocialAuthGateway(targetPlatform: targetPlatform);
 
   final ApiClient _api;
   final DatabaseKeyStore _keyStore;
-  final TargetPlatform _targetPlatform;
+  final SocialAuthGateway _socialAuthGateway;
   AccountProfile? _account;
   Future<String?>? _refreshInFlight;
 
   AccountProfile? get account => _account;
 
   bool supportsProvider(LoginProvider provider) {
-    return isLoginProviderSupported(provider, _targetPlatform);
+    return _socialAuthGateway.supportsProvider(provider);
   }
 
   Future<String?> accessToken() => _keyStore.readToken('access');
@@ -94,11 +79,14 @@ class AuthRepository {
   }
 
   Future<AccountProfile> signIn(LoginProvider provider) async {
-    final providerToken = await _providerToken(provider);
+    final proof = await _socialAuthGateway.authenticate(
+      provider,
+      forceReauthentication: false,
+    );
     final response = await _api.postJson(
       '/v1/auth/exchange/${provider.apiName}',
       body: {
-        'providerToken': providerToken,
+        'providerToken': proof.idToken,
         'termsVersion': '2026-07-25',
         'deviceLabel': Platform.operatingSystem,
       },
@@ -131,6 +119,7 @@ class AuthRepository {
   }
 
   Future<void> signOut() async {
+    final linkedProviders = _linkedProviders();
     final refreshToken = await _keyStore.readToken('refresh');
     if (refreshToken != null) {
       try {
@@ -138,32 +127,53 @@ class AuthRepository {
           '/v1/auth/logout',
           body: {'refreshToken': refreshToken},
         );
-      } on ApiException {
+      } catch (_) {
         // Local sign-out must remain available when the network is unavailable.
+      }
+    }
+    for (final provider in linkedProviders) {
+      try {
+        await _socialAuthGateway.logout(provider);
+      } catch (_) {
+        // Provider logout is best-effort and must never become an unlink.
       }
     }
     await _keyStore.clearTokens();
     _account = null;
-    final google = await _googleSignIn(requireConfiguration: false);
-    await google.signOut();
   }
 
   Future<void> deleteAccount(LoginProvider provider) async {
     final accessToken = await _requiredAccessToken();
-    final providerToken = await _providerToken(provider);
+    final proof = await _socialAuthGateway.authenticate(
+      provider,
+      forceReauthentication: true,
+    );
+    final authorizationCode = proof.authorizationCode;
+    if (provider == LoginProvider.apple &&
+        (authorizationCode == null || authorizationCode.isEmpty)) {
+      throw StateError('Apple did not return an authorization code.');
+    }
     final response = await _api.postJson(
       '/v1/auth/reauth/${provider.apiName}',
       accessToken: accessToken,
-      body: {'providerToken': providerToken},
+      body: {'providerToken': proof.idToken},
     );
     final grant = response['grant'];
     if (grant is! String) {
       throw const FormatException('Missing reauthentication grant.');
     }
+    if (provider != LoginProvider.apple) {
+      // Keep the server account recoverable when provider cleanup fails.
+      await _socialAuthGateway.disconnect(provider);
+    }
     await _api.deleteJson(
       '/v1/me',
       accessToken: accessToken,
-      body: {'reauthGrant': grant},
+      body: {
+        'reauthGrant': grant,
+        if (provider == LoginProvider.apple)
+          'appleAuthorizationCode': authorizationCode,
+      },
     );
     await _keyStore.clearTokens();
     _account = null;
@@ -202,64 +212,13 @@ class AuthRepository {
     return token;
   }
 
-  Future<String> _providerToken(LoginProvider provider) async {
-    if (!supportsProvider(provider)) {
-      throw UnsupportedError(
-        '${provider.apiName} sign-in is not supported on '
-        '${_targetPlatform.name}.',
-      );
+  Set<LoginProvider> _linkedProviders() {
+    final providerNames = _account?.providers.toSet();
+    if (providerNames == null || providerNames.isEmpty) {
+      return {LoginProvider.google, LoginProvider.kakao};
     }
-    switch (provider) {
-      case LoginProvider.google:
-        final google = await _googleSignIn();
-        final user = await google.authenticate(scopeHint: const ['email']);
-        final token = user.authentication.idToken;
-        if (token == null) throw StateError('Google sign-in was cancelled.');
-        return token;
-      case LoginProvider.apple:
-        final credential = await SignInWithApple.getAppleIDCredential(
-          scopes: const [
-            AppleIDAuthorizationScopes.email,
-            AppleIDAuthorizationScopes.fullName,
-          ],
-        );
-        final token = credential.identityToken;
-        if (token == null) {
-          throw StateError('Apple did not return an ID token.');
-        }
-        return token;
-      case LoginProvider.kakao:
-        if (kakaoNativeAppKey.isEmpty) {
-          throw StateError('KAKAO_NATIVE_APP_KEY is not configured.');
-        }
-        final available = await isKakaoTalkInstalled();
-        final token = available
-            ? await UserApi.instance.loginWithKakaoTalk()
-            : await UserApi.instance.loginWithKakaoAccount();
-        if (token.idToken == null) {
-          throw StateError('Kakao OpenID Connect must be enabled.');
-        }
-        return token.idToken!;
-    }
-  }
-
-  Future<GoogleSignIn> _googleSignIn({bool requireConfiguration = true}) async {
-    if (requireConfiguration && googleServerClientId.isEmpty) {
-      throw StateError('GOOGLE_SERVER_CLIENT_ID is not configured.');
-    }
-    if (requireConfiguration && Platform.isIOS && googleIosClientId.isEmpty) {
-      throw StateError('GOOGLE_IOS_CLIENT_ID is not configured.');
-    }
-    final google = GoogleSignIn.instance;
-    _googleInitialization ??= google.initialize(
-      serverClientId: googleServerClientId.isEmpty
-          ? null
-          : googleServerClientId,
-      clientId: Platform.isIOS && googleIosClientId.isNotEmpty
-          ? googleIosClientId
-          : null,
-    );
-    await _googleInitialization;
-    return google;
+    return LoginProvider.values
+        .where((provider) => providerNames.contains(provider.apiName))
+        .toSet();
   }
 }

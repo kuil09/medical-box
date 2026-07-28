@@ -55,10 +55,25 @@ console configuration is required before the flows can complete.
 Provider success, cancellation, expiry, forged signature, and wrong-audience
 cases must all be tested on both platforms before external beta.
 
-Account deletion must also prove that Google disconnect, Kakao unlink, and
-Apple server-side token revocation complete before the local session is
-cleared. A provider failure must preserve the server account and local session
-so the user can retry.
+## Provider lifecycle during account deletion
+
+The mobile client obtains a fresh provider proof before requesting the
+five-minute server reauthentication grant. Google uses an interactive
+`authenticate()` call and then `disconnect()`. Kakao always uses the account
+flow with `Prompt.login` and then calls `unlink()`. Provider cleanup occurs
+before deleting the server account so a cleanup failure leaves the server
+account and app session available for a safe retry.
+
+Apple returns both an ID token and a short-lived authorization code. The client
+sends the ID token to the reauthentication endpoint and sends the code as
+`appleAuthorizationCode` in the `DELETE /api/v1/me` JSON body so the server can
+perform Apple revocation as part of deletion. The client rejects a missing
+authorization code before any server mutation.
+
+The app clears its access and refresh tokens only after every required provider
+and server step succeeds. Ordinary logout is intentionally different: server
+logout and provider logout are best-effort, Kakao uses `logout()` rather than
+`unlink()`, and local tokens are always cleared.
 
 `services/backend/scripts/verify_well_known_metadata.py` validates downloaded
 production metadata without making a network request. It rejects the
