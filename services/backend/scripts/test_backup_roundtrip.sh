@@ -116,6 +116,7 @@ manifest_hmac_key_base64="$(
 mkdir -m 700 "${work_directory}/store"
 
 docker run --rm \
+  --user "$(id -u):$(id -g)" \
   --network "${network_name}" \
   --volume "${work_directory}/store:/backups" \
   --env APP_ENV=test \
@@ -139,6 +140,7 @@ docker run --detach \
 wait_for_postgres "${restore_name}"
 
 docker run --rm \
+  --user "$(id -u):$(id -g)" \
   --network "${network_name}" \
   --volume "${work_directory}/store:/backups:ro" \
   --env APP_ENV=test \
