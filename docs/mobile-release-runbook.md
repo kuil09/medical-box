@@ -44,6 +44,7 @@ profiles, or provider configuration.
 | `ANDROID_STORE_PASSWORD` | Upload keystore password |
 | `ANDROID_KEY_ALIAS` | Upload key alias |
 | `ANDROID_KEY_PASSWORD` | Upload private-key password |
+| `ANDROID_UPLOAD_CERT_SHA256` | Expected upload certificate SHA-256 fingerprint |
 
 Generate the upload key once on an operator-controlled machine and keep at least
 one encrypted offline recovery copy. The repository contains only
@@ -51,8 +52,8 @@ one encrypted offline recovery copy. The repository contains only
 keystore files are ignored.
 
 The workflow validates the keystore and alias before building, verifies the AAB
-signature, and publishes the signed AAB plus its certificate description as a
-seven-day GitHub artifact.
+signature and exact upload-certificate fingerprint, and publishes the signed AAB
+plus its certificate description as a seven-day GitHub artifact.
 
 The upload certificate is not the Google Play App Signing certificate. After a
 Play app is created, use the Play App Signing SHA-1 for the production Android
@@ -75,8 +76,10 @@ material into an ephemeral keychain, creates the IPA, verifies its code
 signature and entitlements, uploads a seven-day artifact, and deletes the
 temporary keychain and profile.
 
-`ios/Flutter/ReleaseSecrets.xcconfig` carries the Kakao callback value only
-during the protected build and is ignored by Git.
+`ios/Flutter/ReleaseSecrets.xcconfig` carries the Kakao callback value and the
+Google reversed client ID derived from `GOOGLE_IOS_CLIENT_ID` only during the
+protected build and is ignored by Git. The archive verification step confirms
+that the resulting callback scheme matches the configured iOS OAuth client.
 
 ## Build
 

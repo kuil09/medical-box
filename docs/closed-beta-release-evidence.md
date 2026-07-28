@@ -196,18 +196,19 @@ Pull request 10 introduces fail-closed mobile release packaging:
   reference, renewal-readiness, and sharing functions. A support URL is used
   until a public support email is approved.
 
-The GitHub `closed-beta` environment now exists, rejects administrator bypass,
-and permits deployment only from `main`. GitHub rejected an account-owner
-required-reviewer rule because the current private-repository billing plan does
-not support that protection. The manual workflow remains restricted to users
-with repository write access, and store promotion remains a separate manual
-step.
+The GitHub `closed-beta` environment exists, rejects administrator bypass, and
+permits deployment only from `main`. The repository is public. The environment
+does not currently name an independent required reviewer; the manual workflow
+remains restricted to users with repository write access, and store promotion
+remains a separate account-authenticated step.
 
 The Android upload key was generated once outside the repository at
 `~/.private_keys/medical-box/medical-box-upload.jks`. Its passwords and alias
 are held in macOS Keychain. The keystore, passwords, alias, production Google
 Web client ID, and Google iOS client ID are installed as `closed-beta`
-environment secrets. No secret value is committed.
+environment secrets. The expected upload-certificate SHA-256, Kakao native key,
+and Apple distribution inputs remain activation gates. No secret value is
+committed.
 
 The upload certificate fingerprints are:
 
@@ -220,16 +221,13 @@ These are upload-key fingerprints, not Play App Signing fingerprints. They
 must not be used for the production Android OAuth client or
 `/.well-known/assetlinks.json`.
 
-GitHub Actions runs `30283835780` and `30285348475` did not allocate a runner
-to any of their five jobs. GitHub annotated every job with the same
-account-level error: recent account payments failed or the Actions spending
-limit must be increased. The billing console then confirmed the operative
-constraint: the Actions budget is `$0` with `Stop usage` enabled. Current-month
-Actions usage was fully discounted to `$0` billed, but the zero hard limit
-still prevented new runner allocation. Therefore the red checks are an
-external GitHub billing gate, not a test failure. Pull request 10 remains a
-draft until the account owner authorizes a nonzero capped Actions budget and a
-clean rerun passes.
+GitHub Actions runs `30283835780` and `30285348475` previously failed before
+runner allocation while the repository was private and the account had a zero
+spending limit. After the repository became public, pull request 10 CI run
+`30319463102` completed successfully across backend, Flutter, iOS, prototype,
+and infrastructure jobs. CodeQL runs `30319461144` and `30319461448` also
+completed successfully. The former billing constraint no longer blocks pull
+request validation.
 
 ## Legal review
 

@@ -58,16 +58,17 @@ Evidence date: 2026-07-28
   verifies store artifacts, retains them for seven days, and cleans ephemeral
   signing material
 - [x] GitHub `closed-beta` environment exists, permits only `main`, and rejects
-  administrator bypass. Required reviewers are unavailable on the current
-  private-repository billing plan.
+  administrator bypass. Store promotion remains a separate account-authenticated
+  action.
 - [x] Android upload key is stored outside the repository with credentials in
   macOS Keychain, and its signing secrets plus both Google client IDs are
   installed in the protected environment
+- [ ] The protected environment contains the expected Android upload-certificate
+  SHA-256, Kakao native key, and all Apple distribution-signing inputs
 - [x] Korean Play Store and App Store metadata source files are versioned
-- [ ] A nonzero capped GitHub Actions budget is authorized and pull request 10
-  rerun passes. The current `$0` hard-stop budget prevented runs `30283835780`
-  and `30285348475` from receiving a runner before any repository step
-  executed.
+- [x] Pull request 10 full CI run `30319463102` and both CodeQL runs pass after
+  the repository became public; the former private-repository billing gate no
+  longer blocks validation
 - [ ] Signed Android AAB produced by the protected release environment using the
   upload key and production provider identifiers
 - [ ] Signed iOS IPA produced by the protected release environment using the

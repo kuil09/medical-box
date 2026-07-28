@@ -130,4 +130,4 @@ The support and account-deletion pages must explain:
 External beta promotion remains blocked until the reviewer records a dated
 decision, reviewer identity, jurisdiction, required edits, and final approval.
 The reviewer must record those results in
-`docs/legal-review-decision-record.md`.
+`docs/legal-review-decision.md`.
