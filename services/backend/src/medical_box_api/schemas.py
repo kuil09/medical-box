@@ -139,11 +139,15 @@ class CatalogSource(ApiModel):
     portal_url: str
     license_name: str | None
     attribution: str | None
+    last_successful_sync: datetime | None
+    last_attempt_status: str | None
+    last_attempt_at: datetime | None
 
 
 class CatalogMeta(ApiModel):
     product_count: int
     last_successful_sync: datetime | None
+    failed_sources: list[str]
     sources: list[CatalogSource]
 
 

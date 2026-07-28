@@ -60,7 +60,7 @@ export default defineRailway((ctx) => {
     DATABASE_URL: database.env.DATABASE_URL,
     CATALOG_SYNC_SOURCE_ALLOWLIST: catalogSyncSources,
     CATALOG_DATABASE_CAPACITY_BYTES: "5000000000",
-    CATALOG_MIN_FREE_BYTES: "750000000",
+    CATALOG_MIN_FREE_BYTES: "1200000000",
     MFDS_RECALL_URL:
       "https://apis.data.go.kr/1471000/MdcinRtrvlSleStpgeInfoService04/getMdcinRtrvlSleStpgelList03",
     MFDS_SHORTAGE_URL:

@@ -134,6 +134,7 @@ class SyncCheckpoint(Base):
     page: Mapped[int] = mapped_column(Integer, default=0)
     source_updated_at: Mapped[str | None] = mapped_column(String(80))
     content_hash: Mapped[str | None] = mapped_column(String(64))
+    normalization_version: Mapped[int] = mapped_column(Integer, default=1)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )

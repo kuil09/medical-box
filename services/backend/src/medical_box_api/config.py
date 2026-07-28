@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     catalog_access_email_allowlist: str = ""
     catalog_sync_source_allowlist: str = ""
     catalog_database_capacity_bytes: int = 0
-    catalog_min_free_bytes: int = 750_000_000
+    catalog_min_free_bytes: int = 1_200_000_000
 
     google_client_id: str | None = None
     apple_client_id: str = "com.medicalbox.app"

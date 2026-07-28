@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 
 import httpx
@@ -7,7 +8,11 @@ import pytest
 from openpyxl import Workbook
 from sqlalchemy import event, func, select
 
-from medical_box_api.catalog.fetcher import PublicDataFetcher, SourceResponseError
+from medical_box_api.catalog.fetcher import (
+    PublicDataFetcher,
+    SourceResponseError,
+    SourceTotalChangedError,
+)
 from medical_box_api.catalog.sources import SourceDefinition, official_sources
 from medical_box_api.catalog.sync import (
     _require_catalog_storage_headroom,
@@ -140,6 +145,31 @@ def test_response_shapes_are_normalized() -> None:
         PublicDataFetcher._extract_items({"response": {"body": {"records": []}}})
 
 
+def test_missing_items_response_is_retried() -> None:
+    class MissingItemsFetcher(PublicDataFetcher):
+        def __init__(self) -> None:
+            super().__init__("test")
+            self.calls = 0
+
+        def _get_json(self, url: str, page: int) -> dict[str, object]:
+            self.calls += 1
+            if self.calls < 3:
+                return {"body": {"totalCount": 1}}
+            return {
+                "body": {
+                    "items": [{"itemSeq": "1"}],
+                    "totalCount": 1,
+                }
+            }
+
+    fetcher = MissingItemsFetcher()
+
+    assert list(fetcher.pages(source())) == [
+        (1, [{"itemSeq": "1"}], 1)
+    ]
+    assert fetcher.calls == 3
+
+
 def test_pagination_rejects_missing_pages_and_changing_totals() -> None:
     class MissingPageFetcher(PublicDataFetcher):
         def _get_json(self, url: str, page: int) -> dict[str, object]:
@@ -162,6 +192,79 @@ def test_pagination_rejects_missing_pages_and_changing_totals() -> None:
 
     with pytest.raises(SourceResponseError, match="total changed"):
         list(ChangingTotalFetcher("test", page_size=1).pages(source()))
+
+
+def test_sync_retries_whole_source_once_after_total_drift() -> None:
+    class TotalDriftFetcher(RecordFetcher):
+        def __init__(self) -> None:
+            super().__init__([])
+            self.attempts = 0
+
+        def pages(
+            self,
+            source: SourceDefinition,
+        ) -> Iterator[tuple[int, list[dict[str, object]], int]]:
+            self.attempts += 1
+            if self.attempts == 1:
+                yield 1, [{"itemSeq": "transient", "itemName": "Transient"}], 2
+                raise SourceTotalChangedError(
+                    "Source total changed during pagination: 2 to 3."
+                )
+            yield (
+                1,
+                [
+                    {"itemSeq": "1", "itemName": "First"},
+                    {"itemSeq": "2", "itemName": "Second"},
+                ],
+                2,
+            )
+
+    reset_database()
+    fetcher = TotalDriftFetcher()
+    with SessionLocal() as database:
+        completed = sync_source(database, source(), fetcher)
+
+        assert completed.status == "succeeded"
+        assert fetcher.attempts == 2
+        assert database.get(DrugProduct, "transient") is None
+        assert database.scalars(
+            select(SyncRun.status).order_by(SyncRun.started_at)
+        ).all() == ["failed", "succeeded"]
+
+
+def test_sync_preserves_snapshot_when_total_drift_retry_is_exhausted() -> None:
+    class PersistentTotalDriftFetcher(RecordFetcher):
+        def __init__(self) -> None:
+            super().__init__([])
+            self.attempts = 0
+
+        def pages(
+            self,
+            source: SourceDefinition,
+        ) -> Iterator[tuple[int, list[dict[str, object]], int]]:
+            self.attempts += 1
+            yield 1, [{"itemSeq": "1", "itemName": "Uncommitted"}], 2
+            raise SourceTotalChangedError(
+                "Source total changed during pagination: 2 to 3."
+            )
+
+    reset_database()
+    with SessionLocal() as database:
+        sync_source(
+            database,
+            source(),
+            RecordFetcher([{"itemSeq": "1", "itemName": "Stable"}]),
+        )
+        fetcher = PersistentTotalDriftFetcher()
+
+        with pytest.raises(SourceTotalChangedError, match="total changed"):
+            sync_source(database, source(), fetcher)
+
+        assert fetcher.attempts == 2
+        assert database.get(DrugProduct, "1").item_name == "Stable"
+        assert database.scalar(
+            select(SourceRecord.payload).where(SourceRecord.record_key == "1")
+        ) == {"itemSeq": "1", "itemName": "Stable"}
 
 
 def test_transient_http_failures_are_retried(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -231,6 +334,108 @@ def test_catalog_sync_source_allowlist_is_normalized() -> None:
         "mfds_product",
         "mfds_easy",
     }
+
+
+def test_official_product_sources_update_normalized_product_without_flat_ingredients() -> None:
+    sources = {
+        candidate.code: candidate
+        for candidate in official_sources(Settings(_env_file=None))
+    }
+    reset_database()
+    with SessionLocal() as database:
+        sync_source(
+            database,
+            sources["mfds_product"],
+            RecordFetcher(
+                [
+                    {
+                        "ITEM_SEQ": "200000001",
+                        "ITEM_NAME": "Initial medicine",
+                        "ENTP_NAME": "Initial manufacturer",
+                        "CANCEL_NAME": "active",
+                        "MATERIAL_NAME": "Unstructured catalog ingredient",
+                    }
+                ]
+            ),
+        )
+        sync_source(
+            database,
+            sources["mfds_product_ingredient"],
+            RecordFetcher(
+                [
+                    {
+                        "ITEM_SEQ": "200000001",
+                        "TAMT_SEQ": "1",
+                        "MTRAL_SN": "1",
+                        "INGR_NAME": "Structured ingredient",
+                        "QNT": "10",
+                        "INGD_UNIT_CD": "mg",
+                    }
+                ]
+            ),
+        )
+        sync_source(
+            database,
+            sources["mfds_product_detail"],
+            RecordFetcher(
+                [
+                    {
+                        "ITEM_SEQ": "200000001",
+                        "ITEM_NAME": "Updated medicine",
+                        "ENTP_NAME": "Updated manufacturer",
+                        "STORAGE_METHOD": "Store at room temperature",
+                        "CHART": "White round tablet",
+                        "ITEM_PERMIT_DATE": "20260728",
+                    }
+                ]
+            ),
+        )
+
+        product = database.get(DrugProduct, "200000001")
+        assert product is not None
+        assert product.item_name == "Updated medicine"
+        assert product.manufacturer == "Updated manufacturer"
+        assert product.storage_method == "Store at room temperature"
+        assert product.appearance == "White round tablet"
+        assert product.permit_date is not None
+        assert product.permit_date.isoformat() == "2026-07-28"
+        assert [
+            (ingredient.name, ingredient.amount, ingredient.unit)
+            for ingredient in product.ingredients
+        ] == [("Structured ingredient", "10", "mg")]
+
+
+def test_normalization_version_reprocesses_unchanged_official_records() -> None:
+    product_source = next(
+        candidate
+        for candidate in official_sources(Settings(_env_file=None))
+        if candidate.code == "mfds_product"
+    )
+    prior_normalizer = replace(product_source, normalization_version=1)
+    payload = {
+        "ITEM_SEQ": "200000001",
+        "ITEM_NAME": "Canonical medicine",
+        "ENTP_NAME": "Canonical manufacturer",
+    }
+    reset_database()
+    with SessionLocal() as database:
+        sync_source(database, prior_normalizer, RecordFetcher([payload]))
+        product = database.get(DrugProduct, "200000001")
+        assert product is not None
+        product.item_name = "Stale normalized value"
+        database.commit()
+
+        completed = sync_source(
+            database,
+            product_source,
+            RecordFetcher([payload]),
+        )
+
+        assert completed.status == "succeeded"
+        assert database.get(DrugProduct, "200000001").item_name == "Canonical medicine"
+        checkpoint = database.get(SyncCheckpoint, product_source.code)
+        assert checkpoint is not None
+        assert checkpoint.normalization_version == 2
 
 
 def test_source_registry_disables_sources_outside_sync_allowlist() -> None:
@@ -587,8 +792,50 @@ def test_xlsx_header_and_rows_are_detected() -> None:
     ]
 
 
+def test_file_version_marker_requires_filename_and_positive_length() -> None:
+    request = httpx.Request("HEAD", "https://example.com/fileDownload.do")
+    complete = httpx.Response(
+        200,
+        request=request,
+        headers={
+            "content-disposition": "attachment; filename=standard-codes.csv",
+            "content-length": "54880067",
+        },
+    )
+    missing_length = httpx.Response(
+        200,
+        request=request,
+        headers={
+            "content-disposition": "attachment; filename=standard-codes.csv",
+        },
+    )
+    missing_disposition = httpx.Response(
+        200,
+        request=request,
+        headers={"content-length": "54880067"},
+    )
+
+    marker = PublicDataFetcher._file_version_marker(complete)
+    assert marker is not None
+    assert marker.startswith("file-version:")
+    assert len(marker) == 77
+    assert PublicDataFetcher._file_version_marker(missing_length) is None
+    assert PublicDataFetcher._file_version_marker(missing_disposition) is None
+
+
 def test_unchanged_standard_code_file_is_not_reloaded() -> None:
     class FileFetcher(PublicDataFetcher):
+        file_version = f"file-version:{'a' * 64}"
+
+        def __init__(self) -> None:
+            super().__init__("test")
+            self.downloads = 0
+            self.head_requests = 0
+
+        def tabular_file_version(self, source: SourceDefinition) -> str | None:
+            self.head_requests += 1
+            return self.file_version
+
         def tabular_file_pages(
             self,
             source: SourceDefinition,
@@ -597,9 +844,10 @@ def test_unchanged_standard_code_file_is_not_reloaded() -> None:
             str | None,
             Iterator[tuple[int, list[dict[str, object]], int]],
         ]:
+            self.downloads += 1
             return (
                 "a" * 64,
-                "Fri, 25 Jul 2026 00:00:00 GMT",
+                self.file_version,
                 iter(
                     [
                         (
@@ -623,15 +871,28 @@ def test_unchanged_standard_code_file_is_not_reloaded() -> None:
         kind="code",
         record_key_fields=("표준코드",),
     )
+    fetcher = FileFetcher()
     with SessionLocal() as database:
-        first = sync_source(database, standard_code_source, FileFetcher("test"))
+        first = sync_source(database, standard_code_source, fetcher)
         first_seen_run = database.scalar(select(SourceRecord.last_seen_run_id))
-        second = sync_source(database, standard_code_source, FileFetcher("test"))
+        second = sync_source(database, standard_code_source, fetcher)
 
         assert first.status == "succeeded"
         assert second.status == "skipped"
+        assert fetcher.downloads == 1
+        assert fetcher.head_requests == 1
         assert database.scalar(select(func.count()).select_from(DrugCode)) == 1
         assert database.scalar(select(SourceRecord.last_seen_run_id)) == first_seen_run
+
+        checkpoint = database.get(SyncCheckpoint, standard_code_source.code)
+        assert checkpoint is not None
+        checkpoint.updated_at = datetime.now(UTC) - timedelta(days=8)
+        database.commit()
+
+        third = sync_source(database, standard_code_source, fetcher)
+        assert third.status == "skipped"
+        assert fetcher.downloads == 2
+        assert fetcher.head_requests == 1
 
 
 def test_standard_code_bootstrap_is_quarantined_until_complete() -> None:
@@ -940,6 +1201,106 @@ def test_catalog_storage_reserve_stops_sync_before_capacity(
     )
     with SessionLocal() as database, pytest.raises(RuntimeError, match="storage"):
         _require_catalog_storage_headroom(database, "test")
+
+
+def test_storage_abort_during_stale_cleanup_rolls_back_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reset_database()
+    with SessionLocal() as database:
+        sync_source(
+            database,
+            source(),
+            RecordFetcher(
+                [
+                    {"itemSeq": "1", "itemName": "First"},
+                    {"itemSeq": "2", "itemName": "Second"},
+                ]
+            ),
+        )
+        checks = 0
+
+        def fail_during_cleanup(db: object, source_code: str) -> None:
+            del db, source_code
+            nonlocal checks
+            checks += 1
+            if checks == 3:
+                raise RuntimeError("simulated storage exhaustion")
+
+        monkeypatch.setattr(
+            "medical_box_api.catalog.sync._require_catalog_storage_headroom",
+            fail_during_cleanup,
+        )
+
+        with pytest.raises(RuntimeError, match="storage exhaustion"):
+            sync_source(
+                database,
+                source(),
+                RecordFetcher([{"itemSeq": "1", "itemName": "Updated"}]),
+            )
+
+        stale_record = database.scalar(
+            select(SourceRecord).where(SourceRecord.record_key == "2")
+        )
+        assert stale_record is not None
+        assert stale_record.active is True
+        assert database.get(DrugProduct, "1").item_name == "First"
+
+
+def test_storage_abort_after_identification_reset_preserves_representative(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reset_database()
+    identification_source = replace(
+        source(),
+        code="identification-storage",
+        kind="identification",
+        composite_key_fields=("ITEM_SEQ", "ITEM_IMAGE"),
+        hash_record_key=True,
+    )
+    original_payload = {
+        "ITEM_SEQ": "1",
+        "ITEM_NAME": "Medicine",
+        "ITEM_IMAGE": "https://example.com/original.jpg",
+        "DRUG_SHAPE": "round",
+    }
+    with SessionLocal() as database:
+        sync_source(
+            database,
+            identification_source,
+            RecordFetcher([original_payload]),
+        )
+        checks = 0
+
+        def fail_after_reset(db: object, source_code: str) -> None:
+            del db, source_code
+            nonlocal checks
+            checks += 1
+            if checks == 2:
+                raise RuntimeError("simulated storage exhaustion")
+
+        monkeypatch.setattr(
+            "medical_box_api.catalog.sync._require_catalog_storage_headroom",
+            fail_after_reset,
+        )
+
+        with pytest.raises(RuntimeError, match="storage exhaustion"):
+            sync_source(
+                database,
+                identification_source,
+                RecordFetcher(
+                    [
+                        {
+                            **original_payload,
+                            "ITEM_IMAGE": "https://example.com/replacement.jpg",
+                        }
+                    ]
+                ),
+            )
+
+        representative = database.get(DrugIdentification, "1")
+        assert representative is not None
+        assert representative.image_url == "https://example.com/original.jpg"
 
 
 def test_product_sync_prefetches_each_page_in_one_query() -> None:

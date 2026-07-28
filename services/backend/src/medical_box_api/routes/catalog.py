@@ -1,9 +1,10 @@
 import base64
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
 from ..db import get_db
 from ..models import (
@@ -127,18 +128,77 @@ def _summary(product: DrugProduct) -> DrugSummary:
     )
 
 
+def _active_product_exists() -> ColumnElement[bool]:
+    return (
+        select(SourceRecord.id)
+        .where(
+            SourceRecord.source_code == "mfds_product",
+            SourceRecord.record_key == DrugProduct.item_seq,
+            SourceRecord.active.is_(True),
+        )
+        .exists()
+    )
+
+
 @router.get("/catalog/meta", response_model=CatalogMeta)
 def catalog_meta(db: Session = Depends(get_db)) -> CatalogMeta:
-    product_count = db.scalar(select(func.count()).select_from(DrugProduct)) or 0
+    product_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(DrugProduct)
+            .where(_active_product_exists())
+        )
+        or 0
+    )
     last_sync = db.scalar(
         select(func.max(SyncRun.finished_at)).where(SyncRun.status == "succeeded")
     )
     sources = db.scalars(
         select(SourceRegistry).where(SourceRegistry.enabled.is_(True)).order_by(SourceRegistry.code)
     ).all()
+    successful_syncs: dict[str, datetime | None] = {
+        source_code: finished_at
+        for source_code, finished_at in db.execute(
+            select(
+                SyncRun.source_code,
+                func.max(SyncRun.finished_at),
+            )
+            .where(SyncRun.status == "succeeded")
+            .group_by(SyncRun.source_code)
+        )
+    }
+    latest_attempt_times = (
+        select(
+            SyncRun.source_code,
+            func.max(SyncRun.started_at).label("started_at"),
+        )
+        .group_by(SyncRun.source_code)
+        .subquery()
+    )
+    latest_attempts = {
+        source_code: (status, started_at)
+        for source_code, status, started_at in db.execute(
+            select(
+                SyncRun.source_code,
+                SyncRun.status,
+                SyncRun.started_at,
+            ).join(
+                latest_attempt_times,
+                (SyncRun.source_code == latest_attempt_times.c.source_code)
+                & (SyncRun.started_at == latest_attempt_times.c.started_at),
+            )
+        )
+    }
+    enabled_source_codes = {source.code for source in sources}
+    failed_sources = sorted(
+        source_code
+        for source_code, (status, _started_at) in latest_attempts.items()
+        if source_code in enabled_source_codes and status == "failed"
+    )
     return CatalogMeta(
         product_count=product_count,
         last_successful_sync=last_sync,
+        failed_sources=failed_sources,
         sources=[
             CatalogSource(
                 code=source.code,
@@ -146,6 +206,17 @@ def catalog_meta(db: Session = Depends(get_db)) -> CatalogMeta:
                 portal_url=source.portal_url,
                 license_name=source.license_name,
                 attribution=source.attribution,
+                last_successful_sync=successful_syncs.get(source.code),
+                last_attempt_status=(
+                    latest_attempts[source.code][0]
+                    if source.code in latest_attempts
+                    else None
+                ),
+                last_attempt_at=(
+                    latest_attempts[source.code][1]
+                    if source.code in latest_attempts
+                    else None
+                ),
             )
             for source in sources
         ],
@@ -163,6 +234,7 @@ def search_drugs(
     statement = (
         select(DrugProduct)
         .where(
+            _active_product_exists(),
             or_(
                 DrugProduct.item_name.ilike(pattern),
                 DrugProduct.manufacturer.ilike(pattern),
@@ -200,7 +272,15 @@ def get_drug_safety_rules(
     limit: int = Query(default=20, ge=1, le=50),
     db: Session = Depends(get_db),
 ) -> CursorPage[DrugSafetyRule]:
-    if db.get(DrugProduct, item_seq) is None:
+    if (
+        db.scalar(
+            select(DrugProduct.item_seq).where(
+                DrugProduct.item_seq == item_seq,
+                _active_product_exists(),
+            )
+        )
+        is None
+    ):
         raise HTTPException(status_code=404, detail="Drug product was not found.")
     if rule_type is not None and rule_type not in SAFETY_RULE_TYPES:
         raise HTTPException(status_code=400, detail="DUR rule type is invalid.")
@@ -244,7 +324,10 @@ def get_drug(
     product = db.scalar(
         select(DrugProduct)
         .options(selectinload(DrugProduct.ingredients), selectinload(DrugProduct.consumer_info))
-        .where(DrugProduct.item_seq == item_seq)
+        .where(
+            DrugProduct.item_seq == item_seq,
+            _active_product_exists(),
+        )
     )
     if product is None:
         raise HTTPException(status_code=404, detail="Drug product was not found.")

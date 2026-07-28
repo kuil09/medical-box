@@ -1,13 +1,15 @@
 import hashlib
 import json
 import re
-from collections.abc import Iterable
-from datetime import UTC, date, datetime
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import typer
 from sqlalchemy import delete, func, select, text, update
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -27,7 +29,7 @@ from ..models import (
     SyncCheckpoint,
     SyncRun,
 )
-from .fetcher import PublicDataFetcher
+from .fetcher import PublicDataFetcher, SourceTotalChangedError
 from .sources import SourceDefinition, official_sources
 
 app = typer.Typer(no_args_is_help=True)
@@ -35,6 +37,8 @@ app = typer.Typer(no_args_is_help=True)
 BOOTSTRAP_DUR_COMMIT_INTERVAL_PAGES = 10
 BOOTSTRAP_CODE_COMMIT_INTERVAL_PAGES = 10
 STALE_RECORD_BATCH_SIZE = 500
+SOURCE_SYNC_MAX_ATTEMPTS = 2
+FILE_CONTENT_REVERIFY_INTERVAL = timedelta(days=7)
 
 
 def canonical_hash(payload: dict[str, Any]) -> str:
@@ -305,7 +309,14 @@ def normalize(
     product = (
         ensure_product(db, payload, product_cache)
         if source.kind
-        in {"product", "product_ingredient", "consumer", "identification"}
+        in {
+            "product",
+            "product_catalog",
+            "product_detail",
+            "product_ingredient",
+            "consumer",
+            "identification",
+        }
         else None
     )
     sequence = product.item_seq if product else item_seq(payload)
@@ -499,17 +510,30 @@ def _advisory_lock_key(source_code: str) -> int:
     return int.from_bytes(digest[:8], "big") & 0x7FFF_FFFF_FFFF_FFFF
 
 
-def _try_source_lock(db: Session, source_code: str) -> bool:
-    if db.bind is None or db.bind.dialect.name != "postgresql":
-        return True
-    acquired = db.scalar(select(func.pg_try_advisory_lock(_advisory_lock_key(source_code))))
-    return bool(acquired)
-
-
-def _release_source_lock(db: Session, source_code: str) -> None:
-    if db.bind is None or db.bind.dialect.name != "postgresql":
+@contextmanager
+def _source_lock(db: Session, source_code: str) -> Iterator[bool]:
+    bind = db.get_bind()
+    if bind.dialect.name != "postgresql":
+        yield True
         return
-    db.scalar(select(func.pg_advisory_unlock(_advisory_lock_key(source_code))))
+    engine = bind.engine if isinstance(bind, Connection) else bind
+    if not isinstance(engine, Engine):
+        raise RuntimeError("Catalog synchronization requires a SQLAlchemy engine.")
+    with engine.connect().execution_options(
+        isolation_level="AUTOCOMMIT"
+    ) as lock_connection:
+        acquired = bool(
+            lock_connection.scalar(
+                select(func.pg_try_advisory_lock(_advisory_lock_key(source_code)))
+            )
+        )
+        try:
+            yield acquired
+        finally:
+            if acquired:
+                lock_connection.scalar(
+                    select(func.pg_advisory_unlock(_advisory_lock_key(source_code)))
+                )
 
 
 def _postgres_storage_usage_bytes(db: Session) -> int | None:
@@ -562,21 +586,37 @@ def _stale_source_record_ids(
     ]
 
 
+def _checkpoint_is_recent(checkpoint: SyncCheckpoint) -> bool:
+    updated_at = checkpoint.updated_at
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=UTC)
+    return datetime.now(UTC) - updated_at < FILE_CONTENT_REVERIFY_INTERVAL
+
+
 def sync_source(db: Session, source: SourceDefinition, fetcher: PublicDataFetcher) -> SyncRun:
-    if not _try_source_lock(db, source.code):
-        run = SyncRun(
-            source_code=source.code,
-            status="skipped",
-            error="Another synchronization owns the source advisory lock.",
-            finished_at=datetime.now(UTC),
-        )
-        db.add(run)
-        db.commit()
-        return run
-    try:
-        return _sync_source_locked(db, source, fetcher)
-    finally:
-        _release_source_lock(db, source.code)
+    with _source_lock(db, source.code) as acquired:
+        if not acquired:
+            run = SyncRun(
+                source_code=source.code,
+                status="skipped",
+                error="Another synchronization owns the source advisory lock.",
+                finished_at=datetime.now(UTC),
+            )
+            db.add(run)
+            db.commit()
+            return run
+        for attempt in range(1, SOURCE_SYNC_MAX_ATTEMPTS + 1):
+            try:
+                return _sync_source_locked(db, source, fetcher)
+            except SourceTotalChangedError:
+                if attempt == SOURCE_SYNC_MAX_ATTEMPTS:
+                    raise
+                typer.echo(
+                    f"{source.code}: source total changed; retrying the full source "
+                    f"({attempt + 1}/{SOURCE_SYNC_MAX_ATTEMPTS})",
+                    err=True,
+                )
+        raise AssertionError("Source synchronization retry loop did not return.")
 
 
 def _sync_source_locked(
@@ -601,10 +641,29 @@ def _sync_source_locked(
     try:
         _require_catalog_storage_headroom(db, source.code)
         checkpoint = db.get(SyncCheckpoint, source.code)
+        force_normalization = (
+            checkpoint is None
+            or checkpoint.normalization_version < source.normalization_version
+        )
         file_content_hash: str | None = None
         file_updated_at: str | None = None
         page_stream: Iterable[tuple[int, list[dict[str, Any]], int]]
         if source.kind == "code":
+            if (
+                checkpoint is not None
+                and checkpoint.content_hash
+                and checkpoint.source_updated_at
+                and checkpoint.source_updated_at.startswith("file-version:")
+                and _checkpoint_is_recent(checkpoint)
+            ):
+                current_file_version = fetcher.tabular_file_version(source)
+                if current_file_version == checkpoint.source_updated_at:
+                    run.status = "skipped"
+                    run.record_count = previous_count or 0
+                    run.page_count = 0
+                    run.finished_at = datetime.now(UTC)
+                    db.commit()
+                    return run
             (
                 file_content_hash,
                 file_updated_at,
@@ -655,6 +714,8 @@ def _sync_source_locked(
         )
         if source.kind == "identification":
             db.execute(delete(DrugIdentification))
+            db.flush()
+            _require_catalog_storage_headroom(db, source.code)
         for page, records, _total in page_stream:
             pages = page
             source_record_cache: dict[str, SourceRecord] | None = None
@@ -819,7 +880,12 @@ def _sync_source_locked(
                         and not existing.active
                     ):
                         existing.active = True
-                if is_new or not unchanged or source.kind == "identification":
+                if (
+                    is_new
+                    or not unchanged
+                    or source.kind == "identification"
+                    or force_normalization
+                ):
                     normalize(
                         db,
                         source,
@@ -878,6 +944,8 @@ def _sync_source_locked(
                     .where(SourceRecord.id.in_(stale_batch))
                     .values(active=False)
                 )
+                db.flush()
+                _require_catalog_storage_headroom(db, source.code)
         elif not dur_rules_are_absent:
             for offset in range(
                 0,
@@ -898,6 +966,8 @@ def _sync_source_locked(
                     .where(SourceRecord.id.in_(stale_batch))
                     .values(active=False)
                 )
+                db.flush()
+                _require_catalog_storage_headroom(db, source.code)
         if source.kind == "identification":
             active_source_record = (
                 select(SourceRecord.id)
@@ -915,6 +985,8 @@ def _sync_source_locked(
                     ~active_source_record,
                 )
             )
+            db.flush()
+            _require_catalog_storage_headroom(db, source.code)
         run.status = "succeeded"
         run.record_count = count
         run.page_count = pages
@@ -922,6 +994,8 @@ def _sync_source_locked(
         if checkpoint is not None and file_content_hash:
             checkpoint.content_hash = file_content_hash
             checkpoint.source_updated_at = file_updated_at
+        if checkpoint is not None:
+            checkpoint.normalization_version = source.normalization_version
         db.commit()
         return run
     except Exception as exc:
