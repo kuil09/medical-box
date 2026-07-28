@@ -1,0 +1,403 @@
+"""Retain only API-facing public fields in catalog source records."""
+
+from collections.abc import Iterable
+
+import sqlalchemy as sa
+from alembic import op
+
+revision = "20260729_0008"
+down_revision = "20260729_0007"
+branch_labels = None
+depends_on = None
+
+SOURCE_UPDATED_AT_FIELDS = frozenset(
+    {
+        "LAST_UPDT_DTM",
+        "lastUpdatedAt",
+        "UPDT_DT",
+        "updateDate",
+        "UPDATE_DATE",
+        "변경일자",
+        "자료갱신일",
+    }
+)
+DUR_PUBLIC_FIELDS = frozenset(
+    {
+        "TYPE_NAME",
+        "typeName",
+        "INGR_NAME",
+        "INGR_KOR_NAME",
+        "MAIN_INGR",
+        "MIXTURE_ITEM_SEQ",
+        "MIXTURE_ITEM_NAME",
+        "MIXTURE_INGR_KOR_NAME",
+        "MIXTURE_INGR_NAME",
+        "PROHBT_CONTENT",
+        "REMARK",
+        "NOTIFICATION_DATE",
+        "CHANGE_DATE",
+    }
+) | SOURCE_UPDATED_AT_FIELDS
+IDENTIFICATION_PUBLIC_FIELDS = frozenset(
+    {
+        "CHANGE_DATE",
+        "changeDate",
+        "IMG_REGIST_TS",
+        "imgRegistTs",
+        "ITEM_IMAGE",
+        "itemImage",
+    }
+)
+STATUS_PUBLIC_FIELDS = frozenset(
+    {
+        "RTRVL_RESN",
+        "recallReason",
+        "RECALL_REASON",
+        "회수사유",
+        "PRDCTN_IMPRT_SUPLY_STOP_RSN",
+        "PRDCTN_IMPRT_SUPPLY_STOP_RSN",
+        "SUSPEND_REASON",
+        "supplyStopReason",
+        "공급중단사유",
+    }
+) | SOURCE_UPDATED_AT_FIELDS
+PRICE_PUBLIC_FIELDS = SOURCE_UPDATED_AT_FIELDS
+CODE_PUBLIC_FIELDS = frozenset(
+    {
+        "제품코드(개정후)",
+        "제품코드",
+        "insuranceCode",
+        "INSURANCE_CODE",
+        "EDI_CODE",
+        "ediCode",
+    }
+) | SOURCE_UPDATED_AT_FIELDS
+
+SOURCE_RECORD_FOREIGN_KEYS = (
+    ("drug_identification", "fk_drug_identification_source_record"),
+    (
+        "drug_identification_variants",
+        "fk_drug_identification_variants_source_record",
+    ),
+    ("drug_codes", "fk_drug_codes_source_record"),
+    ("drug_prices", "fk_drug_prices_source_record"),
+    ("dur_rules", "fk_dur_rules_source_record"),
+    ("drug_status_events", "fk_drug_status_events_source_record"),
+)
+LARGE_RELATION_BYTES = 1_000_000_000
+MAX_SAFE_WAL_BYTES = 128 * 1024 * 1024
+
+
+def _sql_literals(values: Iterable[str]) -> str:
+    return ", ".join(
+        "'" + value.casefold().replace("'", "''") + "'"
+        for value in sorted(values, key=str.casefold)
+    )
+
+
+def _allowed_field_predicate(source: str, key: str) -> str:
+    folded_key = f"lower({key})"
+    return f"""
+        (
+            ({source} LIKE 'mfds_dur%' AND
+                {folded_key} IN ({_sql_literals(DUR_PUBLIC_FIELDS)}))
+            OR
+            ({source} = 'mfds_pill' AND
+                {folded_key} IN ({_sql_literals(IDENTIFICATION_PUBLIC_FIELDS)}))
+            OR
+            ({source} IN ('mfds_recall', 'mfds_shortage') AND
+                {folded_key} IN ({_sql_literals(STATUS_PUBLIC_FIELDS)}))
+            OR
+            ({source} = 'hira_price' AND
+                {folded_key} IN ({_sql_literals(PRICE_PUBLIC_FIELDS)}))
+            OR
+            ({source} = 'hira_standard_code' AND
+                {folded_key} IN ({_sql_literals(CODE_PUBLIC_FIELDS)}))
+        )
+    """
+
+
+def _source_record_fingerprint(
+    connection: sa.Connection,
+    table_name: str,
+) -> tuple[int, int | None, int | None, int, int]:
+    row = connection.execute(
+        sa.text(
+            f"""
+            SELECT
+                COUNT(*) AS row_count,
+                MIN(id) AS minimum_id,
+                MAX(id) AS maximum_id,
+                COALESCE(SUM(id), 0) AS id_sum,
+                COUNT(*) FILTER (WHERE active) AS active_count
+            FROM {table_name}
+            """
+        )
+    ).one()
+    return (
+        int(row.row_count),
+        row.minimum_id,
+        row.maximum_id,
+        int(row.id_sum),
+        int(row.active_count),
+    )
+
+
+def _upgrade_postgresql() -> None:
+    connection = op.get_bind()
+    source_relation_bytes = int(
+        connection.scalar(
+            sa.text("SELECT pg_total_relation_size('source_records')")
+        )
+        or 0
+    )
+    max_wal_bytes = int(
+        connection.scalar(
+            sa.text(
+                "SELECT pg_size_bytes(current_setting('max_wal_size'))"
+            )
+        )
+        or 0
+    )
+    if (
+        source_relation_bytes >= LARGE_RELATION_BYTES
+        and max_wal_bytes > MAX_SAFE_WAL_BYTES
+    ):
+        raise RuntimeError(
+            "Large catalog public-data compaction requires max_wal_size at or "
+            "below 128 MiB. Reduce WAL retention and complete a checkpoint "
+            "before retrying."
+        )
+    before = _source_record_fingerprint(connection, "source_records")
+    predicate = _allowed_field_predicate(
+        "source_records.source_code",
+        "entry.key",
+    )
+
+    op.execute(
+        sa.text(
+            """
+            CREATE TABLE source_records_compact (
+                id integer GENERATED BY DEFAULT AS IDENTITY,
+                source_code varchar(80) NOT NULL,
+                record_key varchar(255) NOT NULL,
+                content_hash varchar(64) NOT NULL,
+                payload jsonb NOT NULL,
+                active boolean NOT NULL,
+                last_seen_run_id uuid NOT NULL,
+                first_seen_at timestamp with time zone NOT NULL,
+                last_seen_at timestamp with time zone NOT NULL
+            )
+            """
+        )
+    )
+    op.execute(
+        sa.text(
+            "ALTER TABLE source_records_compact "
+            "ALTER COLUMN payload SET COMPRESSION lz4"
+        )
+    )
+    op.execute(
+        sa.text(
+            f"""
+            INSERT INTO source_records_compact (
+                id,
+                source_code,
+                record_key,
+                content_hash,
+                payload,
+                active,
+                last_seen_run_id,
+                first_seen_at,
+                last_seen_at
+            )
+            SELECT
+                source_records.id,
+                source_records.source_code,
+                source_records.record_key,
+                source_records.content_hash,
+                COALESCE(
+                    (
+                        SELECT jsonb_object_agg(entry.key, entry.value)
+                        FROM jsonb_each(source_records.payload) AS entry
+                        WHERE {predicate}
+                    ),
+                    '{{}}'::jsonb
+                ),
+                source_records.active,
+                source_records.last_seen_run_id,
+                source_records.first_seen_at,
+                source_records.last_seen_at
+            FROM source_records
+            """
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+            ALTER TABLE source_records_compact
+            ADD CONSTRAINT source_records_compact_pkey PRIMARY KEY (id)
+            """
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+            CREATE UNIQUE INDEX ux_source_records_compact_identity_hash
+            ON source_records_compact (
+                catalog_identity_hash(source_code, record_key)
+            )
+            """
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+            CREATE INDEX ix_source_records_compact_source_code_brin
+            ON source_records_compact
+            USING brin (source_code)
+            WITH (pages_per_range = 32)
+            """
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+            SELECT setval(
+                pg_get_serial_sequence('source_records_compact', 'id'),
+                GREATEST(COALESCE(MAX(id), 1), 1),
+                COUNT(*) > 0
+            )
+            FROM source_records_compact
+            """
+        )
+    )
+
+    after_copy = _source_record_fingerprint(
+        connection,
+        "source_records_compact",
+    )
+    if after_copy != before:
+        raise RuntimeError(
+            "Catalog public-data compaction changed the source-record identity "
+            f"fingerprint: before={before!r}, after={after_copy!r}."
+        )
+
+    invalid_public_fields = connection.scalar(
+        sa.text(
+            f"""
+            SELECT COUNT(*)
+            FROM source_records_compact
+            CROSS JOIN LATERAL jsonb_each(source_records_compact.payload) AS entry
+            WHERE NOT (
+                {_allowed_field_predicate(
+                    "source_records_compact.source_code",
+                    "entry.key",
+                )}
+            )
+            """
+        )
+    )
+    if invalid_public_fields:
+        raise RuntimeError(
+            "Catalog public-data compaction retained "
+            f"{invalid_public_fields} non-public fields."
+        )
+
+    for table_name, constraint_name in SOURCE_RECORD_FOREIGN_KEYS:
+        op.execute(
+            sa.text(
+                f"ALTER TABLE {table_name} DROP CONSTRAINT {constraint_name}"
+            )
+        )
+
+    op.execute(sa.text("ALTER TABLE source_records RENAME TO source_records_raw_archive"))
+    op.execute(sa.text("ALTER TABLE source_records_compact RENAME TO source_records"))
+
+    for table_name, constraint_name in SOURCE_RECORD_FOREIGN_KEYS:
+        op.execute(
+            sa.text(
+                f"""
+                ALTER TABLE {table_name}
+                ADD CONSTRAINT {constraint_name}
+                FOREIGN KEY (source_record_id)
+                REFERENCES source_records (id)
+                ON DELETE CASCADE
+                NOT VALID
+                """
+            )
+        )
+        op.execute(
+            sa.text(
+                f"ALTER TABLE {table_name} VALIDATE CONSTRAINT {constraint_name}"
+            )
+        )
+
+    op.execute(sa.text("DROP TABLE source_records_raw_archive"))
+    op.execute(
+        sa.text(
+            """
+            ALTER TABLE source_records
+            RENAME CONSTRAINT source_records_compact_pkey
+            TO source_records_pkey
+            """
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+            ALTER INDEX ux_source_records_compact_identity_hash
+            RENAME TO ux_source_records_identity_hash
+            """
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+            ALTER INDEX ix_source_records_compact_source_code_brin
+            RENAME TO ix_source_records_source_code_brin
+            """
+        )
+    )
+    op.execute(sa.text("ANALYZE source_records"))
+
+
+def _upgrade_sqlite() -> None:
+    predicate = _allowed_field_predicate(
+        "source_records.source_code",
+        "entry.key",
+    )
+    op.execute(
+        sa.text(
+            f"""
+            UPDATE source_records
+            SET payload = COALESCE(
+                (
+                    SELECT json_group_object(entry.key, entry.value)
+                    FROM json_each(source_records.payload) AS entry
+                    WHERE {predicate}
+                ),
+                '{{}}'
+            )
+            """
+        )
+    )
+
+
+def upgrade() -> None:
+    dialect = op.get_bind().dialect.name
+    if dialect == "postgresql":
+        _upgrade_postgresql()
+    elif dialect == "sqlite":
+        _upgrade_sqlite()
+    else:
+        raise RuntimeError(
+            f"Catalog public-data compaction does not support {dialect!r}."
+        )
+
+
+def downgrade() -> None:
+    # The physical schema stays compatible, but discarded source fields cannot
+    # be reconstructed. Restore a pre-migration backup if the raw payload is
+    # operationally required.
+    pass

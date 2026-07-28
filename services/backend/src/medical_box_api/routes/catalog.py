@@ -95,10 +95,10 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def _payload_string(payload: dict[str, object], *keys: str) -> str | None:
-    folded = {key.casefold(): value for key, value in payload.items()}
+def _public_data_string(public_data: dict[str, object], *keys: str) -> str | None:
+    folded = {key.casefold(): value for key, value in public_data.items()}
     for key in keys:
-        value = payload.get(key)
+        value = public_data.get(key)
         if value in (None, ""):
             value = folded.get(key.casefold())
         if value not in (None, ""):
@@ -106,20 +106,20 @@ def _payload_string(payload: dict[str, object], *keys: str) -> str | None:
     return None
 
 
-def _bounded_payload_string(
-    payload: dict[str, object],
+def _bounded_public_data_string(
+    public_data: dict[str, object],
     *keys: str,
     max_length: int = 2_000,
 ) -> str | None:
-    value = _payload_string(payload, *keys)
+    value = _public_data_string(public_data, *keys)
     if value is None:
         return None
     return value[:max_length]
 
 
 def _source_updated_at(record: SourceRecord) -> str | None:
-    return _bounded_payload_string(
-        record.payload,
+    return _bounded_public_data_string(
+        record.public_data,
         "LAST_UPDT_DTM",
         "lastUpdatedAt",
         "UPDT_DT",
@@ -153,27 +153,36 @@ def _status_event_type(
 
 
 def _safety_rule(rule: DurRule) -> DrugSafetyRule:
-    payload = rule.source_record.payload
+    public_data = rule.source_record.public_data
     return DrugSafetyRule(
         rule_type=rule.rule_type or "unknown",
-        type_name=_payload_string(payload, "TYPE_NAME", "typeName"),
-        ingredient_name=_payload_string(
-            payload,
+        type_name=_public_data_string(public_data, "TYPE_NAME", "typeName"),
+        ingredient_name=_public_data_string(
+            public_data,
             "INGR_NAME",
             "INGR_KOR_NAME",
             "MAIN_INGR",
         ),
-        counterpart_item_seq=_payload_string(payload, "MIXTURE_ITEM_SEQ"),
-        counterpart_item_name=_payload_string(payload, "MIXTURE_ITEM_NAME"),
-        counterpart_ingredient_name=_payload_string(
-            payload,
+        counterpart_item_seq=_public_data_string(
+            public_data,
+            "MIXTURE_ITEM_SEQ",
+        ),
+        counterpart_item_name=_public_data_string(
+            public_data,
+            "MIXTURE_ITEM_NAME",
+        ),
+        counterpart_ingredient_name=_public_data_string(
+            public_data,
             "MIXTURE_INGR_KOR_NAME",
             "MIXTURE_INGR_NAME",
         ),
-        prohibition_content=_payload_string(payload, "PROHBT_CONTENT"),
-        remark=_payload_string(payload, "REMARK"),
-        notification_date=_payload_string(
-            payload,
+        prohibition_content=_public_data_string(
+            public_data,
+            "PROHBT_CONTENT",
+        ),
+        remark=_public_data_string(public_data, "REMARK"),
+        notification_date=_public_data_string(
+            public_data,
             "NOTIFICATION_DATE",
             "CHANGE_DATE",
         ),
@@ -476,8 +485,8 @@ def get_drug(
             mapped_code
             for code in codes
             if (
-                mapped_code := _payload_string(
-                    code.source_record.payload,
+                mapped_code := _public_data_string(
+                    code.source_record.public_data,
                     "제품코드(개정후)",
                     "제품코드",
                     "insuranceCode",
@@ -602,8 +611,8 @@ def get_drug(
         status_events=[
             DrugStatusEventInfo(
                 event_type=_status_event_type(event.event_type),
-                reason=_bounded_payload_string(
-                    event.source_record.payload,
+                reason=_bounded_public_data_string(
+                    event.source_record.public_data,
                     "RTRVL_RESN",
                     "recallReason",
                     "RECALL_REASON",

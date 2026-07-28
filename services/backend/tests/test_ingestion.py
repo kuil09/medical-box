@@ -230,6 +230,13 @@ def test_sync_retries_whole_source_once_after_total_drift() -> None:
         assert database.scalars(
             select(SyncRun.status).order_by(SyncRun.started_at)
         ).all() == ["failed", "succeeded"]
+        source_records = database.scalars(
+            select(SourceRecord).order_by(SourceRecord.record_key)
+        ).all()
+        assert [record.public_data for record in source_records] == [{}, {}]
+        assert source_records[0].content_hash == canonical_hash(
+            {"itemSeq": "1", "itemName": "First"}
+        )
 
 
 def test_sync_preserves_snapshot_when_total_drift_retry_is_exhausted() -> None:
@@ -263,8 +270,10 @@ def test_sync_preserves_snapshot_when_total_drift_retry_is_exhausted() -> None:
         assert fetcher.attempts == 2
         assert database.get(DrugProduct, "1").item_name == "Stable"
         assert database.scalar(
-            select(SourceRecord.payload).where(SourceRecord.record_key == "1")
-        ) == {"itemSeq": "1", "itemName": "Stable"}
+            select(SourceRecord.content_hash).where(
+                SourceRecord.record_key == "1"
+            )
+        ) == canonical_hash({"itemSeq": "1", "itemName": "Stable"})
 
 
 def test_transient_http_failures_are_retried(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -507,6 +516,7 @@ def test_dur_hash_identity_deduplicates_and_replaces_current_rules() -> None:
         "DUR_SEQ": "DUR-1",
         "TYPE_NAME": "Pregnancy",
         "PROHBT_CONTENT": "Updated wording",
+        "PRIVATE_NOTE": "Discarded",
     }
     with SessionLocal() as database:
         first_run = sync_source(
@@ -535,9 +545,10 @@ def test_dur_hash_identity_deduplicates_and_replaces_current_rules() -> None:
         rules = database.scalars(select(DurRule)).all()
         assert len(rules) == 1
         assert (
-            rules[0].source_record.payload["PROHBT_CONTENT"]
+            rules[0].source_record.public_data["PROHBT_CONTENT"]
             == "Updated wording"
         )
+        assert "PRIVATE_NOTE" not in rules[0].source_record.public_data
         assert rules[0].source_record_id is not None
 
 

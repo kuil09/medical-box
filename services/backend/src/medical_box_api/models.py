@@ -151,7 +151,10 @@ class SourceRecord(Base):
     source_code: Mapped[str] = mapped_column(String(80))
     record_key: Mapped[str] = mapped_column(String(255))
     content_hash: Mapped[str] = mapped_column(String(64))
-    payload: Mapped[dict[str, object]] = mapped_column(json_type)
+    public_data: Mapped[dict[str, object]] = mapped_column(
+        "payload",
+        json_type,
+    )
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_seen_run_id: Mapped[uuid.UUID] = mapped_column(index=True)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

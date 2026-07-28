@@ -172,6 +172,69 @@ repeated categorical values compress across records. Raw source snapshots are
 therefore strong candidates for compressed archival storage when SQL-level JSON
 queries are not required.
 
+## API-facing public-data compaction
+
+The API does not query complete source documents. Product, ingredient,
+consumer, appearance, price, and status values are already normalized into
+typed tables. Runtime joins to `source_records` require only:
+
+- official DUR wording and counterpart labels;
+- recall or shortage reasons;
+- HIRA code mappings;
+- source update timestamps; and
+- pill-identification timestamps and image URLs used to select a deterministic
+  compatibility representative during acquisition.
+
+An isolated projection of the complete local catalog retained 891,963
+non-empty public-data rows. The projection contained 258,317,021 bytes of JSON
+text and occupied 388,907,008 bytes in SQLite. Product authorization, product
+detail, ingredient, and consumer source records retained no JSON fields because
+their public values already exist in normalized tables.
+
+Migration `20260729_0008` replaces the PostgreSQL `source_records` relation in
+one transaction. It preserves every row ID, source identity, canonical hash,
+visibility flag, sync-run link, and timestamp while copying only allowlisted
+public fields. All six normalized foreign-key relationships are validated
+against the replacement before the original relation is dropped. The physical
+column name remains `payload` solely for rolling-deployment compatibility; the
+application maps it as `SourceRecord.public_data` and never treats it as a
+complete upstream payload.
+
+Future ingestion computes the canonical hash from the complete fetched record,
+normalizes that record immediately, and persists only the allowlisted
+`public_data`. A normalization mapping change therefore requires an official
+source re-fetch; the former database-only renormalization command now refuses
+to run.
+
+The replacement was replayed in PostgreSQL 18 against all 1,109,256 local
+source records plus 305,522 synthetic HIRA standard-code records. The six
+normalized foreign-key tables included 863,599 DUR rules, 25,332
+identification representatives, 25,349 identification variants, and 305,522
+standard-code mappings.
+
+| Full-scale public-data canary | Result |
+| --- | ---: |
+| Source records before and after | 1,414,778 |
+| Source-record relation before | 2,925,740,032 bytes |
+| Source-record relation after | 767,033,344 bytes |
+| Relation reduction | 2,158,706,688 bytes |
+| Migration elapsed time | 31.743 seconds |
+| WAL generated | 792,120,056 bytes |
+| Peak retained WAL at 96 MiB `max_wal_size` | 117,440,512 bytes |
+| Peak database-plus-WAL growth | 867,745,792 bytes |
+| Row-ID fingerprint preserved | yes |
+| Child counts preserved | yes |
+| Foreign-key failures | 0 |
+| Non-public retained fields | 0 |
+| Invalid indexes | 0 |
+
+The same canary with PostgreSQL's default 1 GiB `max_wal_size` retained
+805,306,368 bytes of WAL and peaked 1,538,842,624 bytes above baseline, which
+exceeds the production volume's measured free space. The migration therefore
+refuses a relation of at least 1 GB when `max_wal_size` exceeds 128 MiB.
+Production must retain its validated 96 MiB setting and be checkpointed before
+deployment.
+
 ## Product-detail document fields
 
 The largest product-detail fields were `NB_DOC_DATA` (969.1 MiB),
@@ -182,13 +245,13 @@ deduplication for this source.
 
 ## Recommended implementation order
 
-1. Run every future compact import in disposable isolated infrastructure and
-   confirm relation, database, WAL, and volume sizes stay below the target
+1. Replay the public-data replacement in disposable PostgreSQL and confirm
+   relation, database, WAL, and peak volume sizes stay below the production
    boundary.
-2. Keep content hashes and source attribution in PostgreSQL even if raw bodies
-   move to compressed archival storage.
-3. Re-run the complete acquisition into a new database, validate counts and
-   hashes, and switch only after the new snapshot passes every invariant.
+2. Preserve content hashes, source identities, attribution, row IDs, and every
+   normalized foreign-key relationship.
+3. Keep the pre-migration backup until post-deployment counts, API responses,
+   foreign keys, and storage reclamation have been verified.
 
 Do not rewrite or delete the only complete local snapshot in place. Keep the
 current database as verification evidence until the compact representation has
