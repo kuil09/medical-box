@@ -9,6 +9,10 @@ updates:
       time: "03:00"
       timezone: "Asia/Seoul"
     open-pull-requests-limit: 3
+    groups:
+      github-actions:
+        patterns:
+          - "*"
 
   - package-ecosystem: "npm"
     directory: "/"
