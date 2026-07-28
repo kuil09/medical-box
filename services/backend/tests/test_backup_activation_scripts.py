@@ -1077,6 +1077,18 @@ def test_backup_roundtrip_and_workflow_require_cleanup_proof() -> None:
         / "workflows"
         / "production-backup-restore.yml"
     ).read_text()
+    mobile_release_workflow = (
+        repository_root
+        / ".github"
+        / "workflows"
+        / "mobile-release-build.yml"
+    ).read_text()
+    mobile_cleanup_script = (
+        repository_root
+        / ".github"
+        / "scripts"
+        / "cleanup-mobile-signing-material.sh"
+    ).read_text()
 
     assert "if ! cleanup_resources; then" in roundtrip_script
     assert 'printf \'cleanup_verified=true\\n\'' in roundtrip_script
@@ -1089,11 +1101,65 @@ def test_backup_roundtrip_and_workflow_require_cleanup_proof() -> None:
     assert all(line.strip().startswith("--name ") for line in run_following_lines)
     assert 'docker_arguments=(--rm --name "${verify_name}"' in production_restore_script
     assert "verify_production_backup_restore.sh" in workflow
+    assert "schedule:" not in workflow
+    assert "workflow_dispatch:" in workflow
     assert "if: github.ref == 'refs/heads/main'" in workflow
     assert "AWS_DEFAULT_REGION: ${{ vars.AWS_DEFAULT_REGION }}" in workflow
     assert "AWS_S3_ADDRESSING_STYLE: ${{ vars.AWS_S3_ADDRESSING_STYLE }}" in workflow
     assert "Restore script did not prove deterministic cleanup." in workflow
     assert "steps.restore.outputs.cleanup_verified == 'true'" in workflow
+    assert mobile_release_workflow.count(
+        "github.ref == 'refs/heads/main'"
+    ) == 2
+    assert (
+        "vars.APPLE_SIGN_IN_ENABLED == 'true'"
+        in mobile_release_workflow
+    )
+    assert (
+        "vars.APPLE_ACCOUNT_REVOCATION_READY == 'true'"
+        in mobile_release_workflow
+    )
+    assert (
+        '--dart-define="APPLE_SIGN_IN_ENABLED=${APPLE_SIGN_IN_ENABLED}"'
+        in mobile_release_workflow
+    )
+    assert "APPLE_SIGN_IN_PRIVATE_KEY_BASE64" not in mobile_release_workflow
+    assert "actions/upload-artifact" not in mobile_release_workflow
+    assert "retention-days:" not in mobile_release_workflow
+    android_cleanup = mobile_release_workflow.split(
+        "      - name: Remove Android signed output and signing material\n",
+        maxsplit=1,
+    )[1].split("\n\n  ios:", maxsplit=1)[0]
+    ios_cleanup = mobile_release_workflow.split(
+        "      - name: Remove iOS signed output and signing material\n",
+        maxsplit=1,
+    )[1]
+    assert "if: always()" in android_cleanup
+    assert "if: always()" in ios_cleanup
+    assert "cleanup-mobile-signing-material.sh android" in android_cleanup
+    assert "cleanup-mobile-signing-material.sh ios" in ios_cleanup
+    assert "set -e" not in mobile_cleanup_script
+    assert "set -u -o pipefail" in mobile_cleanup_script
+    assert "cleanup_failed=1" in mobile_cleanup_script
+    assert "remove_release_directory" in mobile_cleanup_script
+    assert "remove_release_file" in mobile_cleanup_script
+    assert "verify_release_target_absent" in mobile_cleanup_script
+    assert '((cleanup_failed == 0))' in mobile_cleanup_script
+    assert '! security delete-keychain "${keychain}"' in mobile_cleanup_script
+
+
+def test_no_cost_railway_graph_disables_scheduled_and_automatic_workers() -> None:
+    railway_config = (
+        Path(__file__).parents[3] / ".railway" / "railway.ts"
+    ).read_text()
+
+    assert railway_config.count('"services/backend/**"') == 1
+    assert railway_config.count('".railway/railway.ts"') == 1
+    assert railway_config.count('".railway/catalog-sync-activation"') == 1
+    assert "cronSchedule" not in railway_config
+    assert "production-backups" not in railway_config
+    assert 'fn("production-backup"' not in railway_config
+    assert "APPLE_SIGN_IN_ENABLED: preserve()" in railway_config
 
 
 def _backup_plan_guard_allowed_changes() -> list[dict[str, object]]:
@@ -1102,26 +1168,43 @@ def _backup_plan_guard_allowed_changes() -> list[dict[str, object]]:
             "kind": "variable.set",
             "summary": "Update variable medical-box.CATALOG_MIN_FREE_BYTES",
             "severity": "safe",
+            "details": [
+                "medical-box.CATALOG_MIN_FREE_BYTES "
+                "(preserve() → «hidden»)"
+            ],
+        },
+        {
+            "kind": "variable.set",
+            "summary": "Set variable medical-box.TERMS_VERSION",
+            "severity": "safe",
+            "details": [
+                "medical-box.TERMS_VERSION (unset → «hidden»)"
+            ],
         },
         {
             "kind": "variable.set",
             "summary": "Update variable catalog-sync.CATALOG_MIN_FREE_BYTES",
             "severity": "safe",
+            "details": [
+                "catalog-sync.CATALOG_MIN_FREE_BYTES "
+                "(preserve() → «hidden»)"
+            ],
         },
         {
-            "kind": "resource.create",
-            "summary": "Create group Operations",
+            "kind": "resource.update",
+            "summary": "Update catalog-sync build.watchPatterns",
             "severity": "safe",
+            "details": [
+                'build.watchPatterns (["services/backend/**",'
+                '".railway/railway.ts"] → '
+                '[".railway/catalog-sync-activation"])'
+            ],
         },
         {
-            "kind": "resource.create",
-            "summary": "Create service production-backup",
+            "kind": "resource.update",
+            "summary": "Update catalog-sync deploy.cronSchedule",
             "severity": "safe",
-        },
-        {
-            "kind": "resource.create",
-            "summary": "Create bucket production-backups",
-            "severity": "safe",
+            "details": ['deploy.cronSchedule ("10 18 * * *" → unset)'],
         },
     ]
 
@@ -1136,16 +1219,16 @@ def _backup_plan_guard_payload(
         "/bin/sh -c 'echo \"Catalog sync temporarily paused while "
         "normalization safety is repaired\"'"
     ),
-    backup_start: str = (
-        "/bin/sh -c 'echo \"Production backup schedule paused pending "
-        "first verified restore\"'"
-    ),
-    backup_cron: str | None = None,
+    catalog_cron: str | None = None,
+    api_catalog_min_free_bytes: str = "1200000000",
+    catalog_sync_min_free_bytes: str = "1200000000",
+    terms_version: str = "2026-07-25",
+    extra_resources: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     allowed_changes = _backup_plan_guard_allowed_changes()
-    backup_deploy: dict[str, object] = {"startCommand": backup_start}
-    if backup_cron is not None:
-        backup_deploy["cronSchedule"] = backup_cron
+    catalog_deploy: dict[str, object] = {"startCommand": catalog_start}
+    if catalog_cron is not None:
+        catalog_deploy["cronSchedule"] = catalog_cron
     return {
         "ok": True,
         "currentEnvironment": {
@@ -1160,15 +1243,39 @@ def _backup_plan_guard_payload(
             "project": {"name": project_name},
             "resources": [
                 {
-                    "address": "service.catalog-sync",
-                    "name": "catalog-sync",
-                    "deploy": {"startCommand": catalog_start},
+                    "address": "group.Backend",
+                    "name": "Backend",
                 },
                 {
-                    "address": "service.production-backup",
-                    "name": "production-backup",
-                    "deploy": backup_deploy,
+                    "address": "database.Postgres",
+                    "name": "Postgres",
                 },
+                {
+                    "address": "service.medical-box",
+                    "name": "medical-box",
+                    "variables": {
+                        "CATALOG_MIN_FREE_BYTES": {
+                            "type": "literal",
+                            "value": api_catalog_min_free_bytes,
+                        },
+                        "TERMS_VERSION": {
+                            "type": "literal",
+                            "value": terms_version,
+                        },
+                    },
+                },
+                {
+                    "address": "service.catalog-sync",
+                    "name": "catalog-sync",
+                    "deploy": catalog_deploy,
+                    "variables": {
+                        "CATALOG_MIN_FREE_BYTES": {
+                            "type": "literal",
+                            "value": catalog_sync_min_free_bytes,
+                        },
+                    },
+                },
+                *(extra_resources or []),
             ],
         },
     }
@@ -1237,18 +1344,37 @@ exit 64
     return result, command_capture_file
 
 
-def test_backup_railway_plan_guard_accepts_only_paused_allowlist(
+def test_backup_railway_plan_guard_accepts_only_no_cost_allowlist(
     tmp_path: Path,
 ) -> None:
     result, command_capture_file = _run_backup_railway_plan_guard(tmp_path)
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout == "backup_railway_plan_guard=passed\n"
+    assert result.stdout == "no_cost_railway_plan_guard=passed\n"
     commands = command_capture_file.read_text().splitlines()
     assert commands[0] == "status --project medical-box --environment production --json"
     assert commands[1].startswith("config plan --file ")
     assert commands[1].endswith("/.railway/railway.ts --json")
     assert not any("apply" in command for command in commands)
+
+
+def test_backup_railway_plan_guard_accepts_terms_preserve_transition(
+    tmp_path: Path,
+) -> None:
+    changes = _backup_plan_guard_allowed_changes()
+    changes[1] = {
+        **changes[1],
+        "details": [
+            "medical-box.TERMS_VERSION (preserve() → «hidden»)"
+        ],
+    }
+
+    result, _ = _run_backup_railway_plan_guard(
+        tmp_path,
+        plan=_backup_plan_guard_payload(changes=changes),
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize(
@@ -1293,13 +1419,46 @@ def test_backup_railway_plan_guard_rejects_wrong_status_target(
         _backup_plan_guard_payload(
             changes=[
                 {
+                    **_backup_plan_guard_allowed_changes()[0],
+                    "details": [
+                        "medical-box.UNRELATED "
+                        "(preserve() → «hidden»)"
+                    ],
+                },
+                *_backup_plan_guard_allowed_changes()[1:],
+            ]
+        ),
+        _backup_plan_guard_payload(api_catalog_min_free_bytes="0"),
+        _backup_plan_guard_payload(catalog_sync_min_free_bytes="0"),
+        _backup_plan_guard_payload(terms_version="2099-01-01"),
+        _backup_plan_guard_payload(
+            changes=[
+                {
                     "kind": "resource.delete",
                     "summary": "Delete service medical-box",
                     "severity": "destructive",
                 }
             ]
         ),
-        _backup_plan_guard_payload(backup_cron="30 20 * * *"),
+        _backup_plan_guard_payload(catalog_cron="10 18 * * *"),
+        _backup_plan_guard_payload(
+            extra_resources=[
+                {
+                    "address": "service.production-backup",
+                    "name": "production-backup",
+                    "deploy": {},
+                }
+            ]
+        ),
+        _backup_plan_guard_payload(
+            extra_resources=[
+                {
+                    "address": "service.unrelated",
+                    "name": "unrelated",
+                    "deploy": {},
+                }
+            ]
+        ),
         _backup_plan_guard_payload(
             catalog_start="uv run --no-sync medical-box-sync all-sources"
         ),
@@ -1315,8 +1474,14 @@ def test_backup_railway_plan_guard_rejects_wrong_status_target(
     ],
     ids=[
         "unexpected-change",
+        "unexpected-variable-change-details",
+        "unexpected-api-catalog-reserve",
+        "unexpected-sync-catalog-reserve",
+        "unexpected-terms-version",
         "delete",
-        "active-backup-cron",
+        "active-catalog-cron",
+        "backup-resource",
+        "unrelated-resource",
         "active-catalog-command",
         "diagnostic",
     ],
@@ -1331,7 +1496,7 @@ def test_backup_railway_plan_guard_rejects_unsafe_plan(
     )
 
     assert result.returncode != 0
-    assert "backup_railway_plan_guard=passed" not in result.stdout
+    assert "no_cost_railway_plan_guard=passed" not in result.stdout
     assert not any(
         "apply" in command
         for command in command_capture_file.read_text().splitlines()

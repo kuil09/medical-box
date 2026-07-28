@@ -101,14 +101,13 @@ additional.
 
 Evidence date: 2026-07-28
 
-The repository now contains a production backup worker and a separate restore
-verification workflow. The implementation has been locally validated but is
-not yet active in Railway because creating the bucket is a billable
-infrastructure change.
+The repository contains a production backup worker blueprint and a separate
+manual restore-verification workflow. The implementation has been locally
+validated but is absent from the active Railway graph because creating the
+worker and bucket is a billable infrastructure change.
 
-- `.railway/railway.ts` declares a Singapore `production-backups` bucket and a
-  fail-closed `production-backup` worker. Its start command is a no-op and it
-  has no cron until the first backup and disposable restore both succeed.
+- `.railway/railway.ts` intentionally declares no backup bucket, worker, or
+  Operations group. A future cost-approved activation change must add them.
 - `services/backend/Dockerfile.backup` pins PostgreSQL client 18 and GnuPG in a
   runtime separate from the public API image.
 - `medical-box-backup create` holds a PostgreSQL advisory lock across snapshot,
@@ -130,9 +129,10 @@ infrastructure change.
   unpaired ciphertext after a six-hour safety window.
 - Retention is the union of the newest 7 daily, 4 weekly, and 12 monthly
   restore points.
-- `.github/workflows/production-backup-restore.yml` is prepared to decrypt the
-  newest object into a disposable PostgreSQL 18 service every month and verify
-  the Alembic revision and every backed-up table count.
+- `.github/workflows/production-backup-restore.yml` is manual-dispatch only. A
+  future cost-approved operation can use it to decrypt the newest object into
+  a disposable PostgreSQL 18 service and verify the Alembic revision and every
+  backed-up table count.
 
 The private decryption key is intentionally excluded from Railway. The backup
 worker receives only the public key. The private key and bucket read
@@ -150,8 +150,7 @@ added:
 - keep the seven restore values as environment secrets, never repository or
   organization secrets, and keep the two non-secret bucket routing values as
   environment variables; and
-- allow the monthly schedule or a manual dispatch only from the workflow
-  revision present on `main`.
+- allow manual dispatch only from the workflow revision present on `main`.
 
 The self-hosted Singapore runner must be registered ephemerally for one restore
 job, have no other repository or workload assigned, and be destroyed and
@@ -191,13 +190,20 @@ dedicated Singapore restore runner. After approval, the required evidence is:
 4. a separately approved cron-only activation; and
 5. a bucket object-count and retention audit after the next scheduled run.
 
-The read-only Railway configuration plan on 2026-07-28 targeted project
+The historical read-only Railway configuration plan on 2026-07-28 targeted project
 `medical-box`, environment `production`, and reported exactly five safe
 changes: the 1.2 GB catalog reserve variable for the API and dormant catalog
 worker, plus creation of group `Operations`, service `production-backup`, and
 bucket `production-backups`. It reported no deletion operation. Both catalog
 and backup desired start commands were verified as no-ops, and the backup
-worker had no cron. The plan was not applied.
+worker had no cron. The plan was not applied, and the no-cost desired graph now
+excludes all three proposed resources.
+
+The replacement no-cost plan on 2026-07-28 reported `0 to add, 5 to change,
+0 to destroy`. Its only service changes remove the catalog cron and replace
+automatic backend/IaC watches with the intentionally absent activation
+sentinel. The remaining three changes set the documented catalog reserve and
+terms variables. It creates no backup resource and was not applied.
 
 ## Activation runbook
 
@@ -243,16 +249,15 @@ services/backend/scripts/check_backup_railway_plan.sh
 ```
 
 The guard never applies configuration or requests decrypted values. It rejects
-diagnostics, deletions, destructive changes, and every change except exactly
-these five: the two `CATALOG_MIN_FREE_BYTES` variable updates, `Operations`,
-`production-backup`, and `production-backups`. It also requires the catalog to
-remain at its exact no-op command and the backup worker to remain at its exact
-no-op command with no cron.
+diagnostics, resource creation, deletions, destructive changes, backup
+resources, and a catalog cron. It permits only the documented release-variable
+updates with their exact desired values while the product remains in no-cost
+mode.
 
-Record an explicit approval of that exact plan before continuing. A different
-plan, a rerun with an altered plan, or a request to activate either scheduled
-command requires a new review and approval. After the approved guard output is
-saved, apply interactively; do not use unattended confirmation flags:
+Backup activation requires a separate pull request that reintroduces the
+worker and bucket, updates this guard for the newly approved exact plan, and
+records cost and legal approval. Only after that review may an operator apply
+interactively; do not use unattended confirmation flags:
 
 ```bash
 railway config apply

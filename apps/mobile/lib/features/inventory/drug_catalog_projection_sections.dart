@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/api/api_client.dart';
 import '../../theme.dart';
@@ -356,23 +357,74 @@ class _SourceLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sourceDate = sourceUpdatedAt?.trim();
+    final attribution = source.attribution?.trim();
+    final sourceUri = safeCatalogSourceUri(source.sourceUrl);
     final dateLabel = sourceDate?.isNotEmpty == true
         ? '자료 갱신 ${formatCatalogDate(sourceDate!)}'
         : '카탈로그 확인 ${formatCatalogDate(catalogUpdatedAt)}';
-    return Text(
-      [
-        '출처 ${catalogSourceLabel(sourceCode, source.source)}',
-        dateLabel,
-        if (source.licenseName?.isNotEmpty ?? false)
-          catalogLicenseLabel(source.licenseName!),
-      ].join(' · '),
-      style: const TextStyle(
-        color: MedicalBoxColors.muted,
-        fontSize: 11,
-        height: 1.4,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          [
+            '출처 ${catalogSourceLabel(sourceCode, source.source)}',
+            dateLabel,
+            if (source.licenseName?.isNotEmpty ?? false)
+              catalogLicenseLabel(source.licenseName!),
+          ].join(' · '),
+          style: const TextStyle(
+            color: MedicalBoxColors.muted,
+            fontSize: 11,
+            height: 1.4,
+          ),
+        ),
+        if (attribution?.isNotEmpty == true)
+          Text(
+            attribution!,
+            style: const TextStyle(
+              color: MedicalBoxColors.muted,
+              fontSize: 11,
+              height: 1.4,
+            ),
+          ),
+        if (sourceUri != null)
+          TextButton.icon(
+            onPressed: () => _openSource(context, sourceUri),
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+            ),
+            icon: Icon(PhosphorIconsRegular.arrowSquareOut, size: 15),
+            label: const Text('공식 출처 열기'),
+          ),
+      ],
     );
   }
+
+  Future<void> _openSource(BuildContext context, Uri sourceUri) async {
+    var opened = false;
+    try {
+      opened = await launchUrl(sourceUri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      opened = false;
+    }
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('공식 출처 링크를 열지 못했어요.')));
+    }
+  }
+}
+
+Uri? safeCatalogSourceUri(String value) {
+  final uri = Uri.tryParse(value.trim());
+  if (uri == null ||
+      uri.scheme != 'https' ||
+      uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty) {
+    return null;
+  }
+  return uri;
 }
 
 String statusEventLabel(String eventType) {

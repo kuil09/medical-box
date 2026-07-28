@@ -10,10 +10,14 @@ extension LoginProviderApiName on LoginProvider {
   };
 }
 
-bool isLoginProviderSupported(LoginProvider provider, TargetPlatform platform) {
+bool isLoginProviderSupported(
+  LoginProvider provider,
+  TargetPlatform platform, {
+  bool appleSignInEnabled = false,
+}) {
   return switch (provider) {
     // Android requires an Apple Service ID web flow, which is not implemented.
-    LoginProvider.apple => platform == TargetPlatform.iOS,
+    LoginProvider.apple => appleSignInEnabled && platform == TargetPlatform.iOS,
     LoginProvider.google || LoginProvider.kakao =>
       platform == TargetPlatform.iOS || platform == TargetPlatform.android,
   };

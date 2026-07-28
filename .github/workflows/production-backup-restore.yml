@@ -1,8 +1,6 @@
 name: Production backup restore verification
 
 on:
-  schedule:
-    - cron: "30 22 1 * *"
   workflow_dispatch:
 
 permissions:

@@ -31,6 +31,18 @@ class StaticAppleValidator:
         )
 
 
+class SensitiveFailureAppleValidator:
+    def validate(self, provider: str, token: str) -> VerifiedProviderIdentity:
+        del provider
+        try:
+            raise ValueError(f"Rejected sensitive token: {token}")
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=401,
+                detail=f"Sensitive validation failure: {token}",
+            ) from exc
+
+
 def apple_settings() -> Settings:
     private_key = ec.generate_private_key(ec.SECP256R1())
     private_key_pem = private_key.private_bytes(
@@ -196,11 +208,12 @@ def test_apple_authorization_rejects_incomplete_token_response(
 
 
 def test_apple_authorization_requires_valid_server_credentials() -> None:
+    sensitive_invalid_key = "sensitive-invalid-apple-private-key"
     settings = Settings(
         _env_file=None,
         apple_team_id="TESTTEAM",
         apple_sign_in_key_id="TESTKEY",
-        apple_sign_in_private_key_base64="not-base64",
+        apple_sign_in_private_key_base64=sensitive_invalid_key,
     )
     revoker = OfficialAppleAuthorizationRevoker(settings)
 
@@ -213,6 +226,65 @@ def test_apple_authorization_requires_valid_server_credentials() -> None:
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.detail == "Apple account revocation key is invalid."
+    assert sensitive_invalid_key not in str(exc_info.value)
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+
+
+def test_apple_invalid_json_does_not_retain_sensitive_response() -> None:
+    sensitive_response = "sensitive-token-response"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            content=f'{{"id_token":"{sensitive_response}"',
+            headers={"content-type": "application/json"},
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        revoker = OfficialAppleAuthorizationRevoker(apple_settings(), client=client)
+        with pytest.raises(HTTPException) as exc_info:
+            revoker.revoke(
+                provider_subject="apple-subject",
+                authorization_code="sensitive-one-time-code",
+                validator=StaticAppleValidator(),
+            )
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == "Apple returned an invalid token response."
+    assert sensitive_response not in str(exc_info.value)
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+
+
+def test_apple_validator_failure_does_not_retain_sensitive_identity_token() -> None:
+    sensitive_id_token = "sensitive-apple-identity-token"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={
+                "id_token": sensitive_id_token,
+                "refresh_token": "sensitive-apple-refresh-token",
+            },
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        revoker = OfficialAppleAuthorizationRevoker(apple_settings(), client=client)
+        with pytest.raises(HTTPException) as exc_info:
+            revoker.revoke(
+                provider_subject="apple-subject",
+                authorization_code="sensitive-one-time-code",
+                validator=SensitiveFailureAppleValidator(),
+            )
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == "Apple returned an unverifiable identity token."
+    assert sensitive_id_token not in str(exc_info.value)
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
 
 
 def test_apple_provider_http_failure_is_generic() -> None:
@@ -232,3 +304,24 @@ def test_apple_provider_http_failure_is_generic() -> None:
     assert exc_info.value.status_code == 502
     assert exc_info.value.detail == "Apple account revocation failed."
     assert "sensitive-one-time-code" not in str(exc_info.value)
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+
+
+def test_apple_provider_transport_failure_does_not_retain_sensitive_request() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("Network unavailable.", request=request)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        revoker = OfficialAppleAuthorizationRevoker(apple_settings(), client=client)
+        with pytest.raises(HTTPException) as exc_info:
+            revoker.revoke(
+                provider_subject="apple-subject",
+                authorization_code="sensitive-one-time-code",
+                validator=StaticAppleValidator(),
+            )
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == "Apple account revocation failed."
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None

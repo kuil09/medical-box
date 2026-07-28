@@ -55,13 +55,8 @@ def support_email_link(settings: Settings, *, subject: str) -> str:
             "이 상태에서는 외부 베타 배포를 진행하지 않습니다.</p>"
         )
     address = escape(settings.support_email, quote=True)
-    mailto = (
-        f"mailto:{quote(settings.support_email, safe='@._+-')}"
-        f"?subject={quote(subject)}"
-    )
-    return (
-        f'<p><a href="{escape(mailto, quote=True)}">{address}로 이메일 보내기</a></p>'
-    )
+    mailto = f"mailto:{quote(settings.support_email, safe='@._+-')}?subject={quote(subject)}"
+    return f'<p><a href="{escape(mailto, quote=True)}">{address}로 이메일 보내기</a></p>'
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -96,6 +91,10 @@ def privacy() -> HTMLResponse:
         "이 경우 공식 의약품 검색은 사용할 수 없지만 기기 안의 정리 기능은 "
         "계속 사용할 수 있습니다.</p>"
         "<h2>검색과 로그</h2>"
+        "<p>공식 의약품을 검색하거나 상세 정보를 열면 로그인 계정과 검색 권한을 "
+        "확인하는 인증 요청에 검색어 또는 공개 품목기준코드(itemSeq)가 포함되어 "
+        "서버에서 처리됩니다. 서버는 이를 수량, 유효기간, 메모 등 기기 안의 "
+        "재고 정보와 결합하거나 영구 저장하지 않습니다.</p>"
         "<p>의약품 검색어, 요청 본문과 응답 본문은 애플리케이션 로그나 분석 "
         "시스템에 저장하지 않습니다.</p>",
     )
@@ -126,8 +125,8 @@ def account_deletion(settings: Settings = Depends(get_settings)) -> HTMLResponse
     return page(
         "계정 삭제 안내",
         "<h2>앱에서 삭제</h2>"
-        "<p>앱의 설정 → 계정 → 계정 삭제에서 소셜 로그인을 다시 확인한 뒤 "
-        "계정을 삭제할 수 있습니다.</p>"
+        "<p>앱의 설정 → 로그인 및 검색 권한 → 서버 계정 삭제에서 소셜 "
+        "로그인을 다시 확인한 뒤 계정을 삭제할 수 있습니다.</p>"
         "<h2>앱을 사용할 수 없는 경우</h2>"
         "<p>아래 이메일로 계정 삭제를 요청할 수 있습니다. 가입에 사용한 "
         "로그인 제공자와 이메일 주소만 적어 주세요. 비밀번호, 인증 토큰, "

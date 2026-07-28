@@ -33,6 +33,12 @@ class InventoryShareOptions {
   }
 }
 
+String officialMfdsDrugDetailUrl(String itemSeq) {
+  return Uri.https('nedrug.mfds.go.kr', '/pbp/CCBBB01/getItemDetail', {
+    'itemSeq': itemSeq.trim(),
+  }).toString();
+}
+
 String buildInventoryShareText({
   required String containerName,
   required List<InventoryItem> items,
@@ -70,9 +76,7 @@ String buildInventoryShareText({
       if (options.includeOfficialLinks &&
           item.itemSeq != null &&
           item.itemSeq!.trim().isNotEmpty) {
-        lines.add(
-          '  공식 제품 정보: https://medicalbox.outoftokens.ai/api/v1/drugs/${Uri.encodeComponent(item.itemSeq!.trim())}',
-        );
+        lines.add('  공식 제품 정보: ${officialMfdsDrugDetailUrl(item.itemSeq!)}');
       }
     }
   }

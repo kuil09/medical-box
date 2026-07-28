@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +14,7 @@ import 'features/pouch/pouch_screen.dart';
 import 'features/reminders/reminders_screen.dart';
 import 'features/renewal/renewal_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'providers.dart';
 import 'theme.dart';
 import 'widgets/app_shell.dart';
 
@@ -22,9 +25,17 @@ class MedicalBoxApp extends ConsumerStatefulWidget {
   ConsumerState<MedicalBoxApp> createState() => _MedicalBoxAppState();
 }
 
-class _MedicalBoxAppState extends ConsumerState<MedicalBoxApp> {
+class _MedicalBoxAppState extends ConsumerState<MedicalBoxApp>
+    with WidgetsBindingObserver {
   late final GoRouter _router = GoRouter(
     initialLocation: '/onboarding',
+    redirect: (context, state) async {
+      final settings = await ref.read(databaseProvider).getSettings();
+      return onboardingGuardRedirect(
+        path: state.uri.path,
+        onboardingCompleted: settings.onboardingCompleted,
+      );
+    },
     routes: [
       GoRoute(
         path: '/onboarding',
@@ -73,12 +84,37 @@ class _MedicalBoxAppState extends ConsumerState<MedicalBoxApp> {
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       for (final entry in appLinkRedirects.entries)
-        GoRoute(
-          path: entry.key,
-          redirect: (context, state) => entry.value,
-        ),
+        GoRoute(path: entry.key, redirect: (context, state) => entry.value),
     ],
   );
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _router.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshReminderState());
+    }
+  }
+
+  Future<void> _refreshReminderState() async {
+    try {
+      await ref.read(localDataLifecycleProvider).handleAppResumed();
+    } catch (_) {
+      // Keep the app usable; the next resume or restart retries reconciliation.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

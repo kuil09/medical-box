@@ -2,10 +2,20 @@
 
 ## Boundary
 
-The `Mobile release build` workflow creates signed Android and iOS store
-artifacts. It does not upload them to Google Play or App Store Connect. Store
-upload remains a separate, account-authenticated promotion step so an artifact
-cannot reach testers merely because signing secrets exist.
+The `Mobile signed-build verification` workflow creates signed Android and iOS
+store outputs only on an ephemeral protected runner. It verifies them and then
+deletes the complete platform build directory and signing material in an
+always-run cleanup step. It never uploads signed binaries to GitHub Actions
+artifacts or to either store.
+
+Cleanup records each failed deletion, continues attempting every remaining
+target, verifies their absence, and fails the job only after all attempts finish.
+
+This workflow is a signing-configuration gate, not an artifact distribution
+channel. Store promotion requires a separately reviewed path that builds and
+uploads directly within the same protected trust boundary, or an
+operator-controlled machine. Do not reintroduce a public-repository Actions
+artifact as an intermediate handoff.
 
 Normal pull-request CI performs two compile-only release checks:
 
@@ -36,6 +46,26 @@ profiles, or provider configuration.
 | `GOOGLE_IOS_CLIENT_ID` | Native iOS Google OAuth client |
 | `KAKAO_NATIVE_APP_KEY` | Kakao native application key and callback scheme |
 
+The protected `closed-beta` environment also uses two non-secret variables for
+Apple feature activation:
+
+| Variable | Purpose |
+| --- | --- |
+| `APPLE_SIGN_IN_ENABLED` | Explicit operator request to expose native Apple sign-in in the iOS artifact |
+| `APPLE_ACCOUNT_REVOCATION_READY` | Attestation that production Apple token exchange/revocation variables are configured and disposable-account deletion E2E passed |
+
+The iOS build injects `APPLE_SIGN_IN_ENABLED=true` only when both variables are
+exactly `true`. Missing or false values compile the app with Apple sign-in
+hidden. Requesting Apple sign-in without the readiness attestation fails before
+signing material is installed. The workflow never receives the Apple `.p8`
+private key; it remains only in the backend secret boundary.
+
+This artifact gate does not enable the production API. Railway must independently
+set the backend `APPLE_SIGN_IN_ENABLED=true`, and the API still requires a valid
+team ID, key ID, client ID, and private key before accepting Apple token
+exchange. The backend flag defaults to false, so an unset deployment fails
+closed even if a signed app accidentally exposes the button.
+
 ### Android signing
 
 | Secret | Purpose |
@@ -51,9 +81,10 @@ one encrypted offline recovery copy. The repository contains only
 `apps/mobile/android/key.properties.example`; actual `key.properties`, JKS, and
 keystore files are ignored.
 
-The workflow validates the keystore and alias before building, verifies the AAB
-signature and exact upload-certificate fingerprint, and publishes the signed AAB
-plus its certificate description as a seven-day GitHub artifact.
+The workflow validates the keystore and alias before building and verifies the
+AAB signature and exact upload-certificate fingerprint. The signed AAB,
+certificate report, and signing material remain runner-local and are deleted by
+the always-run, fail-closed cleanup step.
 
 The upload certificate is not the Google Play App Signing certificate. After a
 Play app is created, use the Play App Signing SHA-1 for the production Android
@@ -73,8 +104,10 @@ Google OAuth client and its SHA-256 for
 The provisioning profile must cover `com.medicalbox.app`, Associated Domains,
 and Sign in with Apple for team `GS344U4ZSG`. The workflow imports all signing
 material into an ephemeral keychain, creates the IPA, verifies its code
-signature and entitlements, uploads a seven-day artifact, and deletes the
-temporary keychain and profile.
+signature and entitlements, and deletes the full iOS build output, temporary
+keychain, and profile. A failed deletion does not suppress later cleanup
+attempts, and any remaining target fails the job. The IPA is never persisted as
+a GitHub Actions artifact.
 
 `ios/Flutter/ReleaseSecrets.xcconfig` carries the Kakao callback value and the
 Google reversed client ID derived from `GOOGLE_IOS_CLIENT_ID` only during the
@@ -83,29 +116,34 @@ that the resulting callback scheme matches the configured iOS OAuth client.
 
 ## Build
 
-Run `Mobile release build` manually with:
+Run `Mobile signed-build verification` manually with:
 
 - `platform`: `android`, `ios`, or `both`;
 - `build_name`: a three-part store version such as `0.1.0`; and
 - `build_number`: a positive integer that has never been uploaded before.
 
 Both platform jobs fail before compilation if any required input or secret is
-missing. A successful job is evidence only for a signed artifact, not for store
-acceptance.
+missing. A successful job is evidence that an ephemeral signed output passed
+local signature checks and cleanup completed. It does not produce a retrievable
+artifact and is not evidence of store acceptance.
 
 ## Store promotion
 
 1. Recover or verify the Google Play developer account.
 2. Create the Play app, enable Play App Signing, and register the resulting
    signing fingerprints with Google OAuth and the production API.
-3. Upload the verified AAB to the internal track and complete Data safety,
+3. Approve a store-connected promotion path that signs, verifies, and uploads
+   directly from a protected runner, or perform the equivalent sequence on an
+   operator-controlled machine. Do not copy a signed binary through GitHub
+   Actions artifacts.
+4. Upload the verified AAB to the internal track and complete Data safety,
    content rating, target audience, privacy, support, and tester access.
-4. Sign in to App Store Connect, create the app record, and verify bundle ID,
+5. Sign in to App Store Connect, create the app record, and verify bundle ID,
    Sign in with Apple, privacy, support, and export-compliance metadata.
-5. Upload the verified IPA, wait for processing, attach it to an internal
+6. Upload the verified IPA, wait for processing, attach it to an internal
    TestFlight group, and complete beta-review metadata if external testing is
    requested.
-6. Perform Google, Apple, and Kakao login, reauthentication, logout, and
+7. Perform Google, Apple, and Kakao login, reauthentication, logout, and
    disposable-account deletion on store-installed builds.
 
 Record store build IDs, signing fingerprints, tester-group evidence, and the

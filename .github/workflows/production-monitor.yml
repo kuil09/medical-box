@@ -1,9 +1,16 @@
 name: Production monitor
 
 on:
-  schedule:
-    - cron: "18 */4 * * *"
   workflow_dispatch:
+    inputs:
+      expected_apple_app_id:
+        description: Exact Apple team ID and bundle ID
+        required: true
+        type: string
+      expected_android_fingerprint:
+        description: Exact Play App Signing SHA-256 fingerprint
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,11 +21,12 @@ concurrency:
 
 jobs:
   probe:
+    name: Exact production ownership probe
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Verify public routes and security boundaries
+      - name: Verify production availability and security boundaries
         env:
           ORIGIN: https://medicalbox.outoftokens.ai
         run: |
@@ -31,7 +39,6 @@ jobs:
             actual="$(curl \
               --silent \
               --show-error \
-              --location \
               --retry 3 \
               --retry-all-errors \
               --connect-timeout 10 \
@@ -45,6 +52,33 @@ jobs:
             fi
           }
 
+          download_json_metadata() {
+            local path="$1"
+            local output="$2"
+            local result
+            local status
+            local content_type
+            result="$(curl \
+              --silent \
+              --show-error \
+              --retry 3 \
+              --retry-all-errors \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --output "${output}" \
+              --write-out $'%{http_code}\t%{content_type}' \
+              "${ORIGIN}${path}")"
+            IFS=$'\t' read -r status content_type <<<"${result}"
+            if [[ "${status}" != "200" ]]; then
+              echo "::error title=Production metadata probe failed::${path} returned ${status}; expected direct 200."
+              return 1
+            fi
+            if [[ "${content_type,,}" != application/json* ]]; then
+              echo "::error title=Production metadata content type failed::${path} returned ${content_type}; expected application/json."
+              return 1
+            fi
+          }
+
           probe_status "/" "200"
           probe_status "/privacy" "200"
           probe_status "/terms" "200"
@@ -52,43 +86,29 @@ jobs:
           probe_status "/account-deletion" "200"
           probe_status "/api/health/live" "200"
           probe_status "/api/health/ready" "200"
-          probe_status "/.well-known/apple-app-site-association" "200"
-          probe_status "/.well-known/assetlinks.json" "200"
           probe_status "/api/v1/catalog/meta" "401"
 
-          metadata_directory="$(mktemp -d)"
+          metadata_directory="${RUNNER_TEMP}/release-metadata"
+          mkdir -p "${metadata_directory}"
+          download_json_metadata \
+            "/.well-known/apple-app-site-association" \
+            "${metadata_directory}/apple.json"
+          download_json_metadata \
+            "/.well-known/assetlinks.json" \
+            "${metadata_directory}/android.json"
+          python -m json.tool \
+            "${metadata_directory}/apple.json" \
+            > /dev/null
+          python -m json.tool \
+            "${metadata_directory}/android.json" \
+            > /dev/null
+
           headers="$(mktemp)"
-          trap 'rm -rf "${metadata_directory}" "${headers}"' EXIT
-          curl \
-            --silent \
-            --show-error \
-            --fail \
-            --location \
-            --retry 3 \
-            --retry-all-errors \
-            --connect-timeout 10 \
-            --max-time 30 \
-            --output "${metadata_directory}/apple.json" \
-            "${ORIGIN}/.well-known/apple-app-site-association"
-          curl \
-            --silent \
-            --show-error \
-            --fail \
-            --location \
-            --retry 3 \
-            --retry-all-errors \
-            --connect-timeout 10 \
-            --max-time 30 \
-            --output "${metadata_directory}/android.json" \
-            "${ORIGIN}/.well-known/assetlinks.json"
-          python services/backend/scripts/verify_well_known_metadata.py \
-            --apple "${metadata_directory}/apple.json" \
-            --android "${metadata_directory}/android.json"
+          trap 'rm -f "${headers}"' EXIT
 
           curl \
             --silent \
             --show-error \
-            --location \
             --retry 3 \
             --retry-all-errors \
             --connect-timeout 10 \
@@ -99,3 +119,14 @@ jobs:
 
           grep --ignore-case --quiet "^strict-transport-security:" "${headers}"
           grep --ignore-case --quiet "^x-content-type-options: nosniff" "${headers}"
+      - name: Verify exact release metadata
+        env:
+          EXPECTED_APPLE_APP_ID: ${{ inputs.expected_apple_app_id }}
+          EXPECTED_ANDROID_FINGERPRINT: ${{ inputs.expected_android_fingerprint }}
+        run: |
+          set -euo pipefail
+          python services/backend/scripts/verify_well_known_metadata.py \
+            --apple "${RUNNER_TEMP}/release-metadata/apple.json" \
+            --android "${RUNNER_TEMP}/release-metadata/android.json" \
+            --expected-apple-app-id "${EXPECTED_APPLE_APP_ID}" \
+            --expected-android-fingerprint "${EXPECTED_ANDROID_FINGERPRINT}"

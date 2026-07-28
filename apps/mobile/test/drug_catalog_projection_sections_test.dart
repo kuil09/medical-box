@@ -82,8 +82,22 @@ void main() {
 
     expect(find.text('8801234567890'), findsOneWidget);
     expect(find.textContaining('공공누리 제1유형'), findsWidgets);
+    expect(find.text('Source: MFDS'), findsOneWidget);
+    expect(find.text('Source: HIRA'), findsWidgets);
+    expect(find.text('공식 출처 열기'), findsWidgets);
     expect(find.textContaining('현재 보유 제품의 해당 여부를 자동 판단하지 않아요'), findsOneWidget);
     expect(find.textContaining('실제 구매가나 본인부담금과 다를 수 있어요'), findsOneWidget);
+  });
+
+  test('only absolute HTTPS source links are interactive', () {
+    expect(
+      safeCatalogSourceUri('https://example.test/source')?.host,
+      'example.test',
+    );
+    expect(safeCatalogSourceUri('http://example.test/source'), isNull);
+    expect(safeCatalogSourceUri('javascript:alert(1)'), isNull);
+    expect(safeCatalogSourceUri('https://user@example.test/source'), isNull);
+    expect(safeCatalogSourceUri('/relative/source'), isNull);
   });
 
   testWidgets('renders no status claim when projection data is absent', (

@@ -5,7 +5,11 @@ import 'package:timezone/timezone.dart' as tz;
 import '../data/local/app_database.dart';
 
 abstract interface class ReminderScheduling {
+  bool get notificationsExplicitlyDenied;
+
   Future<void> initialize();
+
+  Future<void> refreshPermissionStatus();
 
   Future<void> rescheduleAll(
     List<Reminder> reminders, {
@@ -45,6 +49,10 @@ class ReminderScheduler implements ReminderScheduling {
     : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   final FlutterLocalNotificationsPlugin _plugin;
+  bool? _permissionGranted;
+
+  @override
+  bool get notificationsExplicitlyDenied => _permissionGranted == false;
 
   @override
   Future<void> initialize() async {
@@ -56,16 +64,41 @@ class ReminderScheduler implements ReminderScheduling {
         iOS: DarwinInitializationSettings(),
       ),
     );
-    await _plugin
+    final androidPermission = await _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >()
         ?.requestNotificationsPermission();
-    await _plugin
+    final iosPermission = await _plugin
         .resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin
         >()
         ?.requestPermissions(alert: true, badge: true, sound: true);
+    _permissionGranted = androidPermission ?? iosPermission;
+  }
+
+  @override
+  Future<void> refreshPermissionStatus() async {
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    if (android != null) {
+      final enabled = await android.areNotificationsEnabled();
+      if (enabled != null) {
+        _permissionGranted = enabled;
+      }
+      return;
+    }
+
+    final ios = _plugin
+        .resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin
+        >();
+    final permissions = await ios?.checkPermissions();
+    if (permissions != null) {
+      _permissionGranted = permissions.isEnabled;
+    }
   }
 
   @override
@@ -74,6 +107,7 @@ class ReminderScheduler implements ReminderScheduling {
     required bool notificationPrivacy,
   }) async {
     await cancelAll();
+    if (notificationsExplicitlyDenied) return;
     for (final reminder in reminders.where((entry) => entry.enabled)) {
       await schedule(reminder, notificationPrivacy: notificationPrivacy);
     }
@@ -84,6 +118,9 @@ class ReminderScheduler implements ReminderScheduling {
     Reminder reminder, {
     required bool notificationPrivacy,
   }) async {
+    if (notificationsExplicitlyDenied) {
+      throw const ReminderNotificationPermissionDenied();
+    }
     if (!reminder.scheduledAt.isAfter(DateTime.now())) return;
     final content = reminderNotificationContent(
       reminder,
@@ -122,4 +159,11 @@ class ReminderScheduler implements ReminderScheduling {
       (hash, unit) => (hash * 31 + unit) & 0x7fffffff,
     );
   }
+}
+
+class ReminderNotificationPermissionDenied implements Exception {
+  const ReminderNotificationPermissionDenied();
+
+  @override
+  String toString() => 'Notification permission was explicitly denied.';
 }

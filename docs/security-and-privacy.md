@@ -19,6 +19,12 @@ memory, two iterations, and one lane. Authentication tokens are not part of the
 database snapshot. Imports authenticate and validate the full envelope before a
 transaction replaces local data.
 
+Exports are first created as `medical-box-*.medicalbox` files in the app
+temporary directory so the operating-system share sheet can receive them.
+Deleting device data also deletes those app-created temporary files. Copies
+that the user saves or shares outside the app temporary directory are outside
+the app's control and must be deleted separately by the user.
+
 ## Server account security
 
 - Identities are keyed by provider and provider subject.

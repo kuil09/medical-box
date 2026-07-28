@@ -5,8 +5,11 @@
 *.medicalbox
 *.pem
 *.p8
+*.p12
 *.jks
 *.keystore
+*.mobileprovision
+*.keychain-db
 apps/mobile/android/key.properties
 apps/mobile/ios/Flutter/LocalSecrets.xcconfig
 apps/mobile/ios/Flutter/ReleaseSecrets.xcconfig

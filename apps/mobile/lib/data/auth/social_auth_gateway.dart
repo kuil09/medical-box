@@ -27,16 +27,24 @@ abstract interface class SocialAuthGateway {
 }
 
 class SdkSocialAuthGateway implements SocialAuthGateway {
-  SdkSocialAuthGateway({TargetPlatform? targetPlatform})
-    : _targetPlatform = targetPlatform ?? defaultTargetPlatform;
+  SdkSocialAuthGateway({
+    TargetPlatform? targetPlatform,
+    bool? appleSignInEnabled,
+  }) : _targetPlatform = targetPlatform ?? defaultTargetPlatform,
+       _appleSignInEnabled = appleSignInEnabled ?? appleSignInFeatureEnabled;
 
   static Future<void>? _googleInitialization;
 
   final TargetPlatform _targetPlatform;
+  final bool _appleSignInEnabled;
 
   @override
   bool supportsProvider(LoginProvider provider) {
-    return isLoginProviderSupported(provider, _targetPlatform);
+    return isLoginProviderSupported(
+      provider,
+      _targetPlatform,
+      appleSignInEnabled: _appleSignInEnabled,
+    );
   }
 
   @override
@@ -53,6 +61,9 @@ class SdkSocialAuthGateway implements SocialAuthGateway {
     switch (provider) {
       case LoginProvider.google:
         final google = await _googleSignIn();
+        if (forceReauthentication) {
+          await google.signOut();
+        }
         final user = await google.authenticate(scopeHint: const ['email']);
         final token = user.authentication.idToken;
         if (token == null) {

@@ -10,8 +10,12 @@ import 'package:path_provider/path_provider.dart';
 import '../data/local/app_database.dart';
 
 class MedicalBoxExportService {
-  MedicalBoxExportService(this._database, {Random? random})
-    : _random = random ?? Random.secure();
+  MedicalBoxExportService(
+    this._database, {
+    Random? random,
+    Future<Directory> Function()? temporaryDirectory,
+  }) : _random = random ?? Random.secure(),
+       _temporaryDirectory = temporaryDirectory ?? getTemporaryDirectory;
 
   static const format = 'com.medicalbox.export';
   static const version = 1;
@@ -22,10 +26,11 @@ class MedicalBoxExportService {
 
   final AppDatabase _database;
   final Random _random;
+  final Future<Directory> Function() _temporaryDirectory;
 
   Future<File> createExport(String password) async {
     final bytes = await createExportBytes(password);
-    final temp = await getTemporaryDirectory();
+    final temp = await _temporaryDirectory();
     final timestamp = DateTime.now().toUtc().toIso8601String().replaceAll(
       ':',
       '-',
@@ -35,6 +40,19 @@ class MedicalBoxExportService {
     );
     await file.writeAsBytes(bytes, flush: true);
     return file;
+  }
+
+  Future<void> deleteTemporaryExports() async {
+    final temp = await _temporaryDirectory();
+    if (!await temp.exists()) return;
+
+    await for (final entity in temp.list(followLinks: false)) {
+      if (entity is! File) continue;
+      final name = path.basename(entity.path);
+      if (name.startsWith('medical-box-') && name.endsWith('.medicalbox')) {
+        await entity.delete();
+      }
+    }
   }
 
   Future<Uint8List> createExportBytes(String password) async {

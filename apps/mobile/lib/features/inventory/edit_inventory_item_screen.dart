@@ -44,6 +44,7 @@ class _EditInventoryItemScreenState
   String? _containerId;
   bool _searching = false;
   bool _saving = false;
+  int _searchGeneration = 0;
 
   @override
   void initState() {
@@ -78,21 +79,39 @@ class _EditInventoryItemScreenState
 
   void _onSearchChanged(String query) {
     _searchTimer?.cancel();
-    _itemSeq = null;
-    _identificationVariantKey = null;
-    _officialImageUrl = null;
-    _appearanceSummary = null;
+    final generation = ++_searchGeneration;
+    final normalizedQuery = query.trim();
+    setState(() {
+      _itemSeq = null;
+      _ingredientSummary = null;
+      _identificationVariantKey = null;
+      _officialImageUrl = null;
+      _appearanceSummary = null;
+      _results = const [];
+      _searching = false;
+    });
+    if (normalizedQuery.length < 2) return;
+
     _searchTimer = Timer(const Duration(milliseconds: 350), () async {
-      if (query.trim().length < 2) {
-        if (mounted) setState(() => _results = const []);
+      if (!mounted ||
+          generation != _searchGeneration ||
+          _nameController.text.trim() != normalizedQuery) {
         return;
       }
       setState(() => _searching = true);
       try {
-        final results = await ref.read(catalogRepositoryProvider).search(query);
-        if (mounted) setState(() => _results = results);
+        final results = await ref
+            .read(catalogRepositoryProvider)
+            .search(normalizedQuery);
+        if (mounted &&
+            generation == _searchGeneration &&
+            _nameController.text.trim() == normalizedQuery) {
+          setState(() => _results = results);
+        }
       } catch (error) {
-        if (mounted) {
+        if (mounted &&
+            generation == _searchGeneration &&
+            _nameController.text.trim() == normalizedQuery) {
           setState(() => _results = const []);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -107,7 +126,11 @@ class _EditInventoryItemScreenState
           );
         }
       } finally {
-        if (mounted) setState(() => _searching = false);
+        if (mounted &&
+            generation == _searchGeneration &&
+            _nameController.text.trim() == normalizedQuery) {
+          setState(() => _searching = false);
+        }
       }
     });
   }
@@ -273,8 +296,21 @@ class _EditInventoryItemScreenState
       ),
     );
     if (confirmed != true || widget.itemId == null) return;
-    await ref.read(databaseProvider).deleteInventoryItem(widget.itemId!);
-    if (mounted) context.pop();
+    setState(() => _saving = true);
+    try {
+      await ref
+          .read(localDataLifecycleProvider)
+          .deleteInventoryItem(widget.itemId!);
+      if (mounted) context.pop();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('보유약 삭제를 마치지 못했어요. 다시 시도해 주세요.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -331,28 +367,31 @@ class _EditInventoryItemScreenState
                   : null,
             ),
             if (_results.isNotEmpty)
-              Container(
-                margin: const EdgeInsets.only(top: 6),
-                decoration: BoxDecoration(
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Material(
                   color: Colors.white,
-                  border: Border.all(color: MedicalBoxColors.line),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  children: _results.take(5).map((result) {
-                    return ListTile(
-                      dense: true,
-                      title: Text(result.itemName),
-                      subtitle: Text(
-                        [
-                          result.manufacturer ?? '제조사 정보 없음',
-                          if (result.status?.isNotEmpty ?? false)
-                            result.status!,
-                        ].join(' · '),
-                      ),
-                      onTap: () => _openDrugDetail(result),
-                    );
-                  }).toList(),
+                  clipBehavior: Clip.antiAlias,
+                  shape: RoundedRectangleBorder(
+                    side: const BorderSide(color: MedicalBoxColors.line),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: _results.take(5).map((result) {
+                      return ListTile(
+                        dense: true,
+                        title: Text(result.itemName),
+                        subtitle: Text(
+                          [
+                            result.manufacturer ?? '제조사 정보 없음',
+                            if (result.status?.isNotEmpty ?? false)
+                              result.status!,
+                          ].join(' · '),
+                        ),
+                        onTap: () => _openDrugDetail(result),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
             if (_itemSeq != null && _results.isEmpty) ...[

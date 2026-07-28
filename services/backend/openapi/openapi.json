@@ -552,6 +552,7 @@
             "items": {
               "$ref": "#/components/schemas/DrugAppearanceInfo"
             },
+            "maxItems": 20,
             "title": "Identificationvariants",
             "type": "array"
           },

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -13,10 +14,7 @@ void main() {
     final harness = _TestHarness();
 
     await expectLater(
-      harness.repository.signIn(
-        LoginProvider.google,
-        termsAccepted: false,
-      ),
+      harness.repository.signIn(LoginProvider.google, termsAccepted: false),
       throwsA(isA<StateError>()),
     );
 
@@ -28,10 +26,7 @@ void main() {
   test('sign-in submits the exact accepted terms version', () async {
     final harness = _TestHarness();
 
-    await harness.repository.signIn(
-      LoginProvider.google,
-      termsAccepted: true,
-    );
+    await harness.repository.signIn(LoginProvider.google, termsAccepted: true);
 
     expect(harness.exchangeBodies.single, containsPair('termsAccepted', true));
     expect(
@@ -42,22 +37,23 @@ void main() {
 
   for (final provider in [LoginProvider.google, LoginProvider.kakao]) {
     test(
-      '${provider.apiName} deletion reauthenticates, disconnects, then deletes',
+      '${provider.apiName} deletion removes server and local sessions before provider cleanup',
       () async {
         final harness = _TestHarness();
         harness.seedSession();
 
-        await harness.repository.deleteAccount(provider);
+        final result = await harness.repository.deleteAccount(provider);
 
         expect(harness.events, [
           'provider:${provider.apiName}:authenticate:reauth',
           'server:${provider.apiName}:reauth',
-          'provider:${provider.apiName}:disconnect',
           'server:delete',
           'local:clear',
+          'provider:${provider.apiName}:disconnect',
         ]);
         expect(harness.deleteBodies.single, {'reauthGrant': 'reauth-grant'});
         expect(harness.keyStore.tokens, isEmpty);
+        expect(result.providerCleanupCompleted, isTrue);
       },
     );
   }
@@ -105,26 +101,28 @@ void main() {
     },
   );
 
-  test('provider cleanup failure preserves the app session', () async {
-    final harness = _TestHarness(disconnectFailureFor: LoginProvider.kakao);
-    harness.seedSession();
+  test(
+    'provider cleanup failure preserves completed server deletion',
+    () async {
+      final harness = _TestHarness(disconnectFailureFor: LoginProvider.kakao);
+      harness.seedSession();
 
-    await expectLater(
-      harness.repository.deleteAccount(LoginProvider.kakao),
-      throwsA(isA<StateError>()),
-    );
+      final result = await harness.repository.deleteAccount(
+        LoginProvider.kakao,
+      );
 
-    expect(harness.events, [
-      'provider:kakao:authenticate:reauth',
-      'server:kakao:reauth',
-      'provider:kakao:disconnect',
-    ]);
-    expect(harness.deleteBodies, isEmpty);
-    expect(harness.keyStore.tokens, {
-      'access': 'access-token',
-      'refresh': 'refresh-token',
-    });
-  });
+      expect(harness.events, [
+        'provider:kakao:authenticate:reauth',
+        'server:kakao:reauth',
+        'server:delete',
+        'local:clear',
+        'provider:kakao:disconnect',
+      ]);
+      expect(harness.deleteBodies, hasLength(1));
+      expect(harness.keyStore.tokens, isEmpty);
+      expect(result.requiresProviderCleanupAttention, isTrue);
+    },
+  );
 
   test('server deletion failure preserves the app session', () async {
     final harness = _TestHarness(serverDeleteFailure: true);
@@ -138,7 +136,6 @@ void main() {
     expect(harness.events, [
       'provider:google:authenticate:reauth',
       'server:google:reauth',
-      'provider:google:disconnect',
       'server:delete',
     ]);
     expect(harness.keyStore.tokens, {
@@ -146,6 +143,29 @@ void main() {
       'refresh': 'refresh-token',
     });
   });
+
+  test(
+    'local clear failure preserves the successful server deletion result',
+    () async {
+      final harness = _TestHarness(localClearFailure: true);
+      harness.seedSession();
+
+      final result = await harness.repository.deleteAccount(
+        LoginProvider.google,
+      );
+
+      expect(harness.events, [
+        'provider:google:authenticate:reauth',
+        'server:google:reauth',
+        'server:delete',
+        'local:clear',
+        'provider:google:disconnect',
+      ]);
+      expect(result.requiresLocalSessionCleanupAttention, isTrue);
+      expect(result.providerCleanupCompleted, isTrue);
+      expect(harness.deleteBodies, hasLength(1));
+    },
+  );
 
   test('server reauthentication failure preserves the app session', () async {
     final harness = _TestHarness(serverReauthFailure: true);
@@ -172,18 +192,15 @@ void main() {
       serverLogoutFailure: true,
       logoutFailureFor: LoginProvider.kakao,
     );
-    await harness.repository.signIn(
-      LoginProvider.kakao,
-      termsAccepted: true,
-    );
+    await harness.repository.signIn(LoginProvider.kakao, termsAccepted: true);
     harness.events.clear();
 
     await harness.repository.signOut();
 
     expect(harness.events, [
+      'local:clear',
       'server:logout',
       'provider:kakao:logout',
-      'local:clear',
     ]);
     expect(
       harness.events.where((event) => event.contains('disconnect')),
@@ -191,6 +208,60 @@ void main() {
     );
     expect(harness.keyStore.tokens, isEmpty);
     expect(harness.repository.account, isNull);
+  });
+
+  test('a late restore cannot resurrect an account after sign-out', () async {
+    final pendingMe = Completer<http.Response>();
+    final harness = _TestHarness(pendingMeResponse: pendingMe);
+    harness.seedSession();
+
+    final restore = harness.repository.restore();
+    await harness.meRequestStarted.future;
+    await harness.repository.signOut();
+    pendingMe.complete(
+      http.Response(
+        jsonEncode({
+          'id': 'stale-account',
+          'providers': ['google'],
+          'permissions': <String>[],
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      ),
+    );
+    await restore;
+
+    expect(harness.repository.account, isNull);
+    expect(harness.keyStore.tokens, isEmpty);
+  });
+
+  test('a late refresh cannot rewrite tokens after sign-out', () async {
+    final pendingRefresh = Completer<http.Response>();
+    final harness = _TestHarness(pendingRefreshResponse: pendingRefresh);
+    harness.seedSession();
+
+    final refresh = harness.repository.refreshAccessToken();
+    await harness.refreshRequestStarted.future;
+    await harness.repository.signOut();
+    pendingRefresh.complete(
+      http.Response(
+        jsonEncode({
+          'accessToken': 'late-access',
+          'refreshToken': 'late-refresh',
+          'account': {
+            'id': 'stale-account',
+            'providers': ['google'],
+            'permissions': <String>[],
+          },
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      ),
+    );
+
+    expect(await refresh, isNull);
+    expect(harness.repository.account, isNull);
+    expect(harness.keyStore.tokens, isEmpty);
   });
 }
 
@@ -202,6 +273,9 @@ class _TestHarness {
     this.serverReauthFailure = false,
     this.serverDeleteFailure = false,
     this.serverLogoutFailure = false,
+    this.pendingMeResponse,
+    this.pendingRefreshResponse,
+    this.localClearFailure = false,
   }) {
     gateway = _RecordingSocialAuthGateway(
       events,
@@ -220,7 +294,7 @@ class _TestHarness {
       disconnectFailureFor: disconnectFailureFor,
       logoutFailureFor: logoutFailureFor,
     );
-    keyStore = _RecordingKeyStore(events);
+    keyStore = _RecordingKeyStore(events, clearFailure: localClearFailure);
     repository = AuthRepository(
       ApiClient(
         client: MockClient(_handleRequest),
@@ -239,6 +313,11 @@ class _TestHarness {
   final bool serverReauthFailure;
   final bool serverDeleteFailure;
   final bool serverLogoutFailure;
+  final Completer<http.Response>? pendingMeResponse;
+  final Completer<http.Response>? pendingRefreshResponse;
+  final bool localClearFailure;
+  final meRequestStarted = Completer<void>();
+  final refreshRequestStarted = Completer<void>();
   late final _RecordingSocialAuthGateway gateway;
   late final _RecordingKeyStore keyStore;
   late final AuthRepository repository;
@@ -252,6 +331,42 @@ class _TestHarness {
 
   Future<http.Response> _handleRequest(http.Request request) async {
     final path = request.url.path;
+    if (request.method == 'GET' && path.endsWith('/v1/me')) {
+      events.add('server:me');
+      if (!meRequestStarted.isCompleted) meRequestStarted.complete();
+      final pending = pendingMeResponse;
+      if (pending != null) return pending.future;
+      return http.Response(
+        jsonEncode({
+          'id': 'account-id',
+          'providers': ['google'],
+          'permissions': <String>[],
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+    if (request.method == 'POST' && path.endsWith('/auth/refresh')) {
+      events.add('server:refresh');
+      if (!refreshRequestStarted.isCompleted) {
+        refreshRequestStarted.complete();
+      }
+      final pending = pendingRefreshResponse;
+      if (pending != null) return pending.future;
+      return http.Response(
+        jsonEncode({
+          'accessToken': 'replacement-access',
+          'refreshToken': 'replacement-refresh',
+          'account': {
+            'id': 'account-id',
+            'providers': ['google'],
+            'permissions': <String>[],
+          },
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
     if (request.method == 'POST' && path.contains('/auth/reauth/')) {
       final provider = path.split('/').last;
       events.add('server:$provider:reauth');
@@ -356,9 +471,10 @@ class _RecordingSocialAuthGateway implements SocialAuthGateway {
 }
 
 class _RecordingKeyStore extends DatabaseKeyStore {
-  _RecordingKeyStore(this.events);
+  _RecordingKeyStore(this.events, {this.clearFailure = false});
 
   final List<String> events;
+  final bool clearFailure;
   final tokens = <String, String>{};
 
   @override
@@ -372,6 +488,9 @@ class _RecordingKeyStore extends DatabaseKeyStore {
   @override
   Future<void> clearTokens() async {
     events.add('local:clear');
+    if (clearFailure) {
+      throw StateError('Secure storage clear failed.');
+    }
     tokens.clear();
   }
 }
