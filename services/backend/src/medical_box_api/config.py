@@ -5,6 +5,9 @@ from typing import Literal
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEVELOPMENT_JWT_SECRET = "development-only-secret-change-before-deploy"
+EXAMPLE_JWT_SECRET = "replace-with-at-least-32-random-characters"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -16,7 +19,7 @@ class Settings(BaseSettings):
     support_email: str | None = None
     terms_version: str = "2026-07-25"
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
-    jwt_secret: str = "development-only-secret-change-before-deploy"
+    jwt_secret: str = DEVELOPMENT_JWT_SECRET
     jwt_issuer: str = "medicalbox.outoftokens.ai"
     jwt_audience: str = "com.medicalbox.app"
     catalog_access_email_allowlist: str = ""
@@ -26,6 +29,7 @@ class Settings(BaseSettings):
 
     google_client_id: str | None = None
     apple_client_id: str = "com.medicalbox.app"
+    apple_sign_in_enabled: bool = False
     kakao_app_id: str | None = None
 
     data_go_kr_service_key: str | None = None
@@ -114,13 +118,23 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_deploy_secrets(self) -> "Settings":
-        if (
-            self.app_env == "production"
-            and self.app_role == "api"
-            and len(self.jwt_secret) < 32
+        if self.app_env != "production":
+            return self
+        if self.app_role in {"api", "catalog_sync"} and not self.database_url.startswith(
+            "postgresql+psycopg://"
         ):
             raise ValueError(
-                "JWT_SECRET must contain at least 32 characters outside local development."
+                "DATABASE_URL must use PostgreSQL for production API and catalog sync roles."
+            )
+        if self.app_role != "api":
+            return self
+        if len(self.jwt_secret) < 32 or self.jwt_secret in {
+            DEVELOPMENT_JWT_SECRET,
+            EXAMPLE_JWT_SECRET,
+        }:
+            raise ValueError(
+                "JWT_SECRET must be a non-placeholder secret containing at least "
+                "32 characters for the production API."
             )
         return self
 
@@ -142,6 +156,19 @@ class Settings(BaseSettings):
             source.strip()
             for source in self.catalog_sync_source_allowlist.split(",")
             if source.strip()
+        )
+
+    @property
+    def apple_account_revocation_configured(self) -> bool:
+        private_key = self.apple_sign_in_private_key_base64
+        return bool(
+            self.apple_client_id.strip()
+            and self.apple_team_id
+            and self.apple_team_id.strip()
+            and self.apple_sign_in_key_id
+            and self.apple_sign_in_key_id.strip()
+            and private_key is not None
+            and private_key.get_secret_value().strip()
         )
 
 

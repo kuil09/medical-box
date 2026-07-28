@@ -160,7 +160,7 @@ class DrugDetail(DrugSummary):
     appearance: str | None
     image_url: str | None
     identification: DrugAppearanceInfo | None
-    identification_variants: list[DrugAppearanceInfo]
+    identification_variants: list[DrugAppearanceInfo] = Field(max_length=20)
     safety_overview: DrugSafetyOverview
     ingredients: list[str]
     status_events: list[DrugStatusEventInfo] = Field(max_length=20)

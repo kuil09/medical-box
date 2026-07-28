@@ -26,7 +26,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Verify path classifier
-        run: .github/scripts/test-classify-ci-changes.sh
+        run: |
+          .github/scripts/test-classify-ci-changes.sh
+          .github/scripts/test-cleanup-mobile-signing-material.sh
       - id: paths
         name: Classify changed paths
         env:
@@ -45,7 +47,7 @@ jobs:
               echo "mobile=true"
             } >> "${GITHUB_OUTPUT}"
           else
-            git diff --name-only "${BASE_SHA}" "${HEAD_SHA}" |
+            git diff --no-renames --name-only "${BASE_SHA}" "${HEAD_SHA}" |
               .github/scripts/classify-ci-changes.sh >> "${GITHUB_OUTPUT}"
           fi
 
@@ -142,6 +144,7 @@ jobs:
       - run: flutter analyze
       - run: flutter test
       - run: flutter build apk --debug
+      - run: bash tool/verify_android_notification_manifest.sh
       - name: Verify Android release signing fails closed
         run: |
           set -euo pipefail

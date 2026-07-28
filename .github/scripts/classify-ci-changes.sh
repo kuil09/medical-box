@@ -18,11 +18,23 @@ while IFS= read -r path; do
   [[ -z "${path}" ]] && continue
 
   case "${path}" in
-    .github/workflows/* | .github/scripts/*)
+    .github/workflows/ci.yml | .github/scripts/*)
+      enable_all
+      ;;
+    .github/workflows/mobile-release-build.yml)
+      mobile=true
+      backend=true
+      ;;
+    .github/workflows/production-monitor.yml | \
+      .github/workflows/production-backup-restore.yml)
+      backend=true
+      ;;
+    .github/workflows/*)
       enable_all
       ;;
     .railway/* | package.json | package-lock.json)
       infrastructure=true
+      backend=true
       ;;
     services/backend/*)
       backend=true

@@ -60,16 +60,22 @@ def _android_payload(
 
 def test_valid_release_metadata_passes() -> None:
     assert (
-        validate_apple_app_site_association(_apple_payload())
+        validate_apple_app_site_association(
+            _apple_payload(),
+            f"{TEAM_ID}.com.medicalbox.app",
+        )
         == f"{TEAM_ID}.com.medicalbox.app"
     )
-    assert validate_android_asset_links(_android_payload()) == [FINGERPRINT]
+    assert validate_android_asset_links(_android_payload(), [FINGERPRINT]) == [
+        FINGERPRINT
+    ]
 
 
 def test_unconfigured_apple_app_id_fails_closed() -> None:
     with pytest.raises(MetadataValidationError, match="UNCONFIGURED"):
         validate_apple_app_site_association(
-            _apple_payload("UNCONFIGURED.com.medicalbox.app")
+            _apple_payload("UNCONFIGURED.com.medicalbox.app"),
+            f"{TEAM_ID}.com.medicalbox.app",
         )
 
 
@@ -78,12 +84,15 @@ def test_wildcard_apple_app_links_fail_closed() -> None:
     payload["applinks"]["details"][0]["paths"] = ["*"]
 
     with pytest.raises(MetadataValidationError, match="exact supported /app routes"):
-        validate_apple_app_site_association(payload)
+        validate_apple_app_site_association(
+            payload,
+            f"{TEAM_ID}.com.medicalbox.app",
+        )
 
 
 def test_empty_android_fingerprint_list_fails_closed() -> None:
     with pytest.raises(MetadataValidationError, match="must not be empty"):
-        validate_android_asset_links(_android_payload([]))
+        validate_android_asset_links(_android_payload([]), [FINGERPRINT])
 
 
 @pytest.mark.parametrize(
@@ -96,7 +105,51 @@ def test_empty_android_fingerprint_list_fails_closed() -> None:
 )
 def test_invalid_android_fingerprint_fails_closed(fingerprint: str) -> None:
     with pytest.raises(MetadataValidationError, match="colon-separated"):
-        validate_android_asset_links(_android_payload([fingerprint]))
+        validate_android_asset_links(_android_payload([fingerprint]), [FINGERPRINT])
+
+
+def test_well_formed_but_unexpected_apple_app_id_fails_closed() -> None:
+    with pytest.raises(MetadataValidationError, match="exactly match"):
+        validate_apple_app_site_association(
+            _apple_payload("ZZZZZZZZZZ.com.medicalbox.app"),
+            f"{TEAM_ID}.com.medicalbox.app",
+        )
+
+
+def test_well_formed_but_unexpected_android_fingerprint_fails_closed() -> None:
+    unexpected = ":".join(["AA"] * 32)
+
+    with pytest.raises(MetadataValidationError, match="exactly match"):
+        validate_android_asset_links(
+            _android_payload([unexpected]),
+            [FINGERPRINT],
+        )
+
+
+def test_additional_android_fingerprint_fails_exact_match() -> None:
+    unexpected = ":".join(["AA"] * 32)
+
+    with pytest.raises(MetadataValidationError, match="exactly match"):
+        validate_android_asset_links(
+            _android_payload([FINGERPRINT, unexpected]),
+            [FINGERPRINT],
+        )
+
+
+def test_additional_medical_box_apple_app_id_fails_exact_match() -> None:
+    payload = _apple_payload()
+    payload["applinks"]["details"].append(
+        {
+            "appID": "ZZZZZZZZZZ.com.medicalbox.app",
+            "paths": APP_LINK_PATHS,
+        }
+    )
+
+    with pytest.raises(MetadataValidationError, match="exactly match"):
+        validate_apple_app_site_association(
+            payload,
+            f"{TEAM_ID}.com.medicalbox.app",
+        )
 
 
 def test_cli_validates_downloaded_files(tmp_path: Path) -> None:
@@ -112,6 +165,10 @@ def test_cli_validates_downloaded_files(tmp_path: Path) -> None:
             str(apple_path),
             "--android",
             str(android_path),
+            "--expected-apple-app-id",
+            f"{TEAM_ID}.com.medicalbox.app",
+            "--expected-android-fingerprint",
+            FINGERPRINT,
         ],
         check=False,
         capture_output=True,
@@ -121,3 +178,38 @@ def test_cli_validates_downloaded_files(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert "release_metadata_verification=passed" in result.stdout
     assert "android_fingerprint_count=1" in result.stdout
+
+
+def test_production_monitor_is_manual_and_exact_only() -> None:
+    workflow = (
+        Path(__file__).parents[3]
+        / ".github"
+        / "workflows"
+        / "production-monitor.yml"
+    ).read_text()
+    availability, manual_gate = workflow.split(
+        "      - name: Verify exact release metadata\n",
+        maxsplit=1,
+    )
+
+    assert "--location" not in workflow
+    assert "expected_apple_app_id:" in workflow
+    assert "expected_android_fingerprint:" in workflow
+    assert workflow.count("required: true") == 2
+    assert "application/json" in availability
+    assert "schedule:" not in workflow
+    assert "workflow_dispatch:" in workflow
+    assert "vars.EXPECTED_APPLE_APP_ID" not in workflow
+    assert "vars.EXPECTED_ANDROID_FINGERPRINT" not in workflow
+    assert "\n    if:" not in availability
+    assert (
+        "EXPECTED_APPLE_APP_ID: ${{ inputs.expected_apple_app_id }}"
+        in manual_gate
+    )
+    assert (
+        "EXPECTED_ANDROID_FINGERPRINT: "
+        "${{ inputs.expected_android_fingerprint }}"
+        in manual_gate
+    )
+    assert "--expected-apple-app-id" in manual_gate
+    assert "--expected-android-fingerprint" in manual_gate

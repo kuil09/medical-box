@@ -137,18 +137,15 @@ class PouchScreen extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
-    final database = ref.read(databaseProvider);
-    await database.transaction(() async {
-      await (database.delete(
-        database.inventoryContainers,
-      )..where((table) => table.id.equals(pouch.id))).go();
-      final memberId = pouch.ownerMemberId;
-      if (memberId != null) {
-        await (database.delete(
-          database.memberProfiles,
-        )..where((table) => table.id.equals(memberId))).go();
+    try {
+      await ref.read(localDataLifecycleProvider).deleteMemberPouch(pouch.id);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('구성원과 파우치 삭제를 마치지 못했어요. 다시 시도해 주세요.')),
+        );
       }
-    });
+    }
   }
 
   @override

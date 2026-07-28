@@ -5,11 +5,12 @@ from decimal import Decimal
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 from sqlalchemy import inspect, select
 
 from medical_box_api.config import Settings, get_settings
 from medical_box_api.db import SessionLocal, engine
+from medical_box_api.main import app
 from medical_box_api.models import (
     DrugCode,
     DrugConsumerInfo,
@@ -25,6 +26,10 @@ from medical_box_api.models import (
     SyncRun,
     TermsAcceptance,
     User,
+)
+from medical_box_api.providers import (
+    VerifiedProviderIdentity,
+    get_provider_validator,
 )
 from medical_box_api.security import create_reauth_grant
 
@@ -53,21 +58,72 @@ def test_railway_postgres_url_uses_psycopg_v3() -> None:
     assert settings.database_url.startswith("postgresql+psycopg://")
 
 
-def test_production_catalog_worker_does_not_require_api_jwt_secret() -> None:
+def test_production_catalog_worker_requires_postgres_but_not_api_jwt_secret() -> None:
     worker_settings = Settings(
         _env_file=None,
         app_env="production",
         app_role="catalog_sync",
+        database_url="postgresql://catalog:catalog@postgres/medical_box",
     )
     assert worker_settings.app_role == "catalog_sync"
+
+    with pytest.raises(ValidationError, match="DATABASE_URL"):
+        Settings(
+            _env_file=None,
+            app_env="production",
+            app_role="catalog_sync",
+            database_url="sqlite+pysqlite:///./catalog.db",
+        )
 
     with pytest.raises(ValidationError, match="JWT_SECRET"):
         Settings(
             _env_file=None,
             app_env="production",
             app_role="api",
+            database_url="postgresql://user:password@postgres/medical_box",
             jwt_secret="short",
         )
+
+
+@pytest.mark.parametrize(
+    "jwt_secret",
+    [
+        "development-only-secret-change-before-deploy",
+        "replace-with-at-least-32-random-characters",
+    ],
+)
+def test_production_api_rejects_public_jwt_placeholders(jwt_secret: str) -> None:
+    with pytest.raises(ValidationError, match="non-placeholder"):
+        Settings(
+            _env_file=None,
+            app_env="production",
+            app_role="api",
+            database_url="postgresql://user:password@postgres/medical_box",
+            jwt_secret=jwt_secret,
+        )
+
+
+def test_production_api_requires_postgresql() -> None:
+    with pytest.raises(ValidationError, match="DATABASE_URL"):
+        Settings(
+            _env_file=None,
+            app_env="production",
+            app_role="api",
+            database_url="sqlite+pysqlite:///./production.db",
+            jwt_secret="a-production-only-secret-that-is-long-enough",
+        )
+
+
+def test_production_api_accepts_explicit_postgresql_and_jwt_secret() -> None:
+    settings = Settings(
+        _env_file=None,
+        app_env="production",
+        app_role="api",
+        database_url="postgresql://user:password@postgres/medical_box",
+        jwt_secret="a-production-only-secret-that-is-long-enough",
+    )
+
+    assert settings.database_url.startswith("postgresql+psycopg://")
 
 
 def test_web_health_and_security_headers(client: TestClient) -> None:
@@ -75,6 +131,11 @@ def test_web_health_and_security_headers(client: TestClient) -> None:
         response = client.get(path)
         assert response.status_code == 200
         assert "우리집 구급키트" in response.text
+    account_deletion = client.get("/account-deletion")
+    assert "설정 → 로그인 및 검색 권한 → 서버 계정 삭제" in account_deletion.text
+    privacy = client.get("/privacy")
+    assert "검색어 또는 공개 품목기준코드(itemSeq)" in privacy.text
+    assert "기기 안의 재고 정보와 결합하거나 영구 저장하지 않습니다." in privacy.text
     live = client.get("/api/health/live")
     ready = client.get("/api/health/ready")
     assert live.json() == {"status": "ok"}
@@ -153,9 +214,7 @@ def test_auth_exchange_rejects_stale_terms_without_creating_account(
     )
 
     assert response.status_code == 409
-    assert response.json()["detail"] == (
-        "The current terms must be accepted before sign-in."
-    )
+    assert response.json()["detail"] == ("The current terms must be accepted before sign-in.")
     with SessionLocal() as db:
         assert db.scalar(select(User)) is None
         assert db.scalar(select(TermsAcceptance)) is None
@@ -170,6 +229,115 @@ def test_valid_auth_exchange_records_current_terms_acceptance(
         acceptance = db.scalar(select(TermsAcceptance))
         assert acceptance is not None
         assert acceptance.version == "2026-07-25"
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    [
+        "apple_client_id",
+        "apple_team_id",
+        "apple_sign_in_key_id",
+        "apple_sign_in_private_key_base64",
+    ],
+)
+def test_apple_revocation_configuration_requires_every_value(
+    missing_field: str,
+) -> None:
+    values: dict[str, object] = {
+        "apple_client_id": "com.medicalbox.app",
+        "apple_team_id": "TESTTEAM01",
+        "apple_sign_in_key_id": "TESTKEY01",
+        "apple_sign_in_private_key_base64": "dGVzdC1wcml2YXRlLWtleQ==",
+    }
+    values[missing_field] = ""
+
+    settings = Settings(_env_file=None, **values)
+
+    assert not settings.apple_account_revocation_configured
+
+
+def test_apple_exchange_requires_explicit_lifecycle_activation(
+    client: TestClient,
+) -> None:
+    settings = get_settings()
+    previous_enabled = settings.apple_sign_in_enabled
+    try:
+        settings.apple_sign_in_enabled = False
+        response = client.post(
+            "/api/v1/auth/exchange/apple",
+            json={
+                "providerToken": "valid-apple-token",
+                "termsVersion": "2026-07-25",
+                "termsAccepted": True,
+            },
+        )
+    finally:
+        settings.apple_sign_in_enabled = previous_enabled
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "Apple sign-in is unavailable until account deletion is configured."
+    )
+    with SessionLocal() as db:
+        assert db.scalar(select(User)) is None
+        assert db.scalar(select(TermsAcceptance)) is None
+
+
+def test_apple_exchange_requires_complete_account_revocation_configuration(
+    client: TestClient,
+) -> None:
+    settings = get_settings()
+    previous_team_id = settings.apple_team_id
+    previous_key_id = settings.apple_sign_in_key_id
+    previous_private_key = settings.apple_sign_in_private_key_base64
+    try:
+        settings.apple_sign_in_key_id = None
+        response = client.post(
+            "/api/v1/auth/exchange/apple",
+            json={
+                "providerToken": "valid-apple-token",
+                "termsVersion": "2026-07-25",
+                "termsAccepted": True,
+            },
+        )
+    finally:
+        settings.apple_team_id = previous_team_id
+        settings.apple_sign_in_key_id = previous_key_id
+        settings.apple_sign_in_private_key_base64 = previous_private_key
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "Apple sign-in is unavailable until account deletion is configured."
+    )
+    with SessionLocal() as db:
+        assert db.scalar(select(User)) is None
+        assert db.scalar(select(TermsAcceptance)) is None
+
+
+def test_apple_exchange_rejects_invalid_revocation_key_before_account_creation(
+    client: TestClient,
+) -> None:
+    settings = get_settings()
+    previous_private_key = settings.apple_sign_in_private_key_base64
+    try:
+        settings.apple_sign_in_private_key_base64 = SecretStr("sensitive-invalid-apple-private-key")
+        response = client.post(
+            "/api/v1/auth/exchange/apple",
+            json={
+                "providerToken": "valid-apple-token",
+                "termsVersion": "2026-07-25",
+                "termsAccepted": True,
+            },
+        )
+    finally:
+        settings.apple_sign_in_private_key_base64 = previous_private_key
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Apple account revocation key is invalid."
+    assert "sensitive-invalid-apple-private-key" not in response.text
+    with SessionLocal() as db:
+        assert db.scalar(select(User)) is None
+        assert db.scalar(select(TermsAcceptance)) is None
 
 
 def test_auth_refresh_profile_reauth_and_delete(client: TestClient) -> None:
@@ -214,6 +382,79 @@ def test_auth_refresh_profile_reauth_and_delete(client: TestClient) -> None:
     )
     assert deleted.status_code == 204
     assert client.get("/api/v1/me", headers=fresh_headers).status_code == 401
+
+
+def test_logout_with_rotated_token_revokes_active_refresh_family(
+    client: TestClient,
+) -> None:
+    session = create_account(client)
+    original_refresh = session["refreshToken"]
+    rotated = client.post(
+        "/api/v1/auth/refresh",
+        json={"refreshToken": original_refresh},
+    )
+    assert rotated.status_code == 200
+
+    logged_out = client.post(
+        "/api/v1/auth/logout",
+        json={"refreshToken": original_refresh},
+    )
+    assert logged_out.status_code == 204
+
+    replacement_refresh = rotated.json()["refreshToken"]
+    rejected = client.post(
+        "/api/v1/auth/refresh",
+        json={"refreshToken": replacement_refresh},
+    )
+    assert rejected.status_code == 401
+
+
+@pytest.mark.parametrize(
+    ("issued_age", "authentication_age"),
+    [
+        (timedelta(minutes=6), None),
+        (timedelta(), timedelta(minutes=6)),
+    ],
+)
+def test_reauth_rejects_stale_provider_proof_but_exchange_accepts_it(
+    client: TestClient,
+    issued_age: timedelta,
+    authentication_age: timedelta | None,
+) -> None:
+    now = datetime.now(UTC)
+    issued_at = now - issued_age
+    authenticated_at = None if authentication_age is None else now - authentication_age
+
+    class StaleProviderValidator:
+        def validate(
+            self,
+            provider: str,
+            token: str,
+        ) -> VerifiedProviderIdentity:
+            del token
+            return VerifiedProviderIdentity(
+                subject=f"{provider}-subject",
+                email=f"{provider}@example.com",
+                display_name="Test User",
+                issued_at=issued_at,
+                authenticated_at=authenticated_at,
+            )
+
+    previous_override = app.dependency_overrides[get_provider_validator]
+    app.dependency_overrides[get_provider_validator] = StaleProviderValidator
+    try:
+        session = create_account(client)
+        headers = {"Authorization": f"Bearer {session['accessToken']}"}
+        reauth = client.post(
+            "/api/v1/auth/reauth/google",
+            headers=headers,
+            json={"providerToken": "stale-google-token"},
+        )
+    finally:
+        app.dependency_overrides[get_provider_validator] = previous_override
+
+    assert reauth.status_code == 401
+    assert reauth.json()["detail"] == ("A recent provider proof is required for reauthentication.")
 
 
 def test_delete_rejects_apple_code_for_google_and_preserves_account(
@@ -342,9 +583,7 @@ def test_apple_revocation_success_deletes_account(
     )
 
     assert deleted.status_code == 204
-    assert apple_revoker.calls == [
-        ("apple-subject", "one-time-authorization-code")
-    ]
+    assert apple_revoker.calls == [("apple-subject", "one-time-authorization-code")]
     assert client.get("/api/v1/me", headers=headers).status_code == 401
 
 
@@ -360,6 +599,100 @@ def test_verified_allowlisted_email_receives_catalog_access(client: TestClient) 
     assert session["account"]["permissions"] == ["catalog:read"]
     headers = {"Authorization": f"Bearer {session['accessToken']}"}
     assert client.get("/api/v1/catalog/meta", headers=headers).status_code == 200
+
+
+def test_unverified_allowlisted_email_does_not_receive_catalog_access(
+    client: TestClient,
+) -> None:
+    class UnverifiedProviderValidator:
+        def validate(
+            self,
+            provider: str,
+            token: str,
+        ) -> VerifiedProviderIdentity:
+            del token
+            return VerifiedProviderIdentity(
+                subject=f"{provider}-subject",
+                email=f"{provider}@example.com",
+                display_name="Test User",
+                email_verified=False,
+                issued_at=datetime.now(UTC),
+            )
+
+    settings = get_settings()
+    previous_allowlist = settings.catalog_access_email_allowlist
+    previous_override = app.dependency_overrides[get_provider_validator]
+    settings.catalog_access_email_allowlist = "GOOGLE@EXAMPLE.COM"
+    app.dependency_overrides[get_provider_validator] = UnverifiedProviderValidator
+    try:
+        session = create_account(client)
+    finally:
+        app.dependency_overrides[get_provider_validator] = previous_override
+        settings.catalog_access_email_allowlist = previous_allowlist
+
+    assert session["account"]["permissions"] == []
+    headers = {"Authorization": f"Bearer {session['accessToken']}"}
+    assert client.get("/api/v1/catalog/meta", headers=headers).status_code == 403
+
+
+def test_catalog_search_trims_and_escapes_like_wildcards(
+    client: TestClient,
+) -> None:
+    with SessionLocal() as db:
+        db.add_all(
+            [
+                DrugProduct(
+                    item_seq="literal-wildcard",
+                    item_name=r"Literal %_ marker",
+                    manufacturer=r"Maker \_%",
+                ),
+                DrugProduct(
+                    item_seq="ordinary-product",
+                    item_name="Ordinary medicine",
+                    manufacturer="Ordinary maker",
+                ),
+                SourceRecord(
+                    source_code="mfds_product",
+                    record_key="literal-wildcard",
+                    content_hash="literal-wildcard-hash",
+                    payload={},
+                    active=True,
+                    last_seen_run_id=uuid.uuid4(),
+                ),
+                SourceRecord(
+                    source_code="mfds_product",
+                    record_key="ordinary-product",
+                    content_hash="ordinary-product-hash",
+                    payload={},
+                    active=True,
+                    last_seen_run_id=uuid.uuid4(),
+                ),
+            ]
+        )
+        db.commit()
+
+    session = create_account(client)
+    headers = {"Authorization": f"Bearer {session['accessToken']}"}
+    with SessionLocal() as db:
+        user = db.get(User, uuid.UUID(session["account"]["id"]))
+        assert user is not None
+        user.catalog_read_enabled = True
+        db.commit()
+
+    whitespace = client.get(
+        "/api/v1/drugs/search",
+        params={"q": "  "},
+        headers=headers,
+    )
+    literal_wildcards = client.get(
+        "/api/v1/drugs/search",
+        params={"q": "  %_  "},
+        headers=headers,
+    )
+
+    assert whitespace.status_code == 400
+    assert literal_wildcards.status_code == 200
+    assert [item["itemSeq"] for item in literal_wildcards.json()["items"]] == ["literal-wildcard"]
 
 
 def test_catalog_search_and_detail(client: TestClient) -> None:
@@ -914,6 +1247,12 @@ def test_catalog_detail_projections_are_bounded_and_deterministic(
                     portal_url="https://example.test/codes",
                     enabled=True,
                 ),
+                SourceRegistry(
+                    code="mfds_pill",
+                    name="MFDS pill identification",
+                    portal_url="https://example.test/pills",
+                    enabled=True,
+                ),
                 SyncRun(
                     id=status_run_id,
                     source_code="mfds_recall",
@@ -999,6 +1338,25 @@ def test_catalog_detail_projections_are_bounded_and_deterministic(
                     source_record=code_record,
                 )
             )
+        for index in reversed(range(22)):
+            variant_record = SourceRecord(
+                source_code="mfds_pill",
+                record_key=f"variant-{index:02d}",
+                content_hash=f"variant-hash-{index:02d}",
+                payload={},
+                active=True,
+                last_seen_run_id=uuid.uuid4(),
+            )
+            db.add(variant_record)
+            db.add(
+                DrugIdentificationVariant(
+                    item_seq="bounded-product",
+                    source_code="mfds_pill",
+                    variant_key=f"variant-{index:02d}",
+                    shape="round",
+                    source_record=variant_record,
+                )
+            )
         db.commit()
 
     session = create_account(client)
@@ -1024,6 +1382,9 @@ def test_catalog_detail_projections_are_bounded_and_deterministic(
     assert len(detail["codes"]) == 20
     assert detail["codes"][0]["code"] == "code-21"
     assert detail["codes"][-1]["code"] == "code-02"
+    assert len(detail["identificationVariants"]) == 20
+    assert detail["identificationVariants"][0]["variantKey"] == "variant-00"
+    assert detail["identificationVariants"][-1]["variantKey"] == "variant-19"
 
     empty_response = client.get(
         "/api/v1/drugs/empty-projection-product",

@@ -37,7 +37,14 @@ def _list(value: object, location: str) -> list[Any]:
     return value
 
 
-def validate_apple_app_site_association(payload: object) -> str:
+def validate_apple_app_site_association(
+    payload: object,
+    expected_app_id: str,
+) -> str:
+    if not APPLE_APP_ID_PATTERN.fullmatch(expected_app_id):
+        raise MetadataValidationError(
+            f"Expected Apple appID must target {APPLE_BUNDLE_ID} with a valid team ID."
+        )
     root = _mapping(payload, "Apple metadata")
     applinks = _mapping(root.get("applinks"), "Apple applinks")
     details = _list(applinks.get("details"), "Apple applinks.details")
@@ -51,7 +58,7 @@ def validate_apple_app_site_association(payload: object) -> str:
         app_id = detail.get("appID")
         if isinstance(app_id, str):
             app_ids.append(app_id)
-            if APPLE_APP_ID_PATTERN.fullmatch(app_id):
+            if app_id == expected_app_id:
                 paths = _list(
                     detail.get("paths"),
                     f"Apple applinks.details[{index}].paths",
@@ -65,14 +72,34 @@ def validate_apple_app_site_association(payload: object) -> str:
     if any(app_id.startswith("UNCONFIGURED.") for app_id in app_ids):
         raise MetadataValidationError("Apple appID is still UNCONFIGURED.")
 
-    if not matching_app_ids:
+    medical_box_app_ids = [
+        app_id for app_id in app_ids if APPLE_APP_ID_PATTERN.fullmatch(app_id)
+    ]
+    if medical_box_app_ids != [expected_app_id] or not matching_app_ids:
         raise MetadataValidationError(
-            f"Apple metadata has no configured appID for {APPLE_BUNDLE_ID}."
+            f"Apple metadata appID must exactly match {expected_app_id}."
         )
-    return matching_app_ids[0]
+    return expected_app_id
 
 
-def validate_android_asset_links(payload: object) -> list[str]:
+def validate_android_asset_links(
+    payload: object,
+    expected_fingerprints: list[str],
+) -> list[str]:
+    normalized_expected = {
+        fingerprint.upper() for fingerprint in expected_fingerprints
+    }
+    if not normalized_expected:
+        raise MetadataValidationError(
+            "At least one expected Android certificate fingerprint is required."
+        )
+    if any(
+        not ANDROID_SHA256_PATTERN.fullmatch(fingerprint)
+        for fingerprint in normalized_expected
+    ):
+        raise MetadataValidationError(
+            "Expected Android certificate fingerprints must be colon-separated SHA-256 values."
+        )
     statements = _list(payload, "Android metadata")
     matching_fingerprints: list[str] = []
 
@@ -114,7 +141,12 @@ def validate_android_asset_links(payload: object) -> list[str]:
         raise MetadataValidationError(
             f"Android metadata has no verified link target for {ANDROID_PACKAGE_NAME}."
         )
-    return matching_fingerprints
+    actual_fingerprints = set(matching_fingerprints)
+    if actual_fingerprints != normalized_expected:
+        raise MetadataValidationError(
+            "Android certificate fingerprints do not exactly match the expected values."
+        )
+    return sorted(actual_fingerprints)
 
 
 def load_json(path: Path) -> object:
@@ -128,14 +160,26 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--apple", required=True, type=Path)
     parser.add_argument("--android", required=True, type=Path)
+    parser.add_argument("--expected-apple-app-id", required=True)
+    parser.add_argument(
+        "--expected-android-fingerprint",
+        required=True,
+        action="append",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     try:
-        app_id = validate_apple_app_site_association(load_json(args.apple))
-        fingerprints = validate_android_asset_links(load_json(args.android))
+        app_id = validate_apple_app_site_association(
+            load_json(args.apple),
+            args.expected_apple_app_id,
+        )
+        fingerprints = validate_android_asset_links(
+            load_json(args.android),
+            args.expected_android_fingerprint,
+        )
     except (OSError, json.JSONDecodeError, MetadataValidationError) as error:
         print(f"release_metadata_verification=failed: {error}", file=sys.stderr)
         return 1

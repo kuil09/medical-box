@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers.dart';
+import '../../services/local_data_lifecycle.dart';
 import '../../theme.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -99,10 +100,30 @@ class SettingsScreen extends ConsumerWidget {
     if (bytes == null) return;
     try {
       await ref.read(localDataLifecycleProvider).importExport(bytes, password);
+      ref.invalidate(appSettingsProvider);
+      final importedSettings = await ref.read(databaseProvider).getSettings();
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('암호화 백업을 이 기기에 가져왔어요.')));
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('암호화 백업을 이 기기에 가져왔어요.')),
+        );
+        if (!importedSettings.onboardingCompleted) {
+          context.go('/onboarding');
+        }
+      }
+    } on LocalDataImportPartialFailure {
+      ref.invalidate(appSettingsProvider);
+      final importedSettings = await ref.read(databaseProvider).getSettings();
+      if (context.mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('백업 데이터는 가져왔지만 알림 재예약을 마치지 못했어요. 알림을 다시 확인해 주세요.'),
+          ),
+        );
+        if (!importedSettings.onboardingCompleted) {
+          context.go('/onboarding');
+        }
       }
     } catch (_) {
       if (context.mounted) {
@@ -119,7 +140,9 @@ class SettingsScreen extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: const Text('기기 데이터를 삭제할까요?'),
         content: const Text(
-          '가족·보유약·수량·방문 준비·알림을 이 기기에서 삭제해요. 서버 계정은 삭제되지 않아요.',
+          '가족·보유약·수량·방문 준비·알림과 앱이 만든 임시 백업을 이 기기에서 삭제해요. '
+          '저장하거나 공유한 .medicalbox 복사본은 앱에서 지울 수 없으므로 별도로 삭제해야 해요. '
+          '서버 계정은 삭제되지 않아요.',
         ),
         actions: [
           TextButton(
@@ -134,11 +157,22 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
     if (confirmed != true) return;
-    await ref.read(localDataLifecycleProvider).deleteAllLocalData();
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('기기 데이터를 삭제했어요. 서버 계정은 그대로예요.')),
-      );
+    try {
+      await ref.read(localDataLifecycleProvider).deleteAllLocalData();
+      ref.invalidate(appSettingsProvider);
+      if (context.mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        context.go('/onboarding');
+        messenger.showSnackBar(
+          const SnackBar(content: Text('기기 데이터를 삭제했어요. 서버 계정은 그대로예요.')),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('기기 데이터 삭제를 마치지 못했어요. 다시 시도해 주세요.')),
+        );
+      }
     }
   }
 
@@ -254,7 +288,7 @@ class SettingsScreen extends ConsumerWidget {
                 color: MedicalBoxColors.orange,
               ),
               title: const Text('이 기기의 모든 데이터 삭제'),
-              subtitle: const Text('서버 계정과는 별도로 처리'),
+              subtitle: const Text('앱 임시 백업 포함 · 외부 저장/공유 복사본은 별도 삭제'),
               onTap: () => _deleteLocalData(context, ref),
             ),
           ),

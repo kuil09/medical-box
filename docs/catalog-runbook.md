@@ -256,7 +256,10 @@ date when supplied, and the catalog observation timestamp. Missing rows are
 returned as empty lists and must not be interpreted as evidence that no recall,
 supply interruption, or reimbursement record exists. The client presents these
 records as non-personalized reference information, and the server never receives
-or combines them with device-local household inventory.
+household member names, quantities, expiry dates, or local notes. When a user
+opens an official detail from a local inventory item, the client sends that
+product's public `itemSeq` to the authenticated catalog endpoint; the server
+does not persist or combine it with the remaining device-local inventory.
 
 ## Production promotion and retirement evidence
 
@@ -343,7 +346,14 @@ endpoint used only for the controlled one-off command.
 
 The checkpoint hash matches the downloaded official file:
 `8f177ced6a93fefa439535125aeb4f626e9d386fa5700271094ca26bdcb50ff0`.
-The approved-source cron is deployed and runs at `18:10 UTC`. Recall, supply
+The production catalog stub is deployed with a no-op start command. The
+reviewed but unapplied desired-state plan removes its remote `18:10 UTC` cron
+and points its source watch only to the intentionally absent
+`.railway/catalog-sync-activation` sentinel. Until that exact plan is approved
+and applied, the remote cron can still start the no-op command. A separate,
+explicitly approved change may restore catalog mutation only after the current
+1.2 GB reserve and recurring-run canary pass.
+Recall, supply
 interruption, and price remain excluded until their production API applications
 return authorized responses.
 

@@ -31,9 +31,26 @@ void main() {
 
     expect(text, contains('수량: 2정'));
     expect(text, contains('사용기한: 2027-03-05'));
-    expect(text, contains('/api/v1/drugs/200000001'));
+    expect(
+      text,
+      contains(
+        'https://nedrug.mfds.go.kr/pbp/CCBBB01/getItemDetail'
+        '?itemSeq=200000001',
+      ),
+    );
+    expect(text, isNot(contains('medicalbox.outoftokens.ai/api')));
     expect(text, isNot(contains('공식 외형:')));
     expect(text, isNot(contains('민감한 메모')));
+  });
+
+  test('official detail URL safely encodes an item sequence', () {
+    final url = officialMfdsDrugDetailUrl(' item / 1 ');
+
+    expect(
+      url,
+      'https://nedrug.mfds.go.kr/pbp/CCBBB01/getItemDetail'
+      '?itemSeq=item+%2F+1',
+    );
   });
 
   test('share text follows explicit field choices', () {

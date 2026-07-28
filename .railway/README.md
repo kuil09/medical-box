@@ -10,15 +10,15 @@ This directory defines the persistent Railway production graph for
 - `Postgres` stores account/authentication data and the promoted public
   medicine catalog.
 - `catalog-sync` remains a fail-closed production stub. Its declared start
-  command is a no-op until the capacity reserve and isolated recurring-run
-  canary both pass.
-- `production-backup` and `production-backups` are prepared, but must not be
-  created until the exact billable plan and backup-processing boundary are
-  approved.
-- The API, PostgreSQL, and dormant functions are placed in Railway's Singapore
+  command is a no-op and it has no cron until the capacity reserve and isolated
+  recurring-run canary both pass. Its only source watch is the intentionally
+  absent `.railway/catalog-sync-activation` sentinel, so ordinary backend and
+  IaC merges do not build the dormant function.
+- Backup worker, encryption, retention, and restore code are retained as a
+  future blueprint. The active Railway graph intentionally contains no backup
+  service, bucket, or `Operations` group because those resources can incur cost.
+- The API, PostgreSQL, and catalog stub are placed in Railway's Singapore
   region. Application services reach PostgreSQL over private networking.
-  Railway buckets use a public S3-compatible endpoint, so only encrypted
-  ciphertext leaves the backup worker.
 - The public host is `medicalbox.outoftokens.ai`; there is no separate API or
   staging host.
 - `.railway/railway.ts` is the sole Railway configuration model. Do not add a
@@ -37,7 +37,7 @@ tests and GitHub Actions are the pre-production validation boundary.
 
 ## Required externally managed variables
 
-The IaC definition uses `preserve()` for credentials, provider identifiers,
+The active IaC definition uses `preserve()` for credentials, provider identifiers,
 and access-control inputs so an apply cannot replace an existing value with an
 unresolved shared-variable reference. Confirmed public-source endpoints remain
 explicit literals.
@@ -51,6 +51,7 @@ explicit literals.
 | `DATA_GO_KR_SERVICE_KEY` | Encoded public-data portal service key |
 | `GOOGLE_CLIENT_ID` | Google OIDC client ID |
 | `KAKAO_APP_ID` | Kakao REST/OpenID Connect app ID |
+| `APPLE_SIGN_IN_ENABLED` | Server-side Apple exchange gate; keep unset or `false` until revocation configuration and deletion E2E are complete |
 | `APPLE_TEAM_ID` | Apple Developer team ID |
 | `APPLE_SIGN_IN_KEY_ID` | Sign in with Apple private-key identifier used only for account revocation |
 | `APPLE_SIGN_IN_PRIVATE_KEY_BASE64` | Base64-encoded Sign in with Apple `.p8` private key; store only as a secret |
@@ -59,7 +60,7 @@ explicit literals.
 | `MFDS_SHORTAGE_URL` | Confirmed official supply-interruption API endpoint |
 | `HIRA_PRICE_URL` | Confirmed official HIRA price endpoint |
 | `HIRA_STANDARD_CODE_URL` | Confirmed official HIRA standard-code file endpoint |
-| `AWS_ENDPOINT_URL` | Railway bucket endpoint for the backup worker |
+| `AWS_ENDPOINT_URL` | Future backup blueprint only: bucket endpoint |
 | `AWS_ACCESS_KEY_ID` | Railway credentials for the production backup bucket |
 | `AWS_SECRET_ACCESS_KEY` | Secret paired with the bucket access key |
 | `AWS_S3_BUCKET_NAME` | Railway identifier for `production-backups` |
@@ -76,9 +77,10 @@ redistribution terms before configuring or loading a source.
 
 1. Run the complete local and CI validation suites.
 2. Verify the CLI link resolves to production and run `railway config plan`,
-   or use the task-specific fail-closed plan guard when activating backups.
-3. Review the plan for only the explicitly approved resources. Reject any
-   deletion, database replacement, catalog activation, or unrelated update.
+   then run the fail-closed no-cost plan guard. The guard verifies the exact
+   catalog reserve and terms values as well as the service changes.
+3. Reject any backup resource creation, catalog scheduling, deletion, database
+   replacement, or unrelated update.
 4. Apply only after explicit approval of the exact plan.
 5. Verify `/api/health/ready`, authentication boundaries, catalog metadata,
    search, detail, and DUR responses.

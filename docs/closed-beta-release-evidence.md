@@ -25,11 +25,12 @@ than this public evidence record. The running API uses:
 - the production PostgreSQL service through Railway private networking.
 
 Railway IaC created the `catalog-sync` function and linked its public-data key
-to the existing API secret without printing it. A daily `18:10 UTC` trigger
-still exists, but the function start command is intentionally a no-op: no
-catalog refresh is scheduled to mutate production until the capacity reserve
-and isolated recurring-run canary pass. The corresponding deployment
-successfully built the dormant image.
+to the existing API secret without printing it. Its start command is
+intentionally a no-op. The desired graph now removes its cron entirely, so the
+stub will consume no scheduled runtime after the reviewed plan is applied.
+Until then, the remote cron can still start the no-op command; it cannot mutate
+the catalog while the capacity reserve and isolated recurring-run canary remain
+blocked.
 
 The following production paths returned HTTP 200:
 
@@ -126,6 +127,23 @@ finished. The family add and rename dialogs, plus the Settings password dialog,
 now use controller-free form state. The same add, top-tab navigation, and remove
 flow passed after rebuilding and reinstalling the application.
 
+The final no-cost integration build was also installed on a separate API 35
+tablet AVD so the previously retained Google session and phone QA data were not
+modified. Accessibility-tree evidence confirmed:
+
+- `/app/settings` could not bypass incomplete onboarding;
+- anonymous onboarding reached the shared-box home without login;
+- Settings remained a separate navigation destination;
+- denying notification permission and completing the add-reminder picker left
+  the reminder list empty;
+- Kakao and Google controls remained disabled until the current terms and
+  privacy confirmation was checked, then became enabled; and
+- Apple sign-in remained absent on Android.
+
+The first launch emitted the secure-storage package's one-time cipher migration
+warning. A process restart emitted no secure-storage warning and produced no
+app crash.
+
 ### Device-local data boundary
 
 A second Android run exercised both local-data families with non-identifying
@@ -148,17 +166,34 @@ production API boundary.
 
 ## Build and test evidence
 
+- Flutter formatting check: 41 files, no changes required.
 - Flutter analysis: passed with no issues.
-- Flutter unit and local-data tests: 11 passed.
+- Flutter unit, widget, local-data, auth-race, app-link, catalog-projection,
+  account-deletion, temporary-export cleanup, reminder compensation,
+  autocomplete ordering, and public-share-link tests: 68 passed.
 - Flutter golden tests: passed.
 - Android debug APK build: passed.
-- iOS release no-codesign build: passed.
+- Android notification merged-manifest verification: passed for notification
+  permission, scheduled receiver, boot receiver, boot-completed, and
+  package-replaced entries.
+- Android compile-only unsigned release AAB: passed, 69.7 MB.
+- iOS release no-codesign build: passed, 31.5 MB.
 - Backend Ruff: passed.
 - Backend MyPy strict mode: passed.
-- Backend Pytest: 38 passed.
-- Alembic upgrade to head: passed.
-- OpenAPI regeneration and committed-spec diff: passed.
+- Backend Pytest: 217 passed.
+- Alembic upgrade to `20260728_0005 (head)`: passed on an isolated database.
+- OpenAPI regeneration and committed-spec comparison: passed twice; SHA-256
+  `03933ae037207b72c1f15d10b2e207f17692ce69251a7bcd2ee40acae27ea8af`.
+- Local encrypted PostgreSQL backup/restore round trip: passed with one restored
+  product and verified cleanup.
 - Railway TypeScript IaC compilation: passed.
+- Railway plan guard and production-monitor tests: 11 passed.
+- CI path classifier: 7 scenarios passed.
+- Workflow YAML and production-monitor shell parsing: passed.
+- Product Design prototype runtime integrity: 28 protected files passed; the
+  514-module production build completed.
+- Repository credential scan: all tracked and non-ignored files checked, zero
+  prohibited credential files and zero high-confidence secret hits.
 - GitHub Actions run `30244655755`: all five jobs passed
   (`backend`, `flutter`, `flutter-ios`, `infrastructure`, and
   `product-design-prototype`).
@@ -181,17 +216,23 @@ Pull request 10 introduces fail-closed mobile release packaging:
   `MEDICAL_BOX_ALLOW_UNSIGNED_RELEASE=true`; it cannot produce a store-signed
   artifact.
 - A Flutter 3.44.7 unsigned release AAB compiled successfully and measured
-  66.8 MB. `keytool` confirmed that the compile-only artifact was not signed.
+  69.7 MB. `keytool` confirmed that the compile-only artifact was not signed.
 - An iOS release no-codesign build compiled successfully with Flutter 3.44.7 in
-  a non-File-Provider temporary checkout. The output was a 30.2 MB arm64
+  a non-File-Provider temporary checkout. The output was a 31.5 MB arm64
   `Runner.app`; `codesign` confirmed that it was intentionally unsigned.
 - Google and Kakao release identifiers are build-time values rather than
   committed secrets. Selecting Kakao login without a configured native app key
   now fails with an explicit configuration error.
-- The protected manual `Mobile release build` workflow validates all required
-  Android and iOS signing inputs, creates ephemeral signing material, verifies
-  the resulting AAB or IPA, uploads a seven-day artifact, and removes signing
-  material in an always-run cleanup step.
+- The protected manual `Mobile signed-build verification` workflow validates
+  all required Android and iOS signing inputs, creates ephemeral signing
+  material, and verifies the resulting AAB or IPA. It uploads no signed binary
+  as a GitHub Actions artifact and removes the complete platform build output
+  and signing material in an always-run cleanup step. The cleanup continues
+  after individual failures, verifies every target is absent, and fails closed
+  after all deletion attempts finish.
+- The public repository's Actions artifact inventory was empty, and the signed
+  verification workflow had no historical runs, so no older signed AAB or IPA
+  remained exposed when this boundary was hardened.
 - Korean Play Store and App Store metadata source files are committed under
   `store/metadata/ko-KR`. Medical claims are limited to organization,
   reference, renewal-readiness, and sharing functions. A support URL is used
@@ -312,22 +353,29 @@ from the scheduled allowlist. Production readiness remained HTTP 200 and an
 anonymous metadata request remained HTTP 401 after the load.
 
 A read-only query against production returned one installed `pg_trgm`
-extension. The final Railway IaC plan reported that production was already up
-to date, and the readiness endpoint returned HTTP 200.
+extension. The pre-no-cost-graph Railway IaC plan reported production up to
+date at that historical point, and the readiness endpoint returned HTTP 200.
+The later five-change no-cost plan described above remains unapplied.
 
 ## Production monitoring
 
 `.github/workflows/production-monitor.yml` probes the product, legal, support,
-health, well-known, authentication-boundary, HSTS, and `nosniff` behavior every
-four hours and on manual dispatch. It also parses the downloaded Apple and
-Android well-known JSON. The semantic gate rejects the placeholder Apple app
-ID, a missing application target, an empty Android certificate list, and a
-malformed SHA-256 fingerprint. This prevents HTTP 200 placeholder documents
-from being counted as release-ready metadata.
+health, well-known, authentication-boundary, HSTS, and `nosniff` behavior on
+manual dispatch. Well-known files must return a direct HTTP 200 with
+`application/json` and parse as valid JSON; redirects are rejected. Manual
+dispatch requires the exact expected Apple app ID and Play App Signing SHA-256
+fingerprint.
+
+The workflow is manual-only until the external Apple and Play identifiers
+exist. This allocates no scheduled runner and prevents an unconfigured skipped
+job from appearing as successful ownership evidence. After both identifiers
+are confirmed, a separate reviewed change may add a schedule together with
+fixed expected values only after one exact manual run passes.
 
 Manual run `30276771772` completed successfully after the original workflow was
 merged. Scheduled run `30281631480` then completed successfully for commit
 `cce7671dbe67a8b4342a7429c38e2c5aaebfee98`, independently proving the GitHub
 scheduler path. Those runs predate the semantic metadata gate. A new passing
-run must be recorded after `APPLE_TEAM_ID` and the Play App Signing
-`ANDROID_CERT_SHA256` are configured.
+run must be recorded after `APPLE_TEAM_ID`, the Play App Signing
+`ANDROID_CERT_SHA256`, and the two expected-identifier repository variables are
+configured.

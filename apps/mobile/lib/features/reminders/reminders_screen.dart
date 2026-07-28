@@ -1,12 +1,12 @@
-import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../data/local/app_database.dart';
 import '../../providers.dart';
+import '../../services/local_data_lifecycle.dart';
+import '../../services/reminder_scheduler.dart';
 import '../../theme.dart';
 
 class RemindersScreen extends ConsumerWidget {
@@ -28,7 +28,7 @@ class RemindersScreen extends ConsumerWidget {
       initialTime: const TimeOfDay(hour: 9, minute: 0),
       helpText: '알림 시간',
     );
-    if (time == null) return;
+    if (time == null || !context.mounted) return;
     final scheduled = DateTime(
       date.year,
       date.month,
@@ -36,15 +36,41 @@ class RemindersScreen extends ConsumerWidget {
       time.hour,
       time.minute,
     );
+    if (!scheduled.isAfter(DateTime.now())) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('현재보다 이후 시간을 선택해 주세요.')));
+      return;
+    }
     final id = const Uuid().v4();
-    await ref
-        .read(localDataLifecycleProvider)
-        .addReminder(
-          id: id,
-          kind: 'inventory_check',
-          scheduledAt: scheduled,
-          privateLabel: '보관함 확인',
+    try {
+      await ref
+          .read(localDataLifecycleProvider)
+          .addReminder(
+            id: id,
+            kind: 'inventory_check',
+            scheduledAt: scheduled,
+            privateLabel: '보관함 확인',
+          );
+    } on InvalidReminderTime {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('현재보다 이후 시간을 선택해 주세요.')));
+      }
+    } on ReminderSchedulingFailure {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('기기 알림을 예약하지 못했어요. 알림 권한을 확인해 주세요.')),
         );
+      }
+    } on ReminderNotificationPermissionDenied {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('알림 권한이 꺼져 있어요. 기기 설정에서 허용해 주세요.')),
+        );
+      }
+    }
   }
 
   @override
@@ -100,31 +126,40 @@ class RemindersScreen extends ConsumerWidget {
               Dismissible(
                 key: ValueKey(reminder.id),
                 direction: DismissDirection.endToStart,
-                confirmDismiss: (_) => showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('알림을 삭제할까요?'),
-                    content: const Text('예약된 기기 알림도 함께 취소해요.'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('취소'),
-                      ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('삭제'),
-                      ),
-                    ],
-                  ),
-                ),
-                onDismissed: (_) async {
-                  await ref
-                      .read(localDataLifecycleProvider)
-                      .cancel(reminder.id);
-                  final database = ref.read(databaseProvider);
-                  await (database.delete(
-                    database.reminders,
-                  )..where((row) => row.id.equals(reminder.id))).go();
+                confirmDismiss: (_) async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('알림을 삭제할까요?'),
+                      content: const Text('예약된 기기 알림도 함께 취소해요.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('취소'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('삭제'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed != true) return false;
+                  try {
+                    await ref
+                        .read(localDataLifecycleProvider)
+                        .deleteReminder(reminder.id);
+                    return true;
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('알림 삭제를 마치지 못했어요. 다시 시도해 주세요.'),
+                        ),
+                      );
+                    }
+                    return false;
+                  }
                 },
                 background: Container(
                   margin: const EdgeInsets.symmetric(vertical: 4),
@@ -157,23 +192,36 @@ class RemindersScreen extends ConsumerWidget {
                     ),
                     secondary: PhosphorIcon(PhosphorIconsDuotone.bellRinging),
                     onChanged: (enabled) async {
-                      final database = ref.read(databaseProvider);
-                      await (database.update(
-                        database.reminders,
-                      )..where((row) => row.id.equals(reminder.id))).write(
-                        RemindersCompanion(
-                          enabled: Value(enabled),
-                          updatedAt: Value(DateTime.now()),
-                        ),
-                      );
-                      if (enabled) {
+                      try {
                         await ref
                             .read(localDataLifecycleProvider)
-                            .schedule(reminder.copyWith(enabled: true));
-                      } else {
-                        await ref
-                            .read(localDataLifecycleProvider)
-                            .cancel(reminder.id);
+                            .setReminderEnabled(reminder.id, enabled);
+                      } on ReminderNotificationPermissionDenied {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('알림 권한이 꺼져 있어요. 기기 설정에서 허용해 주세요.'),
+                            ),
+                          );
+                        }
+                      } on InvalidReminderTime {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                '지난 알림은 다시 켤 수 없어요. 새 알림을 추가해 주세요.',
+                              ),
+                            ),
+                          );
+                        }
+                      } catch (_) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('알림 변경을 마치지 못했어요. 기존 상태를 유지해요.'),
+                            ),
+                          );
+                        }
                       }
                     },
                   ),

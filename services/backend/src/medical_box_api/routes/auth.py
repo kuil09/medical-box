@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from ..apple_account import validate_apple_revocation_configuration
 from ..config import Settings, get_settings
 from ..db import get_db
 from ..models import AuthIdentity, RefreshSession, TermsAcceptance, User
@@ -28,6 +29,9 @@ from ..security import (
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
+REAUTH_PROVIDER_PROOF_MAX_AGE = timedelta(minutes=5)
+REAUTH_PROVIDER_PROOF_CLOCK_SKEW = timedelta(seconds=30)
 
 
 def _profile(user: User) -> AccountProfile:
@@ -69,6 +73,57 @@ def _issue_session(
     )
 
 
+def _require_fresh_provider_proof(
+    issued_at: datetime | None,
+    authenticated_at: datetime | None,
+) -> None:
+    proof_time = authenticated_at or issued_at
+    if proof_time is None:
+        raise HTTPException(
+            status_code=401,
+            detail="A recent provider proof is required for reauthentication.",
+        )
+    if proof_time.tzinfo is None:
+        proof_time = proof_time.replace(tzinfo=UTC)
+    else:
+        proof_time = proof_time.astimezone(UTC)
+    now = datetime.now(UTC)
+    if (
+        proof_time > now + REAUTH_PROVIDER_PROOF_CLOCK_SKEW
+        or now - proof_time > REAUTH_PROVIDER_PROOF_MAX_AGE
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="A recent provider proof is required for reauthentication.",
+        )
+
+
+def _lock_refresh_family_for_token(
+    db: Session,
+    token_hash: str,
+) -> RefreshSession | None:
+    family_id = db.scalar(
+        select(RefreshSession.family_id).where(RefreshSession.token_hash == token_hash)
+    )
+    if family_id is None:
+        return None
+    family_anchor = db.scalar(
+        select(RefreshSession)
+        .where(RefreshSession.family_id == family_id)
+        .order_by(RefreshSession.created_at, RefreshSession.id)
+        .limit(1)
+        .with_for_update()
+    )
+    if family_anchor is None:
+        return None
+    return db.scalar(
+        select(RefreshSession)
+        .where(RefreshSession.token_hash == token_hash)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
 @router.post("/exchange/{provider}", response_model=AuthSession)
 def exchange_provider_token(
     provider: str,
@@ -83,6 +138,15 @@ def exchange_provider_token(
             status_code=409,
             detail="The current terms must be accepted before sign-in.",
         )
+    if provider == "apple" and (
+        not settings.apple_sign_in_enabled or not settings.apple_account_revocation_configured
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail="Apple sign-in is unavailable until account deletion is configured.",
+        )
+    if provider == "apple":
+        validate_apple_revocation_configuration(settings)
     verified = validator.validate(provider, payload.provider_token)
     identity = db.scalar(
         select(AuthIdentity).where(
@@ -106,6 +170,7 @@ def exchange_provider_token(
 
     if (
         verified.email is not None
+        and verified.email_verified
         and verified.email.casefold() in settings.catalog_access_email_allowlist_set
     ):
         user.catalog_read_enabled = True
@@ -131,14 +196,17 @@ def refresh_session(
     settings: Settings = Depends(get_settings),
 ) -> AuthSession:
     token_hash = hash_secret(payload.refresh_token)
-    current = db.scalar(select(RefreshSession).where(RefreshSession.token_hash == token_hash))
+    current = _lock_refresh_family_for_token(db, token_hash)
     if current is None:
         raise HTTPException(status_code=401, detail="Refresh token is invalid.")
     now = datetime.now(UTC)
     if current.revoked_at is not None:
         db.execute(
             update(RefreshSession)
-            .where(RefreshSession.family_id == current.family_id)
+            .where(
+                RefreshSession.family_id == current.family_id,
+                RefreshSession.revoked_at.is_(None),
+            )
             .values(revoked_at=now)
         )
         db.commit()
@@ -168,14 +236,21 @@ def refresh_session(
 
 @router.post("/logout", status_code=204)
 def logout(payload: LogoutRequest, db: Session = Depends(get_db)) -> None:
-    current = db.scalar(
-        select(RefreshSession).where(
-            RefreshSession.token_hash == hash_secret(payload.refresh_token)
-        )
+    current = _lock_refresh_family_for_token(
+        db,
+        hash_secret(payload.refresh_token),
     )
-    if current is not None and current.revoked_at is None:
-        current.revoked_at = datetime.now(UTC)
-        db.commit()
+    if current is None:
+        return
+    db.execute(
+        update(RefreshSession)
+        .where(
+            RefreshSession.family_id == current.family_id,
+            RefreshSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=datetime.now(UTC))
+    )
+    db.commit()
 
 
 @router.post("/reauth/{provider}", response_model=ReauthGrant)
@@ -189,6 +264,10 @@ def reauthenticate(
 ) -> ReauthGrant:
     provider = provider.lower()
     verified = validator.validate(provider, payload.provider_token)
+    _require_fresh_provider_proof(
+        verified.issued_at,
+        verified.authenticated_at,
+    )
     linked = db.scalar(
         select(AuthIdentity).where(
             AuthIdentity.user_id == user.id,

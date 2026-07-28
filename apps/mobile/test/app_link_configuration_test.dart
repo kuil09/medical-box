@@ -20,6 +20,34 @@ void main() {
     expect(appLinkRedirects, isNot(contains('/account-deletion')));
   });
 
+  test('local-data routes cannot bypass incomplete onboarding', () {
+    for (final path in [
+      '/',
+      '/inventory',
+      '/reminders',
+      '/settings',
+      '/app',
+      '/app/inventory',
+    ]) {
+      expect(
+        onboardingGuardRedirect(path: path, onboardingCompleted: false),
+        '/onboarding',
+      );
+    }
+    expect(
+      onboardingGuardRedirect(path: '/onboarding', onboardingCompleted: false),
+      isNull,
+    );
+    expect(
+      onboardingGuardRedirect(path: '/login', onboardingCompleted: false),
+      isNull,
+    );
+    expect(
+      onboardingGuardRedirect(path: '/inventory', onboardingCompleted: true),
+      isNull,
+    );
+  });
+
   test('Android verified-link paths match the Flutter route boundary', () {
     final manifest = File(
       'android/app/src/main/AndroidManifest.xml',

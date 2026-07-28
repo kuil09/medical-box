@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -39,21 +40,44 @@ class AccountProfile {
   bool get canReadCatalog => permissions.contains('catalog:read');
 }
 
+class AccountDeletionResult {
+  const AccountDeletionResult({
+    required this.provider,
+    required this.providerCleanupCompleted,
+    required this.localSessionCleanupCompleted,
+  });
+
+  final LoginProvider provider;
+  final bool providerCleanupCompleted;
+  final bool localSessionCleanupCompleted;
+
+  bool get requiresProviderCleanupAttention => !providerCleanupCompleted;
+  bool get requiresLocalSessionCleanupAttention =>
+      !localSessionCleanupCompleted;
+}
+
 class AuthRepository {
   AuthRepository(
     this._api,
     this._keyStore, {
     TargetPlatform? targetPlatform,
     SocialAuthGateway? socialAuthGateway,
+    bool? appleSignInEnabled,
   }) : _socialAuthGateway =
            socialAuthGateway ??
-           SdkSocialAuthGateway(targetPlatform: targetPlatform);
+           SdkSocialAuthGateway(
+             targetPlatform: targetPlatform,
+             appleSignInEnabled: appleSignInEnabled,
+           );
 
   final ApiClient _api;
   final DatabaseKeyStore _keyStore;
   final SocialAuthGateway _socialAuthGateway;
   AccountProfile? _account;
   Future<String?>? _refreshInFlight;
+  int? _refreshInFlightEpoch;
+  Future<void> _sessionMutationTail = Future<void>.value();
+  int _sessionEpoch = 0;
 
   AccountProfile? get account => _account;
 
@@ -64,20 +88,25 @@ class AuthRepository {
   Future<String?> accessToken() => _keyStore.readToken('access');
 
   Future<String?> refreshAccessToken() {
+    final epoch = _sessionEpoch;
     final inFlight = _refreshInFlight;
-    if (inFlight != null) return inFlight;
-    final operation = _refreshAccessTokenOnce();
+    if (inFlight != null && _refreshInFlightEpoch == epoch) return inFlight;
+    late final Future<String?> operation;
+    operation = _refreshAccessTokenOnce(epoch).whenComplete(() {
+      if (identical(_refreshInFlight, operation)) {
+        _refreshInFlight = null;
+        _refreshInFlightEpoch = null;
+      }
+    });
     _refreshInFlight = operation;
+    _refreshInFlightEpoch = epoch;
     return operation;
   }
 
-  Future<String?> _refreshAccessTokenOnce() async {
-    try {
-      await _refresh();
-      return _keyStore.readToken('access');
-    } finally {
-      _refreshInFlight = null;
-    }
+  Future<String?> _refreshAccessTokenOnce(int epoch) async {
+    final refreshed = await _refresh(epoch);
+    if (!refreshed || epoch != _sessionEpoch) return null;
+    return _keyStore.readToken('access');
   }
 
   Future<AccountProfile> signIn(
@@ -87,6 +116,10 @@ class AuthRepository {
     if (!termsAccepted) {
       throw StateError('The current terms must be accepted before sign-in.');
     }
+    if (_account != null) {
+      throw StateError('Sign out before signing in with another account.');
+    }
+    final epoch = ++_sessionEpoch;
     final proof = await _socialAuthGateway.authenticate(
       provider,
       forceReauthentication: false,
@@ -106,21 +139,29 @@ class AuthRepository {
     if (accessToken is! String || refreshToken is! String || account is! Map) {
       throw const FormatException('Invalid authentication response.');
     }
-    await _keyStore.writeToken('access', accessToken);
-    await _keyStore.writeToken('refresh', refreshToken);
-    _account = AccountProfile.fromJson(account.cast<String, dynamic>());
-    return _account!;
+    final profile = AccountProfile.fromJson(account.cast<String, dynamic>());
+    final committed = await _commitSession(
+      epoch: epoch,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      account: profile,
+    );
+    if (!committed) {
+      throw StateError('The sign-in operation was superseded.');
+    }
+    return profile;
   }
 
   Future<void> restore() async {
+    final epoch = _sessionEpoch;
     final accessToken = await _keyStore.readToken('access');
-    if (accessToken == null) return;
+    if (accessToken == null || epoch != _sessionEpoch) return;
     try {
       final profile = await _api.getJson('/v1/me', accessToken: accessToken);
-      _account = AccountProfile.fromJson(profile);
+      await _setAccountIfCurrent(epoch, AccountProfile.fromJson(profile));
     } on ApiException catch (error) {
       if (error.statusCode == 401) {
-        await _refresh();
+        await _refresh(epoch);
       } else {
         rethrow;
       }
@@ -130,6 +171,8 @@ class AuthRepository {
   Future<void> signOut() async {
     final linkedProviders = _linkedProviders();
     final refreshToken = await _keyStore.readToken('refresh');
+    final epoch = ++_sessionEpoch;
+    await _clearSessionIfCurrent(epoch);
     if (refreshToken != null) {
       try {
         await _api.postJson(
@@ -147,11 +190,9 @@ class AuthRepository {
         // Provider logout is best-effort and must never become an unlink.
       }
     }
-    await _keyStore.clearTokens();
-    _account = null;
   }
 
-  Future<void> deleteAccount(LoginProvider provider) async {
+  Future<AccountDeletionResult> deleteAccount(LoginProvider provider) async {
     final accessToken = await _requiredAccessToken();
     final proof = await _socialAuthGateway.authenticate(
       provider,
@@ -171,10 +212,6 @@ class AuthRepository {
     if (grant is! String) {
       throw const FormatException('Missing reauthentication grant.');
     }
-    if (provider != LoginProvider.apple) {
-      // Keep the server account recoverable when provider cleanup fails.
-      await _socialAuthGateway.disconnect(provider);
-    }
     await _api.deleteJson(
       '/v1/me',
       accessToken: accessToken,
@@ -184,13 +221,33 @@ class AuthRepository {
           'appleAuthorizationCode': authorizationCode,
       },
     );
-    await _keyStore.clearTokens();
-    _account = null;
+    final epoch = ++_sessionEpoch;
+    var localSessionCleanupCompleted = true;
+    try {
+      await _clearSessionIfCurrent(epoch);
+    } catch (_) {
+      localSessionCleanupCompleted = false;
+      _account = null;
+    }
+
+    var providerCleanupCompleted = true;
+    if (provider != LoginProvider.apple) {
+      try {
+        await _socialAuthGateway.disconnect(provider);
+      } catch (_) {
+        providerCleanupCompleted = false;
+      }
+    }
+    return AccountDeletionResult(
+      provider: provider,
+      providerCleanupCompleted: providerCleanupCompleted,
+      localSessionCleanupCompleted: localSessionCleanupCompleted,
+    );
   }
 
-  Future<void> _refresh() async {
+  Future<bool> _refresh(int epoch) async {
     final refreshToken = await _keyStore.readToken('refresh');
-    if (refreshToken == null) return;
+    if (refreshToken == null || epoch != _sessionEpoch) return false;
     late final Map<String, dynamic> response;
     try {
       response = await _api.postJson(
@@ -199,8 +256,7 @@ class AuthRepository {
       );
     } on ApiException catch (error) {
       if (error.statusCode == 401) {
-        await _keyStore.clearTokens();
-        _account = null;
+        await _clearSessionIfCurrent(epoch);
       }
       rethrow;
     }
@@ -210,15 +266,76 @@ class AuthRepository {
     if (accessToken is! String || replacement is! String || account is! Map) {
       throw const FormatException('Invalid refresh response.');
     }
-    await _keyStore.writeToken('access', accessToken);
-    await _keyStore.writeToken('refresh', replacement);
-    _account = AccountProfile.fromJson(account.cast<String, dynamic>());
+    return _commitSession(
+      epoch: epoch,
+      accessToken: accessToken,
+      refreshToken: replacement,
+      account: AccountProfile.fromJson(account.cast<String, dynamic>()),
+    );
   }
 
   Future<String> _requiredAccessToken() async {
     final token = await _keyStore.readToken('access');
     if (token == null) throw StateError('No authenticated session.');
     return token;
+  }
+
+  Future<bool> _commitSession({
+    required int epoch,
+    required String accessToken,
+    required String refreshToken,
+    required AccountProfile account,
+  }) {
+    return _serializeSessionMutation(() async {
+      if (epoch != _sessionEpoch) return false;
+      try {
+        await _keyStore.writeToken('access', accessToken);
+        if (epoch != _sessionEpoch) {
+          await _keyStore.clearTokens();
+          return false;
+        }
+        await _keyStore.writeToken('refresh', refreshToken);
+        if (epoch != _sessionEpoch) {
+          await _keyStore.clearTokens();
+          return false;
+        }
+      } catch (_) {
+        await _keyStore.clearTokens();
+        if (epoch == _sessionEpoch) _account = null;
+        rethrow;
+      }
+      _account = account;
+      return true;
+    });
+  }
+
+  Future<bool> _setAccountIfCurrent(int epoch, AccountProfile account) {
+    return _serializeSessionMutation(() async {
+      if (epoch != _sessionEpoch) return false;
+      _account = account;
+      return true;
+    });
+  }
+
+  Future<bool> _clearSessionIfCurrent(int epoch) {
+    return _serializeSessionMutation(() async {
+      if (epoch != _sessionEpoch) return false;
+      await _keyStore.clearTokens();
+      if (epoch == _sessionEpoch) _account = null;
+      return true;
+    });
+  }
+
+  Future<T> _serializeSessionMutation<T>(Future<T> Function() operation) {
+    final completer = Completer<T>();
+    _sessionMutationTail = _sessionMutationTail.then((_) async {
+      try {
+        completer.complete(await operation());
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future;
   }
 
   Set<LoginProvider> _linkedProviders() {

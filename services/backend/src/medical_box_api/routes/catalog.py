@@ -57,6 +57,7 @@ STATUS_EVENT_TYPES = ("recall", "suspension", "shortage")
 STATUS_EVENT_LIMIT = 20
 PRICE_LIMIT = 5
 CODE_LIMIT = 20
+IDENTIFICATION_VARIANT_LIMIT = 20
 
 
 def _encode_cursor(name: str, item_seq: str) -> str:
@@ -87,6 +88,10 @@ def _decode_rule_cursor(value: str) -> int:
         return rule_id
     except (ValueError, UnicodeDecodeError) as exc:
         raise HTTPException(status_code=400, detail="Cursor is invalid.") from exc
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _payload_string(payload: dict[str, object], *keys: str) -> str | None:
@@ -279,15 +284,21 @@ def search_drugs(
     limit: int = Query(default=20, ge=1, le=50),
     db: Session = Depends(get_db),
 ) -> CursorPage[DrugSummary]:
-    pattern = f"%{q.strip()}%"
+    normalized_query = q.strip()
+    if len(normalized_query) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="Search query must contain at least two non-whitespace characters.",
+        )
+    pattern = f"%{_escape_like(normalized_query)}%"
     statement = (
         select(DrugProduct)
         .where(
             _active_product_exists(),
             or_(
-                DrugProduct.item_name.ilike(pattern),
-                DrugProduct.manufacturer.ilike(pattern),
-                DrugProduct.item_seq == q.strip(),
+                DrugProduct.item_name.ilike(pattern, escape="\\"),
+                DrugProduct.manufacturer.ilike(pattern, escape="\\"),
+                DrugProduct.item_seq == normalized_query,
             ),
         )
         .order_by(DrugProduct.item_name, DrugProduct.item_seq)
@@ -381,7 +392,12 @@ def get_drug(
     identification_variants = db.scalars(
         select(DrugIdentificationVariant)
         .where(DrugIdentificationVariant.item_seq == item_seq)
-        .order_by(DrugIdentificationVariant.variant_key)
+        .order_by(
+            DrugIdentificationVariant.variant_key,
+            DrugIdentificationVariant.source_code,
+            DrugIdentificationVariant.id,
+        )
+        .limit(IDENTIFICATION_VARIANT_LIMIT)
     ).all()
     safety_counts = db.execute(
         select(DurRule.rule_type, func.count(DurRule.id))

@@ -1,10 +1,10 @@
-name: Mobile release build
+name: Mobile signed-build verification
 
 on:
   workflow_dispatch:
     inputs:
       platform:
-        description: Platform artifact to build
+        description: Platform signed build to verify
         required: true
         type: choice
         default: both
@@ -32,7 +32,9 @@ concurrency:
 
 jobs:
   android:
-    if: inputs.platform == 'android' || inputs.platform == 'both'
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (inputs.platform == 'android' || inputs.platform == 'both')
     runs-on: ubuntu-latest
     environment: closed-beta
     defaults:
@@ -152,23 +154,18 @@ jobs:
           fi
           printf '\nVerified SHA-256: %s\n' "${actual_fingerprint}" \
             >> build/app/outputs/bundle/release/signing-certificate.txt
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: medical-box-android-${{ inputs.build_number }}
-          path: |
-            apps/mobile/build/app/outputs/bundle/release/app-release.aab
-            apps/mobile/build/app/outputs/bundle/release/signing-certificate.txt
-          if-no-files-found: error
-          retention-days: 7
-      - name: Remove Android signing material
+      - name: Remove Android signed output and signing material
         if: always()
-        run: |
-          rm -f android/key.properties android/upload-keystore.jks
+        run: ../../.github/scripts/cleanup-mobile-signing-material.sh android
 
   ios:
-    if: inputs.platform == 'ios' || inputs.platform == 'both'
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (inputs.platform == 'ios' || inputs.platform == 'both')
     runs-on: macos-latest
     environment: closed-beta
+    env:
+      APPLE_SIGN_IN_ENABLED: ${{ vars.APPLE_SIGN_IN_ENABLED == 'true' && vars.APPLE_ACCOUNT_REVOCATION_READY == 'true' && 'true' || 'false' }}
     defaults:
       run:
         working-directory: apps/mobile
@@ -203,10 +200,19 @@ jobs:
           GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
           GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
           KAKAO_NATIVE_APP_KEY: ${{ secrets.KAKAO_NATIVE_APP_KEY }}
+          REQUESTED_APPLE_SIGN_IN: ${{ vars.APPLE_SIGN_IN_ENABLED }}
+          APPLE_ACCOUNT_REVOCATION_READY: ${{ vars.APPLE_ACCOUNT_REVOCATION_READY }}
         run: |
           set -euo pipefail
           [[ "${BUILD_NAME}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           [[ "${BUILD_NUMBER}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${APPLE_SIGN_IN_ENABLED}" == "true" ||
+            "${APPLE_SIGN_IN_ENABLED}" == "false" ]]
+          if [[ "${REQUESTED_APPLE_SIGN_IN}" == "true" &&
+            "${APPLE_ACCOUNT_REVOCATION_READY}" != "true" ]]; then
+            echo "::error title=Apple account lifecycle is not ready::Set APPLE_ACCOUNT_REVOCATION_READY only after production revocation configuration and deletion E2E pass."
+            exit 1
+          fi
           required=(
             APPLE_DISTRIBUTION_CERTIFICATE_BASE64
             APPLE_CERTIFICATE_PASSWORD
@@ -261,6 +267,10 @@ jobs:
             "${keychain}"
           security list-keychains -d user -s "${keychain}"
           profile_uuid="$(security cms -D -i "${profile}" | plutil -extract UUID raw -)"
+          if [[ ! "${profile_uuid}" =~ ^[A-Fa-f0-9-]{36}$ ]]; then
+            echo "::error title=Invalid provisioning profile::The profile UUID is malformed."
+            exit 1
+          fi
           profile_dir="${HOME}/Library/MobileDevice/Provisioning Profiles"
           mkdir -p "${profile_dir}"
           cp "${profile}" "${profile_dir}/${profile_uuid}.mobileprovision"
@@ -293,7 +303,8 @@ jobs:
             --export-options-plist="${RUNNER_TEMP}/ExportOptions.plist" \
             --dart-define="GOOGLE_SERVER_CLIENT_ID=${GOOGLE_SERVER_CLIENT_ID}" \
             --dart-define="GOOGLE_IOS_CLIENT_ID=${GOOGLE_IOS_CLIENT_ID}" \
-            --dart-define="KAKAO_NATIVE_APP_KEY=${KAKAO_NATIVE_APP_KEY}"
+            --dart-define="KAKAO_NATIVE_APP_KEY=${KAKAO_NATIVE_APP_KEY}" \
+            --dart-define="APPLE_SIGN_IN_ENABLED=${APPLE_SIGN_IN_ENABLED}"
       - name: Verify iOS archive signature
         env:
           GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
@@ -314,30 +325,6 @@ jobs:
             echo "::error title=Unexpected Google callback scheme::The archived app does not match GOOGLE_IOS_CLIENT_ID."
             exit 1
           fi
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: medical-box-ios-${{ inputs.build_number }}
-          path: |
-            apps/mobile/build/ios/ipa/*.ipa
-            apps/mobile/build/ios/archive/Runner.xcarchive/medical-box-entitlements.plist
-          if-no-files-found: error
-          retention-days: 7
-      - name: Remove Apple signing material
+      - name: Remove iOS signed output and signing material
         if: always()
-        env:
-          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
-        run: |
-          keychain="${RUNNER_TEMP}/medical-box.keychain-db"
-          if [[ -f "${RUNNER_TEMP}/profile-uuid" ]]; then
-            profile_uuid="$(cat "${RUNNER_TEMP}/profile-uuid")"
-            rm -f "${HOME}/Library/MobileDevice/Provisioning Profiles/${profile_uuid}.mobileprovision"
-          fi
-          rm -f \
-            "${RUNNER_TEMP}/distribution.p12" \
-            "${RUNNER_TEMP}/profile.mobileprovision" \
-            "${RUNNER_TEMP}/ExportOptions.plist" \
-            "${RUNNER_TEMP}/profile-uuid" \
-            ios/Flutter/ReleaseSecrets.xcconfig
-          if security show-keychain-info "${keychain}" > /dev/null 2>&1; then
-            security delete-keychain "${keychain}"
-          fi
+        run: ../../.github/scripts/cleanup-mobile-signing-material.sh ios
