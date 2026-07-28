@@ -119,6 +119,8 @@ docker run --rm \
   --user "$(id -u):$(id -g)" \
   --network "${network_name}" \
   --volume "${work_directory}/store:/backups" \
+  --env HOME=/tmp \
+  --env UV_CACHE_DIR=/tmp/uv-cache \
   --env APP_ENV=test \
   --env APP_ROLE=backup \
   --env "DATABASE_URL=postgresql+psycopg://postgres:${database_password}@${source_name}:5432/medical_box" \
@@ -143,6 +145,8 @@ docker run --rm \
   --user "$(id -u):$(id -g)" \
   --network "${network_name}" \
   --volume "${work_directory}/store:/backups:ro" \
+  --env HOME=/tmp \
+  --env UV_CACHE_DIR=/tmp/uv-cache \
   --env APP_ENV=test \
   --env APP_ROLE=backup_verify \
   --env "DATABASE_URL=postgresql+psycopg://postgres:${database_password}@${source_name}:5432/medical_box" \
