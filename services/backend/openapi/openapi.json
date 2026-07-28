@@ -98,14 +98,20 @@
             "title": "Providertoken",
             "type": "string"
           },
+          "termsAccepted": {
+            "const": true,
+            "title": "Termsaccepted",
+            "type": "boolean"
+          },
           "termsVersion": {
-            "default": "2026-07-25",
             "title": "Termsversion",
             "type": "string"
           }
         },
         "required": [
-          "providerToken"
+          "providerToken",
+          "termsVersion",
+          "termsAccepted"
         ],
         "title": "AuthExchangeRequest",
         "type": "object"
@@ -1688,6 +1694,111 @@
         "summary": "Update Me",
         "tags": [
           "account"
+        ]
+      }
+    },
+    "/app": {
+      "get": {
+        "operationId": "app_link_fallback_app_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "App Link Fallback",
+        "tags": [
+          "web"
+        ]
+      }
+    },
+    "/app/inventory": {
+      "get": {
+        "operationId": "app_link_fallback_app_inventory_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "App Link Fallback",
+        "tags": [
+          "web"
+        ]
+      }
+    },
+    "/app/login": {
+      "get": {
+        "operationId": "app_link_fallback_app_login_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "App Link Fallback",
+        "tags": [
+          "web"
+        ]
+      }
+    },
+    "/app/reminders": {
+      "get": {
+        "operationId": "app_link_fallback_app_reminders_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "App Link Fallback",
+        "tags": [
+          "web"
+        ]
+      }
+    },
+    "/app/settings": {
+      "get": {
+        "operationId": "app_link_fallback_app_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "App Link Fallback",
+        "tags": [
+          "web"
         ]
       }
     },

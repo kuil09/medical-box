@@ -51,7 +51,7 @@ void main() {
     );
 
     await expectLater(
-      repository.signIn(LoginProvider.apple),
+      repository.signIn(LoginProvider.apple, termsAccepted: true),
       throwsA(
         isA<UnsupportedError>().having(
           (error) => error.message,
@@ -70,6 +70,17 @@ void main() {
     expect(find.text('Apple로 계속'), findsNothing);
     expect(find.text('Google로 계속'), findsOneWidget);
     expect(find.text('카카오로 계속'), findsOneWidget);
+    final googleButton = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Google로 계속'),
+    );
+    expect(googleButton.onPressed, isNull);
+
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+    final enabledGoogleButton = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Google로 계속'),
+    );
+    expect(enabledGoogleButton.onPressed, isNotNull);
   });
 
   testWidgets('iOS continues to offer Apple sign-in', (tester) async {

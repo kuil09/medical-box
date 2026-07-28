@@ -10,6 +10,13 @@ from typing import Any
 APPLE_BUNDLE_ID = "com.medicalbox.app"
 ANDROID_PACKAGE_NAME = "com.medicalbox.app"
 ANDROID_HANDLE_ALL_URLS = "delegate_permission/common.handle_all_urls"
+APPLE_APP_LINK_PATHS = (
+    "/app",
+    "/app/inventory",
+    "/app/reminders",
+    "/app/settings",
+    "/app/login",
+)
 APPLE_APP_ID_PATTERN = re.compile(r"^[A-Z0-9]{10}\.com\.medicalbox\.app$")
 ANDROID_SHA256_PATTERN = re.compile(r"^(?:[0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2}$")
 
@@ -38,18 +45,26 @@ def validate_apple_app_site_association(payload: object) -> str:
         raise MetadataValidationError("Apple applinks.details must not be empty.")
 
     app_ids: list[str] = []
+    matching_app_ids: list[str] = []
     for index, detail_value in enumerate(details):
         detail = _mapping(detail_value, f"Apple applinks.details[{index}]")
         app_id = detail.get("appID")
         if isinstance(app_id, str):
             app_ids.append(app_id)
+            if APPLE_APP_ID_PATTERN.fullmatch(app_id):
+                paths = _list(
+                    detail.get("paths"),
+                    f"Apple applinks.details[{index}].paths",
+                )
+                if paths != list(APPLE_APP_LINK_PATHS):
+                    raise MetadataValidationError(
+                        "Apple app-link paths must be the exact supported /app routes."
+                    )
+                matching_app_ids.append(app_id)
 
     if any(app_id.startswith("UNCONFIGURED.") for app_id in app_ids):
         raise MetadataValidationError("Apple appID is still UNCONFIGURED.")
 
-    matching_app_ids = [
-        app_id for app_id in app_ids if APPLE_APP_ID_PATTERN.fullmatch(app_id)
-    ]
     if not matching_app_ids:
         raise MetadataValidationError(
             f"Apple metadata has no configured appID for {APPLE_BUNDLE_ID}."

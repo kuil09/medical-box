@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,7 +22,8 @@ class ProviderIdentity(ApiModel):
 
 class AuthExchangeRequest(ApiModel):
     provider_token: str = Field(min_length=8)
-    terms_version: str = "2026-07-25"
+    terms_version: str
+    terms_accepted: Literal[True]
     device_label: str | None = Field(default=None, max_length=120)
 
 

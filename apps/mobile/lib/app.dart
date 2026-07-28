@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'app_links.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/inventory/edit_inventory_item_screen.dart';
@@ -71,6 +72,11 @@ class _MedicalBoxAppState extends ConsumerState<MedicalBoxApp> {
         builder: (context, state) => const RenewalScreen(),
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      for (final entry in appLinkRedirects.entries)
+        GoRoute(
+          path: entry.key,
+          redirect: (context, state) => entry.value,
+        ),
     ],
   );
 

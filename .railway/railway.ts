@@ -81,6 +81,7 @@ export default defineRailway((ctx) => {
     DATA_GO_KR_SERVICE_KEY: preserve(),
     PUBLIC_ORIGIN: publicOrigin,
     SUPPORT_EMAIL: preserve(),
+    TERMS_VERSION: "2026-07-25",
     ALLOWED_HOSTS: allowedHosts,
     JWT_ISSUER: "https://medicalbox.outoftokens.ai",
     JWT_AUDIENCE: "com.medicalbox.app",

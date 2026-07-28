@@ -70,6 +70,7 @@ def run_probe(config: ProbeConfig) -> None:
                 json={
                     "providerToken": config.provider_token,
                     "termsVersion": "2026-07-25",
+                    "termsAccepted": True,
                     "deviceLabel": "deployment-probe",
                 },
             ),

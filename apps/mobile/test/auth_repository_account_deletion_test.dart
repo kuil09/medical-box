@@ -9,6 +9,37 @@ import 'package:medical_box/data/auth/social_auth_gateway.dart';
 import 'package:medical_box/data/local/database_key_store.dart';
 
 void main() {
+  test('sign-in requires explicit current terms acceptance', () async {
+    final harness = _TestHarness();
+
+    await expectLater(
+      harness.repository.signIn(
+        LoginProvider.google,
+        termsAccepted: false,
+      ),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(harness.events, isEmpty);
+    expect(harness.exchangeBodies, isEmpty);
+    expect(harness.keyStore.tokens, isEmpty);
+  });
+
+  test('sign-in submits the exact accepted terms version', () async {
+    final harness = _TestHarness();
+
+    await harness.repository.signIn(
+      LoginProvider.google,
+      termsAccepted: true,
+    );
+
+    expect(harness.exchangeBodies.single, containsPair('termsAccepted', true));
+    expect(
+      harness.exchangeBodies.single,
+      containsPair('termsVersion', currentTermsVersion),
+    );
+  });
+
   for (final provider in [LoginProvider.google, LoginProvider.kakao]) {
     test(
       '${provider.apiName} deletion reauthenticates, disconnects, then deletes',
@@ -141,7 +172,10 @@ void main() {
       serverLogoutFailure: true,
       logoutFailureFor: LoginProvider.kakao,
     );
-    await harness.repository.signIn(LoginProvider.kakao);
+    await harness.repository.signIn(
+      LoginProvider.kakao,
+      termsAccepted: true,
+    );
     harness.events.clear();
 
     await harness.repository.signOut();
@@ -199,6 +233,7 @@ class _TestHarness {
 
   final events = <String>[];
   final deleteBodies = <Map<String, dynamic>>[];
+  final exchangeBodies = <Map<String, dynamic>>[];
   final LoginProvider? disconnectFailureFor;
   final LoginProvider? logoutFailureFor;
   final bool serverReauthFailure;
@@ -250,6 +285,9 @@ class _TestHarness {
     if (request.method == 'POST' && path.contains('/auth/exchange/')) {
       final provider = path.split('/').last;
       events.add('server:$provider:exchange');
+      exchangeBodies.add(
+        (jsonDecode(request.body) as Map).cast<String, dynamic>(),
+      );
       return http.Response(
         jsonEncode({
           'accessToken': 'signed-in-access',

@@ -7,6 +7,13 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from ..config import Settings, get_settings
 
 router = APIRouter(tags=["web"])
+APP_LINK_PATHS = (
+    "/app",
+    "/app/inventory",
+    "/app/reminders",
+    "/app/settings",
+    "/app/login",
+)
 
 
 def page(title: str, content: str) -> HTMLResponse:
@@ -95,9 +102,10 @@ def privacy() -> HTMLResponse:
 
 
 @router.get("/terms", response_class=HTMLResponse)
-def terms() -> HTMLResponse:
+def terms(settings: Settings = Depends(get_settings)) -> HTMLResponse:
     return page(
         "이용약관",
+        f"<p>시행일: {escape(settings.terms_version)}</p>"
         "<p>서비스의 의약품 정보는 공식 공공데이터를 정리한 참고 정보입니다.</p>"
         "<p>의료적 판단, 진단, 처방, 복용량 결정 또는 대체약 선택에 사용해서는 안 됩니다.</p>",
     )
@@ -133,6 +141,19 @@ def account_deletion(settings: Settings = Depends(get_settings)) -> HTMLResponse
     )
 
 
+@router.get("/app", response_class=HTMLResponse)
+@router.get("/app/inventory", response_class=HTMLResponse)
+@router.get("/app/reminders", response_class=HTMLResponse)
+@router.get("/app/settings", response_class=HTMLResponse)
+@router.get("/app/login", response_class=HTMLResponse)
+def app_link_fallback() -> HTMLResponse:
+    return page(
+        "앱에서 열기",
+        "<p>우리집 구급키트 앱이 설치되어 있으면 이 링크가 앱의 해당 화면을 엽니다.</p>"
+        "<p>앱이 열리지 않으면 홈 화면에서 직접 원하는 메뉴를 선택해 주세요.</p>",
+    )
+
+
 @router.get("/.well-known/apple-app-site-association")
 def apple_app_site_association(
     settings: Settings = Depends(get_settings),
@@ -142,7 +163,14 @@ def apple_app_site_association(
         if settings.apple_team_id
         else "UNCONFIGURED.com.medicalbox.app"
     )
-    return JSONResponse({"applinks": {"apps": [], "details": [{"appID": app_id, "paths": ["*"]}]}})
+    return JSONResponse(
+        {
+            "applinks": {
+                "apps": [],
+                "details": [{"appID": app_id, "paths": list(APP_LINK_PATHS)}],
+            }
+        }
+    )
 
 
 @router.get("/.well-known/assetlinks.json")
