@@ -1,4 +1,6 @@
 import uuid
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 from fastapi import HTTPException
@@ -9,11 +11,14 @@ from sqlalchemy import inspect, select
 from medical_box_api.config import Settings, get_settings
 from medical_box_api.db import SessionLocal, engine
 from medical_box_api.models import (
+    DrugCode,
     DrugConsumerInfo,
     DrugIdentification,
     DrugIdentificationVariant,
     DrugIngredient,
+    DrugPrice,
     DrugProduct,
+    DrugStatusEvent,
     DurRule,
     SourceRecord,
     SourceRegistry,
@@ -393,6 +398,11 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
         pregnancy_run_id = uuid.uuid4()
         concomitant_run_id = uuid.uuid4()
         failed_run_id = uuid.uuid4()
+        failed_status_run_id = uuid.uuid4()
+        recall_run_id = uuid.uuid4()
+        price_run_id = uuid.uuid4()
+        code_run_id = uuid.uuid4()
+        catalog_seen_at = datetime(2026, 7, 26, 3, 10, tzinfo=UTC)
         pregnancy_source_record = SourceRecord(
             source_code="mfds_dur_product_pregnancy",
             record_key="pregnancy-1",
@@ -426,6 +436,58 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             payload={"TYPE_NAME": "노인주의"},
             last_seen_run_id=failed_run_id,
         )
+        recall_source_record = SourceRecord(
+            source_code="mfds_recall",
+            record_key="recall-1",
+            content_hash="recall-hash",
+            payload={
+                "RTRVL_RESN": "품질 기준 확인을 위한 공식 회수",
+                "UPDATE_DATE": "20260726",
+            },
+            active=True,
+            last_seen_run_id=recall_run_id,
+            last_seen_at=catalog_seen_at,
+        )
+        inactive_recall_source_record = SourceRecord(
+            source_code="mfds_recall",
+            record_key="recall-inactive",
+            content_hash="inactive-recall-hash",
+            payload={"RTRVL_RESN": "이전 전체 동기화에서 사라진 이력"},
+            active=False,
+            last_seen_run_id=recall_run_id,
+            last_seen_at=catalog_seen_at,
+        )
+        failed_recall_source_record = SourceRecord(
+            source_code="mfds_recall",
+            record_key="recall-failed",
+            content_hash="failed-recall-hash",
+            payload={"RTRVL_RESN": "완료되지 않은 동기화의 이력"},
+            active=True,
+            last_seen_run_id=failed_status_run_id,
+            last_seen_at=catalog_seen_at,
+        )
+        price_source_record = SourceRecord(
+            source_code="hira_price",
+            record_key="price-1",
+            content_hash="price-hash",
+            payload={"applyDt": "20260701", "UPDATE_DATE": "20260702"},
+            active=True,
+            last_seen_run_id=price_run_id,
+            last_seen_at=catalog_seen_at,
+        )
+        code_source_record = SourceRecord(
+            source_code="hira_standard_code",
+            record_key="8801234567890",
+            content_hash="code-hash",
+            payload={
+                "표준코드": "8801234567890",
+                "제품코드(개정후)": "645700010",
+                "UPDATE_DATE": "20260703",
+            },
+            active=True,
+            last_seen_run_id=code_run_id,
+            last_seen_at=catalog_seen_at,
+        )
         db.add_all(
             [
                 product_source_record,
@@ -433,6 +495,11 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
                 pregnancy_source_record,
                 concomitant_source_record,
                 failed_source_record,
+                recall_source_record,
+                inactive_recall_source_record,
+                failed_recall_source_record,
+                price_source_record,
+                code_source_record,
                 SyncRun(
                     id=pregnancy_run_id,
                     source_code="mfds_dur_product_pregnancy",
@@ -447,6 +514,28 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
                     id=failed_run_id,
                     source_code="mfds_dur_product_elderly",
                     status="failed",
+                ),
+                SyncRun(
+                    id=recall_run_id,
+                    source_code="mfds_recall",
+                    status="succeeded",
+                    started_at=datetime(2026, 7, 26, 3, 0, tzinfo=UTC),
+                ),
+                SyncRun(
+                    id=failed_status_run_id,
+                    source_code="mfds_recall",
+                    status="failed",
+                    started_at=datetime(2026, 7, 25, 3, 0, tzinfo=UTC),
+                ),
+                SyncRun(
+                    id=price_run_id,
+                    source_code="hira_price",
+                    status="succeeded",
+                ),
+                SyncRun(
+                    id=code_run_id,
+                    source_code="hira_standard_code",
+                    status="succeeded",
                 ),
             ]
         )
@@ -474,14 +563,40 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
                 image_url="https://example.test/official-pill.jpg",
             )
         )
-        db.add(
-            SourceRegistry(
-                code="mfds_product",
-                name="MFDS pharmaceutical product authorization",
-                portal_url="https://www.data.go.kr/data/15095677/openapi.do",
-                license_name="Public data",
-                enabled=True,
-            )
+        db.add_all(
+            [
+                SourceRegistry(
+                    code="mfds_product",
+                    name="MFDS pharmaceutical product authorization",
+                    portal_url="https://www.data.go.kr/data/15095677/openapi.do",
+                    license_name="Public data",
+                    enabled=True,
+                ),
+                SourceRegistry(
+                    code="mfds_recall",
+                    name="MFDS recall and sale suspension",
+                    portal_url="https://www.data.go.kr/data/15059114/openapi.do",
+                    license_name="Public data",
+                    attribution="Source: Ministry of Food and Drug Safety",
+                    enabled=True,
+                ),
+                SourceRegistry(
+                    code="hira_price",
+                    name="HIRA drug reimbursement price",
+                    portal_url="https://www.data.go.kr/data/15054445/openapi.do",
+                    license_name="Korea Open Government License Type 1",
+                    attribution=("Source: Health Insurance Review & Assessment Service"),
+                    enabled=True,
+                ),
+                SourceRegistry(
+                    code="hira_standard_code",
+                    name="HIRA medicine standard code",
+                    portal_url="https://www.data.go.kr/data/15067462/fileData.do",
+                    license_name="Korea Open Government License Type 1",
+                    attribution=("Source: Health Insurance Review & Assessment Service"),
+                    enabled=True,
+                ),
+            ]
         )
         db.add_all(
             [
@@ -506,6 +621,44 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
                     rule_type="elderly_caution",
                     source_record=failed_source_record,
                 ),
+                DrugStatusEvent(
+                    item_seq="200000001",
+                    source_code="mfds_recall",
+                    event_key="recall-1",
+                    event_type="recall",
+                    started_on=date(2026, 7, 25),
+                    source_record=recall_source_record,
+                ),
+                DrugStatusEvent(
+                    item_seq="200000001",
+                    source_code="mfds_recall",
+                    event_key="recall-inactive",
+                    event_type="recall",
+                    started_on=date(2025, 1, 1),
+                    source_record=inactive_recall_source_record,
+                ),
+                DrugStatusEvent(
+                    item_seq="200000001",
+                    source_code="mfds_recall",
+                    event_key="recall-failed",
+                    event_type="recall",
+                    started_on=date(2026, 7, 27),
+                    source_record=failed_recall_source_record,
+                ),
+                DrugPrice(
+                    item_seq=None,
+                    insurance_code="645700010",
+                    amount=Decimal("1234.00"),
+                    effective_date=date(2026, 7, 1),
+                    source_record=price_source_record,
+                ),
+                DrugCode(
+                    item_seq="200000001",
+                    code_type="standard",
+                    code="8801234567890",
+                    valid_from=date(2026, 1, 1),
+                    source_record=code_source_record,
+                ),
             ]
         )
         db.commit()
@@ -516,8 +669,7 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
     session = create_account(client)
     headers = {"Authorization": f"Bearer {session['accessToken']}"}
     assert (
-        client.get("/api/v1/drugs/search", params={"q": "효소"}, headers=headers).status_code
-        == 403
+        client.get("/api/v1/drugs/search", params={"q": "효소"}, headers=headers).status_code == 403
     )
     with SessionLocal() as db:
         user = db.get(User, uuid.UUID(session["account"]["id"]))
@@ -533,7 +685,10 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
     assert meta.status_code == 200
     assert meta.json()["productCount"] == 1
     assert meta.json()["failedSources"] == []
-    assert meta.json()["sources"][0]["lastAttemptStatus"] is None
+    product_source = next(
+        source for source in meta.json()["sources"] if source["code"] == "mfds_product"
+    )
+    assert product_source["lastAttemptStatus"] is None
 
     search = client.get("/api/v1/drugs/search", params={"q": "효소"}, headers=headers)
     assert search.status_code == 200
@@ -569,8 +724,61 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
             {"ruleType": "pregnancy_contraindication", "count": 1},
         ],
     }
-    assert len(detail.json()["sources"]) == 1
-    assert detail.json()["sources"][0]["sourceUrl"].startswith("https://www.data.go.kr/")
+    assert detail.json()["statusEvents"] == [
+        {
+            "eventType": "recall",
+            "reason": "품질 기준 확인을 위한 공식 회수",
+            "startedOn": "2026-07-25",
+            "endedOn": None,
+            "sourceCode": "mfds_recall",
+            "sourceUpdatedAt": "20260726",
+            "catalogUpdatedAt": "2026-07-26T03:10:00",
+            "source": {
+                "source": "MFDS recall and sale suspension",
+                "sourceUrl": "https://www.data.go.kr/data/15059114/openapi.do",
+                "licenseName": "Public data",
+                "attribution": "Source: Ministry of Food and Drug Safety",
+            },
+        }
+    ]
+    assert detail.json()["prices"] == [
+        {
+            "insuranceCode": "645700010",
+            "amount": "1234.00",
+            "effectiveDate": "2026-07-01",
+            "sourceCode": "hira_price",
+            "sourceUpdatedAt": "20260702",
+            "catalogUpdatedAt": "2026-07-26T03:10:00",
+            "source": {
+                "source": "HIRA drug reimbursement price",
+                "sourceUrl": "https://www.data.go.kr/data/15054445/openapi.do",
+                "licenseName": "Korea Open Government License Type 1",
+                "attribution": ("Source: Health Insurance Review & Assessment Service"),
+            },
+        }
+    ]
+    assert detail.json()["codes"] == [
+        {
+            "codeType": "standard",
+            "code": "8801234567890",
+            "validFrom": "2026-01-01",
+            "validTo": None,
+            "sourceCode": "hira_standard_code",
+            "sourceUpdatedAt": "20260703",
+            "catalogUpdatedAt": "2026-07-26T03:10:00",
+            "source": {
+                "source": "HIRA medicine standard code",
+                "sourceUrl": "https://www.data.go.kr/data/15067462/fileData.do",
+                "licenseName": "Korea Open Government License Type 1",
+                "attribution": ("Source: Health Insurance Review & Assessment Service"),
+            },
+        }
+    ]
+    assert len(detail.json()["sources"]) == 4
+    assert all(
+        source["sourceUrl"].startswith("https://www.data.go.kr/")
+        for source in detail.json()["sources"]
+    )
 
     first_rules = client.get(
         "/api/v1/drugs/200000001/dur-rules",
@@ -597,10 +805,7 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
     )
     assert concomitant.status_code == 200
     assert concomitant.json()["items"][0]["counterpartItemName"] == "상대 의약품"
-    assert (
-        concomitant.json()["items"][0]["counterpartIngredientName"]
-        == "상대성분"
-    )
+    assert concomitant.json()["items"][0]["counterpartIngredientName"] == "상대성분"
 
     with SessionLocal() as db:
         product_record = db.scalar(
@@ -619,10 +824,13 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
     )
     assert hidden_search.status_code == 200
     assert hidden_search.json()["items"] == []
-    assert client.get(
-        "/api/v1/drugs/200000001",
-        headers=headers,
-    ).status_code == 404
+    assert (
+        client.get(
+            "/api/v1/drugs/200000001",
+            headers=headers,
+        ).status_code
+        == 404
+    )
 
     with SessionLocal() as db:
         user = db.get(User, uuid.UUID(session["account"]["id"]))
@@ -630,9 +838,202 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
         user.catalog_read_enabled = False
         db.commit()
     assert (
-        client.get("/api/v1/drugs/search", params={"q": "효소"}, headers=headers).status_code
-        == 403
+        client.get("/api/v1/drugs/search", params={"q": "효소"}, headers=headers).status_code == 403
     )
+
+
+def test_catalog_detail_projections_are_bounded_and_deterministic(
+    client: TestClient,
+) -> None:
+    status_run_id = uuid.uuid4()
+    shortage_run_id = uuid.uuid4()
+    price_run_id = uuid.uuid4()
+    code_run_id = uuid.uuid4()
+    with SessionLocal() as db:
+        db.add(
+            DrugProduct(
+                item_seq="bounded-product",
+                item_name="Projection Bound Test",
+            )
+        )
+        db.add(
+            DrugProduct(
+                item_seq="empty-projection-product",
+                item_name="Empty Projection Test",
+            )
+        )
+        db.add(
+            SourceRecord(
+                source_code="mfds_product",
+                record_key="bounded-product",
+                content_hash="bounded-product-hash",
+                payload={},
+                active=True,
+                last_seen_run_id=uuid.uuid4(),
+            )
+        )
+        db.add(
+            SourceRecord(
+                source_code="mfds_product",
+                record_key="empty-projection-product",
+                content_hash="empty-projection-product-hash",
+                payload={},
+                active=True,
+                last_seen_run_id=uuid.uuid4(),
+            )
+        )
+        db.add_all(
+            [
+                SourceRegistry(
+                    code="mfds_product",
+                    name="MFDS products",
+                    portal_url="https://example.test/products",
+                    enabled=True,
+                ),
+                SourceRegistry(
+                    code="mfds_recall",
+                    name="MFDS recalls",
+                    portal_url="https://example.test/recalls",
+                    enabled=True,
+                ),
+                SourceRegistry(
+                    code="mfds_shortage",
+                    name="MFDS supply shortage",
+                    portal_url="https://example.test/shortages",
+                    enabled=True,
+                ),
+                SourceRegistry(
+                    code="hira_price",
+                    name="HIRA prices",
+                    portal_url="https://example.test/prices",
+                    enabled=True,
+                ),
+                SourceRegistry(
+                    code="hira_standard_code",
+                    name="HIRA codes",
+                    portal_url="https://example.test/codes",
+                    enabled=True,
+                ),
+                SyncRun(
+                    id=status_run_id,
+                    source_code="mfds_recall",
+                    status="succeeded",
+                ),
+                SyncRun(
+                    id=shortage_run_id,
+                    source_code="mfds_shortage",
+                    status="succeeded",
+                ),
+                SyncRun(
+                    id=price_run_id,
+                    source_code="hira_price",
+                    status="succeeded",
+                ),
+                SyncRun(
+                    id=code_run_id,
+                    source_code="hira_standard_code",
+                    status="succeeded",
+                ),
+            ]
+        )
+        for index in range(23):
+            event_source_code = "mfds_shortage" if index == 21 else "mfds_recall"
+            event_record = SourceRecord(
+                source_code=event_source_code,
+                record_key=f"event-{index:02d}",
+                content_hash=f"event-hash-{index:02d}",
+                payload=(
+                    {"SUSPEND_REASON": "공식 생산·수입·공급 중단 사유"} if index == 21 else {}
+                ),
+                active=True,
+                last_seen_run_id=(shortage_run_id if index == 21 else status_run_id),
+            )
+            db.add(event_record)
+            db.add(
+                DrugStatusEvent(
+                    item_seq="bounded-product",
+                    source_code=event_source_code,
+                    event_key=f"event-{index:02d}",
+                    event_type=(
+                        "suspension" if index == 22 else "shortage" if index == 21 else "recall"
+                    ),
+                    started_on=date(2026, 1, 1) + timedelta(days=index),
+                    source_record=event_record,
+                )
+            )
+        for index in range(7):
+            price_record = SourceRecord(
+                source_code="hira_price",
+                record_key=f"price-{index:02d}",
+                content_hash=f"price-hash-{index:02d}",
+                payload={},
+                active=True,
+                last_seen_run_id=price_run_id,
+            )
+            db.add(price_record)
+            db.add(
+                DrugPrice(
+                    item_seq="bounded-product",
+                    insurance_code=f"price-{index:02d}",
+                    amount=Decimal(index),
+                    effective_date=date(2026, 2, 1) + timedelta(days=index),
+                    source_record=price_record,
+                )
+            )
+        for index in range(22):
+            code_record = SourceRecord(
+                source_code="hira_standard_code",
+                record_key=f"code-{index:02d}",
+                content_hash=f"code-hash-{index:02d}",
+                payload={},
+                active=True,
+                last_seen_run_id=code_run_id,
+            )
+            db.add(code_record)
+            db.add(
+                DrugCode(
+                    item_seq="bounded-product",
+                    code_type="standard",
+                    code=f"code-{index:02d}",
+                    valid_from=date(2026, 3, 1) + timedelta(days=index),
+                    source_record=code_record,
+                )
+            )
+        db.commit()
+
+    session = create_account(client)
+    headers = {"Authorization": f"Bearer {session['accessToken']}"}
+    with SessionLocal() as db:
+        user = db.get(User, uuid.UUID(session["account"]["id"]))
+        assert user is not None
+        user.catalog_read_enabled = True
+        db.commit()
+
+    response = client.get("/api/v1/drugs/bounded-product", headers=headers)
+    assert response.status_code == 200
+    detail = response.json()
+    assert len(detail["statusEvents"]) == 20
+    assert detail["statusEvents"][0]["startedOn"] == "2026-01-23"
+    assert detail["statusEvents"][0]["eventType"] == "suspension"
+    assert detail["statusEvents"][1]["eventType"] == "shortage"
+    assert detail["statusEvents"][1]["reason"] == "공식 생산·수입·공급 중단 사유"
+    assert detail["statusEvents"][-1]["startedOn"] == "2026-01-04"
+    assert len(detail["prices"]) == 5
+    assert detail["prices"][0]["insuranceCode"] == "price-06"
+    assert detail["prices"][-1]["insuranceCode"] == "price-02"
+    assert len(detail["codes"]) == 20
+    assert detail["codes"][0]["code"] == "code-21"
+    assert detail["codes"][-1]["code"] == "code-02"
+
+    empty_response = client.get(
+        "/api/v1/drugs/empty-projection-product",
+        headers=headers,
+    )
+    assert empty_response.status_code == 200
+    assert empty_response.json()["statusEvents"] == []
+    assert empty_response.json()["prices"] == []
+    assert empty_response.json()["codes"] == []
+
 
 def test_server_schema_excludes_household_inventory(client: TestClient) -> None:
     table_names = set(inspect(engine).get_table_names())

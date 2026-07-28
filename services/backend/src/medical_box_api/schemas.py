@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
@@ -121,6 +122,38 @@ class DrugSafetyRule(ApiModel):
     source_code: str
 
 
+class DrugStatusEventInfo(ApiModel):
+    event_type: Literal["recall", "suspension", "shortage"]
+    reason: str | None = Field(max_length=2_000)
+    started_on: str | None
+    ended_on: str | None
+    source_code: str
+    source_updated_at: str | None = Field(max_length=80)
+    catalog_updated_at: datetime
+    source: DrugSourceAttribution
+
+
+class DrugPriceInfo(ApiModel):
+    insurance_code: str | None
+    amount: Decimal | None
+    effective_date: str | None
+    source_code: str
+    source_updated_at: str | None = Field(max_length=80)
+    catalog_updated_at: datetime
+    source: DrugSourceAttribution
+
+
+class DrugCodeInfo(ApiModel):
+    code_type: str
+    code: str
+    valid_from: str | None
+    valid_to: str | None
+    source_code: str
+    source_updated_at: str | None = Field(max_length=80)
+    catalog_updated_at: datetime
+    source: DrugSourceAttribution
+
+
 class DrugDetail(DrugSummary):
     permit_date: str | None
     storage_method: str | None
@@ -130,6 +163,9 @@ class DrugDetail(DrugSummary):
     identification_variants: list[DrugAppearanceInfo]
     safety_overview: DrugSafetyOverview
     ingredients: list[str]
+    status_events: list[DrugStatusEventInfo] = Field(max_length=20)
+    prices: list[DrugPriceInfo] = Field(max_length=5)
+    codes: list[DrugCodeInfo] = Field(max_length=20)
     efficacy: str | None
     use_method: str | None
     warning: str | None

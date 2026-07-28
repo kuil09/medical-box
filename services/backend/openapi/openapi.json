@@ -436,6 +436,76 @@
         "title": "DrugAppearanceInfo",
         "type": "object"
       },
+      "DrugCodeInfo": {
+        "properties": {
+          "catalogUpdatedAt": {
+            "format": "date-time",
+            "title": "Catalogupdatedat",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "codeType": {
+            "title": "Codetype",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DrugSourceAttribution"
+          },
+          "sourceCode": {
+            "title": "Sourcecode",
+            "type": "string"
+          },
+          "sourceUpdatedAt": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceupdatedat"
+          },
+          "validFrom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validfrom"
+          },
+          "validTo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validto"
+          }
+        },
+        "required": [
+          "codeType",
+          "code",
+          "validFrom",
+          "validTo",
+          "sourceCode",
+          "sourceUpdatedAt",
+          "catalogUpdatedAt",
+          "source"
+        ],
+        "title": "DrugCodeInfo",
+        "type": "object"
+      },
       "DrugDetail": {
         "properties": {
           "appearance": {
@@ -448,6 +518,14 @@
               }
             ],
             "title": "Appearance"
+          },
+          "codes": {
+            "items": {
+              "$ref": "#/components/schemas/DrugCodeInfo"
+            },
+            "maxItems": 20,
+            "title": "Codes",
+            "type": "array"
           },
           "efficacy": {
             "anyOf": [
@@ -547,6 +625,14 @@
             ],
             "title": "Precautions"
           },
+          "prices": {
+            "items": {
+              "$ref": "#/components/schemas/DrugPriceInfo"
+            },
+            "maxItems": 5,
+            "title": "Prices",
+            "type": "array"
+          },
           "professionalCategory": {
             "anyOf": [
               {
@@ -601,6 +687,14 @@
             ],
             "title": "Status"
           },
+          "statusEvents": {
+            "items": {
+              "$ref": "#/components/schemas/DrugStatusEventInfo"
+            },
+            "maxItems": 20,
+            "title": "Statusevents",
+            "type": "array"
+          },
           "storageMethod": {
             "anyOf": [
               {
@@ -649,6 +743,9 @@
           "identificationVariants",
           "safetyOverview",
           "ingredients",
+          "statusEvents",
+          "prices",
+          "codes",
           "efficacy",
           "useMethod",
           "warning",
@@ -659,6 +756,79 @@
           "sources"
         ],
         "title": "DrugDetail",
+        "type": "object"
+      },
+      "DrugPriceInfo": {
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "catalogUpdatedAt": {
+            "format": "date-time",
+            "title": "Catalogupdatedat",
+            "type": "string"
+          },
+          "effectiveDate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effectivedate"
+          },
+          "insuranceCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insurancecode"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DrugSourceAttribution"
+          },
+          "sourceCode": {
+            "title": "Sourcecode",
+            "type": "string"
+          },
+          "sourceUpdatedAt": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceupdatedat"
+          }
+        },
+        "required": [
+          "insuranceCode",
+          "amount",
+          "effectiveDate",
+          "sourceCode",
+          "sourceUpdatedAt",
+          "catalogUpdatedAt",
+          "source"
+        ],
+        "title": "DrugPriceInfo",
         "type": "object"
       },
       "DrugSafetyCategory": {
@@ -852,6 +1022,89 @@
           "sourceUrl"
         ],
         "title": "DrugSourceAttribution",
+        "type": "object"
+      },
+      "DrugStatusEventInfo": {
+        "properties": {
+          "catalogUpdatedAt": {
+            "format": "date-time",
+            "title": "Catalogupdatedat",
+            "type": "string"
+          },
+          "endedOn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endedon"
+          },
+          "eventType": {
+            "enum": [
+              "recall",
+              "suspension",
+              "shortage"
+            ],
+            "title": "Eventtype",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DrugSourceAttribution"
+          },
+          "sourceCode": {
+            "title": "Sourcecode",
+            "type": "string"
+          },
+          "sourceUpdatedAt": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceupdatedat"
+          },
+          "startedOn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedon"
+          }
+        },
+        "required": [
+          "eventType",
+          "reason",
+          "startedOn",
+          "endedOn",
+          "sourceCode",
+          "sourceUpdatedAt",
+          "catalogUpdatedAt",
+          "source"
+        ],
+        "title": "DrugStatusEventInfo",
         "type": "object"
       },
       "DrugSummary": {
