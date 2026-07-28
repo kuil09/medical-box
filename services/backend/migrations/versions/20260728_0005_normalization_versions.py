@@ -10,16 +10,26 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "sync_checkpoints",
-        sa.Column(
-            "normalization_version",
-            sa.Integer(),
-            nullable=False,
-            server_default="1",
-        ),
-    )
+    columns = {
+        column["name"]
+        for column in sa.inspect(op.get_bind()).get_columns("sync_checkpoints")
+    }
+    if "normalization_version" not in columns:
+        op.add_column(
+            "sync_checkpoints",
+            sa.Column(
+                "normalization_version",
+                sa.Integer(),
+                nullable=False,
+                server_default="1",
+            ),
+        )
 
 
 def downgrade() -> None:
-    op.drop_column("sync_checkpoints", "normalization_version")
+    columns = {
+        column["name"]
+        for column in sa.inspect(op.get_bind()).get_columns("sync_checkpoints")
+    }
+    if "normalization_version" in columns:
+        op.drop_column("sync_checkpoints", "normalization_version")
