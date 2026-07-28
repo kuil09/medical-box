@@ -40,7 +40,7 @@ class OfficialMedicineThumbnail extends StatelessWidget {
               fit: BoxFit.contain,
               loadingBuilder: (context, child, progress) =>
                   progress == null ? child : _fallback(),
-              errorBuilder: (_, __, ___) => _fallback(),
+              errorBuilder: (_, _, _) => _fallback(),
             )
           : _fallback(),
     );

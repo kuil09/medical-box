@@ -14,7 +14,7 @@ class ReminderScheduler {
     tz.initializeTimeZones();
     tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
     await _plugin.initialize(
-      const InitializationSettings(
+      settings: const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         iOS: DarwinInitializationSettings(),
       ),
@@ -41,13 +41,13 @@ class ReminderScheduler {
   Future<void> schedule(Reminder reminder) async {
     if (!reminder.scheduledAt.isAfter(DateTime.now())) return;
     await _plugin.zonedSchedule(
-      _notificationId(reminder.id),
-      '우리집 구급키트',
-      reminder.hidesMedicineName
+      id: _notificationId(reminder.id),
+      title: '우리집 구급키트',
+      body: reminder.hidesMedicineName
           ? '확인할 일정이 있어요.'
           : (reminder.privateLabel ?? '확인할 일정이 있어요.'),
-      tz.TZDateTime.from(reminder.scheduledAt, tz.local),
-      const NotificationDetails(
+      scheduledDate: tz.TZDateTime.from(reminder.scheduledAt, tz.local),
+      notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
           'medical_box_private_reminders',
           '구급키트 알림',
@@ -63,7 +63,7 @@ class ReminderScheduler {
     );
   }
 
-  Future<void> cancel(String id) => _plugin.cancel(_notificationId(id));
+  Future<void> cancel(String id) => _plugin.cancel(id: _notificationId(id));
 
   int _notificationId(String value) {
     return value.codeUnits.fold<int>(

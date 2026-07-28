@@ -416,8 +416,8 @@ class CatalogRepository {
     final json = await _authorizedGet(
       '/v1/drugs/${Uri.encodeComponent(itemSeq)}/dur-rules',
       query: {
-        if (ruleType != null) 'ruleType': ruleType,
-        if (cursor != null) 'cursor': cursor,
+        'ruleType': ?ruleType,
+        'cursor': ?cursor,
         'limit': '$limit',
       },
     );
