@@ -1,6 +1,6 @@
 # Closed beta release checklist
 
-Evidence date: 2026-07-27
+Evidence date: 2026-07-28
 
 ## Automated gates
 
@@ -52,6 +52,29 @@ Evidence date: 2026-07-27
 
 - [x] Real Google production login, restored session, entitlement, official
   detail, appearance, and DUR flow
+- [x] Android release signing is fail-closed; compile-only unsigned AAB and iOS
+  release no-codesign builds pass locally with Flutter 3.44.7
+- [x] Protected manual mobile-release workflow validates secrets, signs and
+  verifies store artifacts, retains them for seven days, and cleans ephemeral
+  signing material
+- [x] GitHub `closed-beta` environment exists, permits only `main`, and rejects
+  administrator bypass. Store promotion remains a separate account-authenticated
+  action.
+- [x] Android upload key is stored outside the repository with credentials in
+  macOS Keychain, and its signing secrets plus both Google client IDs are
+  installed in the protected environment
+- [ ] The protected environment contains the expected Android upload-certificate
+  SHA-256, Kakao native key, and all Apple distribution-signing inputs
+- [x] Korean Play Store and App Store metadata source files are versioned
+- [x] Pull request 10 full CI run `30319463102` and both CodeQL runs pass after
+  the repository became public; the former private-repository billing gate no
+  longer blocks validation
+- [ ] Signed Android AAB produced by the protected release environment using the
+  upload key and production provider identifiers
+- [ ] Signed iOS IPA produced by the protected release environment using the
+  distribution certificate, provisioning profile, and production provider
+  identifiers
+- [ ] Encrypted off-device recovery copy of the Android upload key retained
 - [ ] Real Apple login, reauthentication, and disposable-account deletion E2E
 - [ ] Real Kakao login, reauthentication, and disposable-account deletion E2E
 - [ ] Google Play developer-account verification and internal-test release

@@ -1,0 +1,343 @@
+name: Mobile release build
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform artifact to build
+        required: true
+        type: choice
+        default: both
+        options:
+          - android
+          - ios
+          - both
+      build_name:
+        description: Store version in x.y.z form
+        required: true
+        type: string
+        default: 0.1.0
+      build_number:
+        description: Positive store build number
+        required: true
+        type: string
+        default: "1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-release-build
+  cancel-in-progress: false
+
+jobs:
+  android:
+    if: inputs.platform == 'android' || inputs.platform == 'both'
+    runs-on: ubuntu-latest
+    environment: closed-beta
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install pinned Flutter SDK
+        env:
+          FLUTTER_COMMIT: 84fc5cbb223bc12f83d65b647ff8a56caf779ffd # 3.44.7
+          FLUTTER_HOME: ${{ runner.temp }}/flutter
+          FLUTTER_VERSION: 3.44.7
+        run: |
+          set -euo pipefail
+          git init "${FLUTTER_HOME}"
+          git -C "${FLUTTER_HOME}" remote add origin https://github.com/flutter/flutter.git
+          git -C "${FLUTTER_HOME}" fetch \
+            --depth 1 \
+            origin \
+            "refs/tags/${FLUTTER_VERSION}:refs/tags/${FLUTTER_VERSION}"
+          git -C "${FLUTTER_HOME}" checkout --detach "refs/tags/${FLUTTER_VERSION}"
+          test "$(git -C "${FLUTTER_HOME}" rev-parse HEAD)" = "${FLUTTER_COMMIT}"
+          echo "${FLUTTER_HOME}/bin" >> "${GITHUB_PATH}"
+          "${FLUTTER_HOME}/bin/flutter" config --no-analytics
+      - name: Validate release inputs
+        env:
+          BUILD_NAME: ${{ inputs.build_name }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_UPLOAD_CERT_SHA256: ${{ secrets.ANDROID_UPLOAD_CERT_SHA256 }}
+          GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
+          KAKAO_NATIVE_APP_KEY: ${{ secrets.KAKAO_NATIVE_APP_KEY }}
+        run: |
+          set -euo pipefail
+          [[ "${BUILD_NAME}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "${BUILD_NUMBER}" =~ ^[1-9][0-9]*$ ]]
+          required=(
+            ANDROID_KEYSTORE_BASE64
+            ANDROID_STORE_PASSWORD
+            ANDROID_KEY_ALIAS
+            ANDROID_KEY_PASSWORD
+            ANDROID_UPLOAD_CERT_SHA256
+            GOOGLE_SERVER_CLIENT_ID
+            KAKAO_NATIVE_APP_KEY
+          )
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error title=Missing release secret::${name} is required."
+              exit 1
+            fi
+          done
+      - name: Install Android signing material
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "${ANDROID_KEYSTORE_BASE64}" \
+            | base64 --decode > android/upload-keystore.jks
+          {
+            printf 'storeFile=upload-keystore.jks\n'
+            printf 'storePassword=%s\n' "${ANDROID_STORE_PASSWORD}"
+            printf 'keyAlias=%s\n' "${ANDROID_KEY_ALIAS}"
+            printf 'keyPassword=%s\n' "${ANDROID_KEY_PASSWORD}"
+          } > android/key.properties
+          keytool \
+            -list \
+            -keystore android/upload-keystore.jks \
+            -storepass "${ANDROID_STORE_PASSWORD}" \
+            -alias "${ANDROID_KEY_ALIAS}" > /dev/null
+      - run: flutter pub get
+      - name: Build signed Android app bundle
+        env:
+          BUILD_NAME: ${{ inputs.build_name }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
+          KAKAO_NATIVE_APP_KEY: ${{ secrets.KAKAO_NATIVE_APP_KEY }}
+        run: |
+          set -euo pipefail
+          flutter build appbundle \
+            --release \
+            --build-name "${BUILD_NAME}" \
+            --build-number "${BUILD_NUMBER}" \
+            --dart-define="GOOGLE_SERVER_CLIENT_ID=${GOOGLE_SERVER_CLIENT_ID}" \
+            --dart-define="KAKAO_NATIVE_APP_KEY=${KAKAO_NATIVE_APP_KEY}"
+      - name: Verify Android signature
+        env:
+          ANDROID_UPLOAD_CERT_SHA256: ${{ secrets.ANDROID_UPLOAD_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          bundle=build/app/outputs/bundle/release/app-release.aab
+          jarsigner -verify "${bundle}"
+          keytool -printcert -jarfile "${bundle}" \
+            > build/app/outputs/bundle/release/signing-certificate.txt
+          expected_fingerprint="$(
+            printf '%s' "${ANDROID_UPLOAD_CERT_SHA256}" \
+              | tr -d '[:space:]:' \
+              | tr '[:lower:]' '[:upper:]'
+          )"
+          actual_fingerprint="$(
+            keytool -printcert -jarfile "${bundle}" -rfc \
+              | openssl x509 -noout -fingerprint -sha256 \
+              | sed 's/^.*=//' \
+              | tr -d ':' \
+              | tr '[:lower:]' '[:upper:]'
+          )"
+          [[ "${expected_fingerprint}" =~ ^[0-9A-F]{64}$ ]]
+          if [[ "${actual_fingerprint}" != "${expected_fingerprint}" ]]; then
+            echo "::error title=Unexpected Android signing certificate::The AAB certificate does not match ANDROID_UPLOAD_CERT_SHA256."
+            exit 1
+          fi
+          printf '\nVerified SHA-256: %s\n' "${actual_fingerprint}" \
+            >> build/app/outputs/bundle/release/signing-certificate.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: medical-box-android-${{ inputs.build_number }}
+          path: |
+            apps/mobile/build/app/outputs/bundle/release/app-release.aab
+            apps/mobile/build/app/outputs/bundle/release/signing-certificate.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Remove Android signing material
+        if: always()
+        run: |
+          rm -f android/key.properties android/upload-keystore.jks
+
+  ios:
+    if: inputs.platform == 'ios' || inputs.platform == 'both'
+    runs-on: macos-latest
+    environment: closed-beta
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install pinned Flutter SDK
+        env:
+          FLUTTER_COMMIT: 84fc5cbb223bc12f83d65b647ff8a56caf779ffd # 3.44.7
+          FLUTTER_HOME: ${{ runner.temp }}/flutter
+          FLUTTER_VERSION: 3.44.7
+        run: |
+          set -euo pipefail
+          git init "${FLUTTER_HOME}"
+          git -C "${FLUTTER_HOME}" remote add origin https://github.com/flutter/flutter.git
+          git -C "${FLUTTER_HOME}" fetch \
+            --depth 1 \
+            origin \
+            "refs/tags/${FLUTTER_VERSION}:refs/tags/${FLUTTER_VERSION}"
+          git -C "${FLUTTER_HOME}" checkout --detach "refs/tags/${FLUTTER_VERSION}"
+          test "$(git -C "${FLUTTER_HOME}" rev-parse HEAD)" = "${FLUTTER_COMMIT}"
+          echo "${FLUTTER_HOME}/bin" >> "${GITHUB_PATH}"
+          "${FLUTTER_HOME}/bin/flutter" config --no-analytics
+      - name: Validate release inputs
+        env:
+          BUILD_NAME: ${{ inputs.build_name }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+          APPLE_EXPORT_OPTIONS_PLIST_BASE64: ${{ secrets.APPLE_EXPORT_OPTIONS_PLIST_BASE64 }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
+          GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
+          KAKAO_NATIVE_APP_KEY: ${{ secrets.KAKAO_NATIVE_APP_KEY }}
+        run: |
+          set -euo pipefail
+          [[ "${BUILD_NAME}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "${BUILD_NUMBER}" =~ ^[1-9][0-9]*$ ]]
+          required=(
+            APPLE_DISTRIBUTION_CERTIFICATE_BASE64
+            APPLE_CERTIFICATE_PASSWORD
+            APPLE_PROVISIONING_PROFILE_BASE64
+            APPLE_EXPORT_OPTIONS_PLIST_BASE64
+            APPLE_KEYCHAIN_PASSWORD
+            GOOGLE_SERVER_CLIENT_ID
+            GOOGLE_IOS_CLIENT_ID
+            KAKAO_NATIVE_APP_KEY
+          )
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error title=Missing release secret::${name} is required."
+              exit 1
+            fi
+          done
+      - name: Install Apple signing material
+        env:
+          APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+          APPLE_EXPORT_OPTIONS_PLIST_BASE64: ${{ secrets.APPLE_EXPORT_OPTIONS_PLIST_BASE64 }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+          GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
+          KAKAO_NATIVE_APP_KEY: ${{ secrets.KAKAO_NATIVE_APP_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          certificate="${RUNNER_TEMP}/distribution.p12"
+          profile="${RUNNER_TEMP}/profile.mobileprovision"
+          export_options="${RUNNER_TEMP}/ExportOptions.plist"
+          keychain="${RUNNER_TEMP}/medical-box.keychain-db"
+          printf '%s' "${APPLE_DISTRIBUTION_CERTIFICATE_BASE64}" \
+            | base64 -D > "${certificate}"
+          printf '%s' "${APPLE_PROVISIONING_PROFILE_BASE64}" \
+            | base64 -D > "${profile}"
+          printf '%s' "${APPLE_EXPORT_OPTIONS_PLIST_BASE64}" \
+            | base64 -D > "${export_options}"
+          security create-keychain -p "${APPLE_KEYCHAIN_PASSWORD}" "${keychain}"
+          security set-keychain-settings -lut 21600 "${keychain}"
+          security unlock-keychain -p "${APPLE_KEYCHAIN_PASSWORD}" "${keychain}"
+          security import "${certificate}" \
+            -P "${APPLE_CERTIFICATE_PASSWORD}" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "${keychain}"
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "${APPLE_KEYCHAIN_PASSWORD}" \
+            "${keychain}"
+          security list-keychains -d user -s "${keychain}"
+          profile_uuid="$(security cms -D -i "${profile}" | plutil -extract UUID raw -)"
+          profile_dir="${HOME}/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "${profile_dir}"
+          cp "${profile}" "${profile_dir}/${profile_uuid}.mobileprovision"
+          printf '%s' "${profile_uuid}" > "${RUNNER_TEMP}/profile-uuid"
+          google_suffix=".apps.googleusercontent.com"
+          if [[ "${GOOGLE_IOS_CLIENT_ID}" != *"${google_suffix}" ]]; then
+            echo "::error title=Invalid Google iOS client::GOOGLE_IOS_CLIENT_ID must end with ${google_suffix}."
+            exit 1
+          fi
+          google_client_prefix="${GOOGLE_IOS_CLIENT_ID%"${google_suffix}"}"
+          google_reversed_client_id="com.googleusercontent.apps.${google_client_prefix}"
+          {
+            printf 'KAKAO_NATIVE_APP_KEY = %s\n' "${KAKAO_NATIVE_APP_KEY}"
+            printf 'GOOGLE_REVERSED_CLIENT_ID = %s\n' "${google_reversed_client_id}"
+          } > ios/Flutter/ReleaseSecrets.xcconfig
+      - run: flutter pub get
+      - name: Build signed iOS archive
+        env:
+          BUILD_NAME: ${{ inputs.build_name }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
+          GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
+          KAKAO_NATIVE_APP_KEY: ${{ secrets.KAKAO_NATIVE_APP_KEY }}
+        run: |
+          set -euo pipefail
+          flutter build ipa \
+            --release \
+            --build-name "${BUILD_NAME}" \
+            --build-number "${BUILD_NUMBER}" \
+            --export-options-plist="${RUNNER_TEMP}/ExportOptions.plist" \
+            --dart-define="GOOGLE_SERVER_CLIENT_ID=${GOOGLE_SERVER_CLIENT_ID}" \
+            --dart-define="GOOGLE_IOS_CLIENT_ID=${GOOGLE_IOS_CLIENT_ID}" \
+            --dart-define="KAKAO_NATIVE_APP_KEY=${KAKAO_NATIVE_APP_KEY}"
+      - name: Verify iOS archive signature
+        env:
+          GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          app=build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app
+          codesign --verify --deep --strict "${app}"
+          codesign -d --entitlements :- "${app}" \
+            > build/ios/archive/Runner.xcarchive/medical-box-entitlements.plist
+          google_suffix=".apps.googleusercontent.com"
+          expected_google_scheme="com.googleusercontent.apps.${GOOGLE_IOS_CLIENT_ID%"${google_suffix}"}"
+          actual_google_scheme="$(
+            /usr/libexec/PlistBuddy \
+              -c 'Print :CFBundleURLTypes:1:CFBundleURLSchemes:0' \
+              "${app}/Info.plist"
+          )"
+          if [[ "${actual_google_scheme}" != "${expected_google_scheme}" ]]; then
+            echo "::error title=Unexpected Google callback scheme::The archived app does not match GOOGLE_IOS_CLIENT_ID."
+            exit 1
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: medical-box-ios-${{ inputs.build_number }}
+          path: |
+            apps/mobile/build/ios/ipa/*.ipa
+            apps/mobile/build/ios/archive/Runner.xcarchive/medical-box-entitlements.plist
+          if-no-files-found: error
+          retention-days: 7
+      - name: Remove Apple signing material
+        if: always()
+        env:
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          keychain="${RUNNER_TEMP}/medical-box.keychain-db"
+          if [[ -f "${RUNNER_TEMP}/profile-uuid" ]]; then
+            profile_uuid="$(cat "${RUNNER_TEMP}/profile-uuid")"
+            rm -f "${HOME}/Library/MobileDevice/Provisioning Profiles/${profile_uuid}.mobileprovision"
+          fi
+          rm -f \
+            "${RUNNER_TEMP}/distribution.p12" \
+            "${RUNNER_TEMP}/profile.mobileprovision" \
+            "${RUNNER_TEMP}/ExportOptions.plist" \
+            "${RUNNER_TEMP}/profile-uuid" \
+            ios/Flutter/ReleaseSecrets.xcconfig
+          if security show-keychain-info "${keychain}" > /dev/null 2>&1; then
+            security delete-keychain "${keychain}"
+          fi

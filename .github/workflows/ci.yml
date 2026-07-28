@@ -141,6 +141,24 @@ jobs:
       - run: flutter analyze
       - run: flutter test
       - run: flutter build apk --debug
+      - name: Verify Android release signing fails closed
+        run: |
+          set -euo pipefail
+          log="${RUNNER_TEMP}/android-release-signing.log"
+          if flutter build appbundle --release > "${log}" 2>&1; then
+            echo "::error title=Release signing bypassed::Unsigned release task unexpectedly succeeded."
+            cat "${log}"
+            exit 1
+          fi
+          if ! grep --quiet "Release signing is not configured" "${log}"; then
+            echo "::error title=Unexpected release failure::Release task failed outside the signing guard."
+            cat "${log}"
+            exit 1
+          fi
+      - name: Compile unsigned release app bundle
+        env:
+          ORG_GRADLE_PROJECT_MEDICAL_BOX_ALLOW_UNSIGNED_RELEASE: "true"
+        run: flutter build appbundle --release
 
   flutter-ios:
     needs: changes
@@ -170,4 +188,4 @@ jobs:
           echo "${FLUTTER_HOME}/bin" >> "${GITHUB_PATH}"
           "${FLUTTER_HOME}/bin/flutter" config --no-analytics
       - run: flutter pub get
-      - run: flutter build ios --debug --no-codesign
+      - run: flutter build ios --release --no-codesign

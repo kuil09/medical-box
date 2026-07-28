@@ -1,6 +1,6 @@
 # Closed-beta release evidence
 
-Evidence date: 2026-07-27
+Evidence date: 2026-07-28
 
 ## Scope
 
@@ -169,6 +169,66 @@ generated Flutter framework under the local Documents directory. Removing that
 metadata from the generated build artifact allowed the same build to pass. The
 source tree did not require an iOS code change.
 
+## Mobile release readiness
+
+Pull request 10 introduces fail-closed mobile release packaging:
+
+- Android release tasks require a real keystore and complete
+  `android/key.properties` values. A negative dry run without signing
+  configuration failed with the expected configuration error.
+- The compile-only CI escape hatch is explicit and limited to
+  `MEDICAL_BOX_ALLOW_UNSIGNED_RELEASE=true`; it cannot produce a store-signed
+  artifact.
+- A Flutter 3.44.7 unsigned release AAB compiled successfully and measured
+  66.8 MB. `keytool` confirmed that the compile-only artifact was not signed.
+- An iOS release no-codesign build compiled successfully with Flutter 3.44.7 in
+  a non-File-Provider temporary checkout. The output was a 30.2 MB arm64
+  `Runner.app`; `codesign` confirmed that it was intentionally unsigned.
+- Google and Kakao release identifiers are build-time values rather than
+  committed secrets. Selecting Kakao login without a configured native app key
+  now fails with an explicit configuration error.
+- The protected manual `Mobile release build` workflow validates all required
+  Android and iOS signing inputs, creates ephemeral signing material, verifies
+  the resulting AAB or IPA, uploads a seven-day artifact, and removes signing
+  material in an always-run cleanup step.
+- Korean Play Store and App Store metadata source files are committed under
+  `store/metadata/ko-KR`. Medical claims are limited to organization,
+  reference, renewal-readiness, and sharing functions. A support URL is used
+  until a public support email is approved.
+
+The GitHub `closed-beta` environment exists, rejects administrator bypass, and
+permits deployment only from `main`. The repository is public. The environment
+does not currently name an independent required reviewer; the manual workflow
+remains restricted to users with repository write access, and store promotion
+remains a separate account-authenticated step.
+
+The Android upload key was generated once outside the repository at
+`~/.private_keys/medical-box/medical-box-upload.jks`. Its passwords and alias
+are held in macOS Keychain. The keystore, passwords, alias, production Google
+Web client ID, and Google iOS client ID are installed as `closed-beta`
+environment secrets. The expected upload-certificate SHA-256, Kakao native key,
+and Apple distribution inputs remain activation gates. No secret value is
+committed.
+
+The upload certificate fingerprints are:
+
+- SHA-1:
+  `B0:F5:CD:F2:8C:2C:8B:4D:67:40:F2:1C:19:CC:AB:B3:E1:3C:20:18`
+- SHA-256:
+  `FC:04:00:2E:D5:75:85:9E:A5:EA:23:3E:F8:8B:00:1E:D0:52:8F:E4:20:4A:4F:05:85:C1:2D:85:B4:4A:1C:26`
+
+These are upload-key fingerprints, not Play App Signing fingerprints. They
+must not be used for the production Android OAuth client or
+`/.well-known/assetlinks.json`.
+
+GitHub Actions runs `30283835780` and `30285348475` previously failed before
+runner allocation while the repository was private and the account had a zero
+spending limit. After the repository became public, pull request 10 CI run
+`30319463102` completed successfully across backend, Flutter, iOS, prototype,
+and infrastructure jobs. CodeQL runs `30319461144` and `30319461448` also
+completed successfully. The former billing constraint no longer blocks pull
+request validation.
+
 ## Legal review
 
 `docs/legal-review-packet.md` defines the required external decisions for
@@ -192,16 +252,19 @@ Google payments profile, account details, private contact details, and public
 developer-profile details.
 
 App Store Connect reached the Apple sign-in page, but the available passkey
-attempt returned an error. The local project has valid Apple Development and
-Apple Distribution identities for team `GS344U4ZSG`, automatic signing, and
-bundle identifier `com.medicalbox.app`. TestFlight work remains blocked until
-the account owner completes Apple sign-in and two-factor authentication in the
-existing browser session.
+attempt returned an error. The local project has automatic signing, team
+`GS344U4ZSG`, and bundle identifier `com.medicalbox.app`, but the current
+Keychain contains no valid Apple code-signing identity and the installed
+provisioning profiles do not cover `com.medicalbox.app`. TestFlight and CI
+signing remain blocked until the account owner completes Apple sign-in and
+two-factor authentication, then creates or downloads the distribution
+certificate and App Store profile.
 
 The Kakao Developers console is signed out. Railway production also lacks
-`KAKAO_APP_ID`, `APPLE_TEAM_ID`, and the release `ANDROID_CERT_SHA256`. Kakao
-application registration and the final Apple/Android identifiers require the
-respective authenticated provider and store accounts.
+`KAKAO_APP_ID`, `APPLE_TEAM_ID`, and the Play App Signing
+`ANDROID_CERT_SHA256`. Kakao application registration and the final
+Apple/Android identifiers require the respective authenticated provider and
+store accounts.
 
 The public-data portal is also signed out in the retained browser session.
 Recall, supply-interruption, and HIRA-price application or approval state cannot

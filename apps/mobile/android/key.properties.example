@@ -1,0 +1,6 @@
+# Copy this file to key.properties only on a protected release machine.
+# The storeFile path is relative to apps/mobile/android.
+storeFile=upload-keystore.jks
+storePassword=replace-with-protected-secret
+keyAlias=upload
+keyPassword=replace-with-protected-secret

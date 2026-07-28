@@ -4,11 +4,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
+import '../../build_config.dart';
 import '../api/api_client.dart';
 import '../local/database_key_store.dart';
-
-const googleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
-const googleIosClientId = String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
 
 enum LoginProvider { kakao, apple, google }
 
@@ -209,6 +207,9 @@ class AuthRepository {
         }
         return token;
       case LoginProvider.kakao:
+        if (kakaoNativeAppKey.isEmpty) {
+          throw StateError('KAKAO_NATIVE_APP_KEY is not configured.');
+        }
         final available = await isKakaoTalkInstalled();
         final token = available
             ? await UserApi.instance.loginWithKakaoTalk()
