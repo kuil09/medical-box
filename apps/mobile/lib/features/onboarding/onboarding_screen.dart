@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../../data/local/app_database.dart';
 import '../../providers.dart';
 import '../../theme.dart';
+import '../../widgets/cabinet_index_components.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -44,7 +45,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               InventoryContainersCompanion.insert(
                 id: uuid.v4(),
                 householdId: householdId,
-                name: '공용 트레이',
+                name: '공용 약장',
                 kind: 'shared',
                 sortOrder: const Value(0),
               ),
@@ -59,240 +60,104 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) => SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: MedicalBoxColors.sky,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: const Text(
-                    '기기 안에서만',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  '우리 집 약을,\n꺼내 보기 쉽게.',
-                  style: Theme.of(context).textTheme.displaySmall,
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  '계정으로 앱 접근을 보호하고, 가족과 보유약 정보는 이 기기의 암호화된 보관함에만 저장해요. 로그인 후에도 개인 보관 데이터는 서버로 동기화되지 않아요.',
-                  style: TextStyle(
-                    fontSize: 16,
-                    height: 1.55,
-                    color: MedicalBoxColors.muted,
-                  ),
-                ),
-                const SizedBox(height: 28),
-                SizedBox(
-                  height: constraints.maxHeight >= 760 ? 350 : 300,
-                  child: const _InteractiveTrayPreview(),
-                ),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: _working ? null : _continueToAccount,
-                  child: Text(_working ? '준비하는 중…' : '가입 또는 로그인하고 시작'),
-                ),
-              ],
-            ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            MedicalBoxSpacing.screen,
+            MedicalBoxSpacing.x10,
+            MedicalBoxSpacing.screen,
+            MedicalBoxSpacing.x6,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InteractiveTrayPreview extends StatefulWidget {
-  const _InteractiveTrayPreview();
-
-  @override
-  State<_InteractiveTrayPreview> createState() =>
-      _InteractiveTrayPreviewState();
-}
-
-class _InteractiveTrayPreviewState extends State<_InteractiveTrayPreview> {
-  String _selected = '상처 관리';
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0E7DB),
-        border: Border.all(color: MedicalBoxColors.line),
-        borderRadius: BorderRadius.circular(32),
-      ),
-      child: Column(
-        children: [
-          const Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  '의약품 트레이 미리보기',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+              const _CabinetMark(),
+              const SizedBox(height: MedicalBoxSpacing.x8),
+              Text(
+                '우리집 약장을\n시작해요',
+                style: Theme.of(context).textTheme.displaySmall,
+              ),
+              const SizedBox(height: MedicalBoxSpacing.x3),
+              const Text(
+                '공식 의약품 정보를 연결하고, 집에 있는 약과 보관 위치를 빠르게 확인하세요.',
+                style: TextStyle(
+                  color: MedicalBoxColors.muted,
+                  fontSize: 16,
+                  height: 1.5,
                 ),
               ),
-              Icon(
-                PhosphorIconsRegular.handTap,
-                color: MedicalBoxColors.orange,
-              ),
-            ],
-          ),
-          const SizedBox(height: 13),
-          Row(
-            children: [
-              Expanded(
-                child: _PreviewCompartment(
-                  label: '소화',
-                  count: 1,
-                  icon: PhosphorIconsDuotone.pill,
-                  color: const Color(0xFFF9F4EC),
-                  selected: _selected == '소화',
-                  onTap: () => setState(() => _selected = '소화'),
-                ),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: _PreviewCompartment(
-                  label: '상처 관리',
-                  count: 3,
-                  icon: PhosphorIconsDuotone.firstAidKit,
-                  color: const Color(0xFFFFD8C8),
-                  selected: _selected == '상처 관리',
-                  onTap: () => setState(() => _selected = '상처 관리'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 9),
-          _PreviewCompartment(
-            label: '기타',
-            count: 0,
-            icon: PhosphorIconsDuotone.archive,
-            color: Colors.white.withValues(alpha: 0.74),
-            selected: _selected == '기타',
-            onTap: () => setState(() => _selected = '기타'),
-            compact: true,
-          ),
-          const Spacer(),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: Container(
-              key: ValueKey(_selected),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.78),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Row(
+              const SizedBox(height: MedicalBoxSpacing.x7),
+              const CabinetSectionList(
                 children: [
-                  const Icon(
-                    PhosphorIconsRegular.shieldCheck,
-                    color: MedicalBoxColors.skyDeep,
+                  _OnboardingValue(
+                    icon: PhosphorIconsRegular.firstAidKit,
+                    title: '약과 보관 위치를 한눈에',
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '$_selected 수납칸을 선택했어요. 개인 보관 정보는 기기 밖으로 전송하지 않아요.',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  _OnboardingValue(
+                    icon: PhosphorIconsRegular.users,
+                    title: '공용 약장과 가족별 파우치',
+                  ),
+                  _OnboardingValue(
+                    icon: PhosphorIconsRegular.lockKey,
+                    title: '가족과 보유약 정보는 기기에 암호화 저장',
                   ),
                 ],
               ),
-            ),
+              const Spacer(),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _working ? null : _continueToAccount,
+                  child: Text(_working ? '준비하는 중…' : '계정 만들고 시작'),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _PreviewCompartment extends StatelessWidget {
-  const _PreviewCompartment({
-    required this.label,
-    required this.count,
-    required this.icon,
-    required this.color,
-    required this.selected,
-    required this.onTap,
-    this.compact = false,
-  });
-
-  final String label;
-  final int count;
-  final Object icon;
-  final Color color;
-  final bool selected;
-  final VoidCallback onTap;
-  final bool compact;
+class _CabinetMark extends StatelessWidget {
+  const _CabinetMark();
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: color,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          height: compact ? 68 : 102,
-          padding: const EdgeInsets.all(13),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: selected ? MedicalBoxColors.orange : MedicalBoxColors.line,
-              width: selected ? 2 : 1,
-            ),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            children: [
-              PhosphorIcon(icon, size: compact ? 25 : 30),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    Text(
-                      '$count개 항목',
-                      style: const TextStyle(
-                        color: MedicalBoxColors.muted,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (selected)
-                Icon(
-                  PhosphorIconsFill.checkCircle,
-                  size: 18,
-                  color: MedicalBoxColors.orange,
-                ),
-            ],
-          ),
+    return Semantics(
+      image: true,
+      label: '우리집 약장',
+      child: Container(
+        width: 64,
+        height: 52,
+        decoration: BoxDecoration(
+          color: MedicalBoxColors.surfaceContainer,
+          border: Border.all(color: MedicalBoxColors.railStrong),
+          borderRadius: BorderRadius.circular(MedicalBoxRadius.control),
+        ),
+        alignment: Alignment.center,
+        child: const PhosphorIcon(
+          PhosphorIconsRegular.firstAidKit,
+          color: MedicalBoxColors.accent,
+          size: 28,
         ),
       ),
+    );
+  }
+}
+
+class _OnboardingValue extends StatelessWidget {
+  const _OnboardingValue({required this.icon, required this.title});
+
+  final Object icon;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      minTileHeight: 64,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      leading: PhosphorIcon(icon, size: 22),
+      title: Text(title, style: Theme.of(context).textTheme.titleMedium),
     );
   }
 }

@@ -79,6 +79,11 @@ final inventoryProvider = StreamProvider<List<InventoryItem>>(
   (ref) => ref.watch(databaseProvider).watchInventory(),
 );
 
+final inventoryItemProvider = StreamProvider.autoDispose
+    .family<InventoryItem?, String>(
+      (ref, id) => ref.watch(databaseProvider).watchInventoryItem(id),
+    );
+
 final sharedInventoryProvider = StreamProvider<List<InventoryItem>>(
   (ref) => ref.watch(databaseProvider).watchInventoryByContainerKind('shared'),
 );
@@ -100,6 +105,17 @@ final remindersProvider = StreamProvider<List<Reminder>>(
 final renewalReadinessProvider = StreamProvider<List<RenewalReadinessData>>(
   (ref) => ref.watch(databaseProvider).watchRenewalReadiness(),
 );
+
+final catalogDetailProvider = FutureProvider.autoDispose
+    .family<DrugDetail, String>(
+      (ref, itemSeq) => ref.watch(catalogRepositoryProvider).detail(itemSeq),
+    );
+
+final concomitantSafetyRulesProvider = FutureProvider.autoDispose
+    .family<List<DrugSafetyRule>, String>(
+      (ref, itemSeq) =>
+          ref.watch(catalogRepositoryProvider).concomitantRules(itemSeq),
+    );
 
 final appSettingsProvider = FutureProvider<AppSetting>(
   (ref) => ref.watch(databaseProvider).getSettings(),

@@ -9,6 +9,7 @@ import 'features/auth/login_screen.dart';
 import 'features/auth/session_gate_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/inventory/edit_inventory_item_screen.dart';
+import 'features/inventory/inventory_item_detail_screen.dart';
 import 'features/inventory/inventory_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/pouch/pouch_screen.dart';
@@ -92,6 +93,11 @@ class _MedicalBoxAppState extends ConsumerState<MedicalBoxApp>
           path: '/inventory/:id/edit',
           builder: (context, state) =>
               EditInventoryItemScreen(itemId: state.pathParameters['id']),
+        ),
+        GoRoute(
+          path: '/inventory/:id',
+          builder: (context, state) =>
+              InventoryItemDetailScreen(itemId: state.pathParameters['id']!),
         ),
         GoRoute(
           path: '/pouch',

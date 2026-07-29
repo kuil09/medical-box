@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from sqlalchemy import func, or_, select, tuple_
+from sqlalchemy import and_, func, or_, select, tuple_
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -152,29 +152,45 @@ def _status_event_type(
     raise ValueError("Unsupported public status event type.")
 
 
-def _safety_rule(rule: DurRule) -> DrugSafetyRule:
+def _safety_rule(
+    rule: DurRule,
+    *,
+    requested_item_seq: str,
+    item_names: dict[str, str],
+) -> DrugSafetyRule:
     public_data = rule.source_record.public_data
+    is_reverse_concomitant = (
+        rule.rule_type == "concomitant_contraindication"
+        and rule.item_seq != requested_item_seq
+        and rule.counterpart_item_seq == requested_item_seq
+    )
+    ingredient_name = _public_data_string(
+        public_data,
+        "INGR_NAME",
+        "INGR_KOR_NAME",
+        "MAIN_INGR",
+    )
+    counterpart_ingredient_name = _public_data_string(
+        public_data,
+        "MIXTURE_INGR_KOR_NAME",
+        "MIXTURE_INGR_NAME",
+    )
     return DrugSafetyRule(
         rule_type=rule.rule_type or "unknown",
         type_name=_public_data_string(public_data, "TYPE_NAME", "typeName"),
-        ingredient_name=_public_data_string(
-            public_data,
-            "INGR_NAME",
-            "INGR_KOR_NAME",
-            "MAIN_INGR",
+        ingredient_name=(
+            counterpart_ingredient_name if is_reverse_concomitant else ingredient_name
         ),
-        counterpart_item_seq=_public_data_string(
-            public_data,
-            "MIXTURE_ITEM_SEQ",
+        counterpart_item_seq=(
+            rule.item_seq if is_reverse_concomitant else rule.counterpart_item_seq
         ),
-        counterpart_item_name=_public_data_string(
-            public_data,
-            "MIXTURE_ITEM_NAME",
+        counterpart_item_name=(
+            item_names.get(rule.item_seq or "")
+            if is_reverse_concomitant
+            else _public_data_string(public_data, "MIXTURE_ITEM_NAME")
         ),
-        counterpart_ingredient_name=_public_data_string(
-            public_data,
-            "MIXTURE_INGR_KOR_NAME",
-            "MIXTURE_INGR_NAME",
+        counterpart_ingredient_name=(
+            ingredient_name if is_reverse_concomitant else counterpart_ingredient_name
         ),
         prohibition_content=_public_data_string(
             public_data,
@@ -222,11 +238,7 @@ def _active_product_exists(db: Session) -> ColumnElement[bool]:
 @router.get("/catalog/meta", response_model=CatalogMeta)
 def catalog_meta(db: Session = Depends(get_db)) -> CatalogMeta:
     product_count = (
-        db.scalar(
-            select(func.count())
-            .select_from(DrugProduct)
-            .where(_active_product_exists(db))
-        )
+        db.scalar(select(func.count()).select_from(DrugProduct).where(_active_product_exists(db)))
         or 0
     )
     last_sync = db.scalar(
@@ -372,7 +384,13 @@ def get_drug_safety_rules(
         .join(SyncRun, SyncRun.id == SourceRecord.last_seen_run_id)
         .options(selectinload(DurRule.source_record))
         .where(
-            DurRule.item_seq == item_seq,
+            or_(
+                DurRule.item_seq == item_seq,
+                and_(
+                    DurRule.rule_type == "concomitant_contraindication",
+                    DurRule.counterpart_item_seq == item_seq,
+                ),
+            ),
             DurRule.rule_type.in_(SAFETY_RULE_TYPES),
             SyncRun.status == "succeeded",
         )
@@ -386,9 +404,34 @@ def get_drug_safety_rules(
     rules = list(db.scalars(statement.limit(limit + 1)).all())
     has_more = len(rules) > limit
     page_rules = rules[:limit]
+    reverse_item_seqs = {
+        rule.item_seq
+        for rule in page_rules
+        if rule.rule_type == "concomitant_contraindication"
+        and rule.item_seq is not None
+        and rule.item_seq != item_seq
+        and rule.counterpart_item_seq == item_seq
+    }
+    item_names: dict[str, str] = {}
+    if reverse_item_seqs:
+        item_names = {
+            product_item_seq: product_item_name
+            for product_item_seq, product_item_name in db.execute(
+                select(DrugProduct.item_seq, DrugProduct.item_name).where(
+                    DrugProduct.item_seq.in_(reverse_item_seqs)
+                )
+            )
+        }
     next_cursor = _encode_rule_cursor(page_rules[-1].id) if has_more and page_rules else None
     return CursorPage(
-        items=[_safety_rule(rule) for rule in page_rules],
+        items=[
+            _safety_rule(
+                rule,
+                requested_item_seq=item_seq,
+                item_names=item_names,
+            )
+            for rule in page_rules
+        ],
         next_cursor=next_cursor,
     )
 
@@ -425,7 +468,13 @@ def get_drug(
         .join(SourceRecord, SourceRecord.id == DurRule.source_record_id)
         .join(SyncRun, SyncRun.id == SourceRecord.last_seen_run_id)
         .where(
-            DurRule.item_seq == item_seq,
+            or_(
+                DurRule.item_seq == item_seq,
+                and_(
+                    DurRule.rule_type == "concomitant_contraindication",
+                    DurRule.counterpart_item_seq == item_seq,
+                ),
+            ),
             DurRule.rule_type.in_(SAFETY_RULE_TYPES),
             SyncRun.status == "succeeded",
         )

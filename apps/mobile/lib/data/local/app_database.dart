@@ -196,6 +196,12 @@ class AppDatabase extends _$AppDatabase {
         .watch();
   }
 
+  Stream<InventoryItem?> watchInventoryItem(String id) {
+    return (select(
+      inventoryItems,
+    )..where((row) => row.id.equals(id))).watchSingleOrNull();
+  }
+
   Stream<List<InventoryItem>> watchInventoryByContainerKind(String kind) {
     final query =
         select(inventoryItems).join([

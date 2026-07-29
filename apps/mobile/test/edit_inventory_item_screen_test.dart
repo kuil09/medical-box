@@ -35,6 +35,37 @@ void main() {
       find.text('로그인 후 검색어만 공식 카탈로그 조회에 사용하고, 사진·사용기한·메모는 서버로 보내지 않아요.'),
       findsNothing,
     );
+    expect(find.text('의약품 등록'), findsOneWidget);
+    expect(find.text('제품명 촬영'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('보관함에 등록'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('보관함에 등록'), findsOneWidget);
+  });
+
+  testWidgets('existing medicine editor has a distinct focused edit state', (
+    tester,
+  ) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    await _insertOfficialInventoryItem(database);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: const MaterialApp(
+          home: EditInventoryItemScreen(itemId: 'item-1'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('의약품 수정'), findsOneWidget);
+    expect(find.text('제품명 촬영'), findsNothing);
+    expect(find.text('변경사항 저장'), findsOneWidget);
+    expect(find.text('보관함에 등록'), findsNothing);
   });
 
   testWidgets('a stale autocomplete response cannot replace current results', (
@@ -116,11 +147,11 @@ void main() {
       '직접 입력한 제품',
     );
     await tester.scrollUntilVisible(
-      find.text('보관함에 저장'),
+      find.text('변경사항 저장'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.text('보관함에 저장'));
+    await tester.tap(find.text('변경사항 저장'));
     await tester.pumpAndSettle();
 
     final item = await (database.select(

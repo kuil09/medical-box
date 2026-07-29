@@ -27,21 +27,21 @@ class PrivacySafeBannerSlot extends ConsumerWidget {
       child: Container(
         height: 72,
         width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(8, 5, 8, 7),
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.7),
-          border: Border.all(color: MedicalBoxColors.line),
-          borderRadius: BorderRadius.circular(14),
+          color: MedicalBoxColors.surfaceContainer,
+          border: Border.all(color: MedicalBoxColors.rail),
+          borderRadius: BorderRadius.circular(MedicalBoxRadius.control),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '광고',
+              '광고 · 비개인화 광고',
               style: TextStyle(
                 color: MedicalBoxColors.muted,
                 fontSize: 10,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
               ),
             ),
             Expanded(child: ads.buildBanner(placement)),

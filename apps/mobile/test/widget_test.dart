@@ -23,8 +23,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('가입 또는 로그인하고 시작'), findsOneWidget);
+    expect(find.text('계정 만들고 시작'), findsOneWidget);
     expect(find.text('로그인 없이 시작'), findsNothing);
-    expect(find.textContaining('개인 보관 데이터는 서버로 동기화되지 않아요'), findsOneWidget);
+    expect(find.text('가족과 보유약 정보는 기기에 암호화 저장'), findsOneWidget);
   });
 }

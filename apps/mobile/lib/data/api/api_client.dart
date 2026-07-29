@@ -548,4 +548,31 @@ class CatalogRepository {
     );
     return DrugSafetyRulePage.fromJson(json);
   }
+
+  Future<List<DrugSafetyRule>> concomitantRules(String itemSeq) async {
+    final rules = <DrugSafetyRule>[];
+    final seenCursors = <String>{};
+    String? cursor;
+    var pageCount = 0;
+
+    do {
+      final page = await safetyRules(
+        itemSeq,
+        ruleType: 'concomitant_contraindication',
+        cursor: cursor,
+        limit: 50,
+      );
+      rules.addAll(page.items);
+      cursor = page.nextCursor;
+      pageCount += 1;
+      if (cursor != null && !seenCursors.add(cursor)) {
+        throw const FormatException('DUR pagination cursor repeated.');
+      }
+      if (pageCount >= 100 && cursor != null) {
+        throw const FormatException('DUR pagination exceeded the safe limit.');
+      }
+    } while (cursor != null);
+
+    return List.unmodifiable(rules);
+  }
 }

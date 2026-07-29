@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../data/auth/auth_repository.dart';
 import '../../providers.dart';
 import '../../theme.dart';
+import '../../widgets/cabinet_index_components.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({
@@ -229,39 +230,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       repository.supportsProvider,
     );
     return Scaffold(
-      appBar: AppBar(title: const Text('로그인 및 검색 권한')),
+      appBar: AppBar(title: const Text('로그인')),
       body: ListView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(
+          MedicalBoxSpacing.screen,
+          MedicalBoxSpacing.x6,
+          MedicalBoxSpacing.screen,
+          MedicalBoxSpacing.x8,
+        ),
         children: [
-          PhosphorIcon(
-            PhosphorIconsDuotone.userCircleCheck,
-            size: 70,
-            color: MedicalBoxColors.skyDeep,
-          ),
-          const SizedBox(height: 18),
-          Text(
-            account == null
-                ? '가입 또는 로그인 후 시작하세요'
+          _LoginHeader(
+            icon: account == null
+                ? PhosphorIconsRegular.lockKeyOpen
                 : account.canReadCatalog
-                ? '검색 권한이 확인됐어요'
-                : '검색 권한 승인 대기 중이에요',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            account == null
-                ? '우리집 구급키트는 계정으로 보관함 접근을 보호해요. 가족·보유약·알림 데이터는 로그인 후에도 이 기기의 암호화 저장소에만 남아요.'
+                ? PhosphorIconsRegular.checkCircle
+                : PhosphorIconsRegular.clockCountdown,
+            iconColor: account?.canReadCatalog == false
+                ? MedicalBoxColors.warning
+                : MedicalBoxColors.official,
+            title: account == null
+                ? '로그인하고 구급키트를 시작하세요'
                 : account.canReadCatalog
-                ? '이 계정은 공공데이터 기반 의약품 정보를 조회할 수 있어요. 기기 데이터는 계속 이 기기에만 저장돼요.'
-                : '앱은 사용할 수 있지만 서버의 catalog:read 권한이 아직 부여되지 않았어요. 공식 검색과 사진 자동인식은 승인 후 사용할 수 있어요.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: MedicalBoxColors.muted, height: 1.5),
+                ? '공식 의약품 검색이 준비됐어요'
+                : '검색 권한을 확인하고 있어요',
+            description: account == null
+                ? '공식 의약품을 검색하고, 가족과 보관함 정보는 이 기기에 안전하게 보관해요.'
+                : account.canReadCatalog
+                ? '공공데이터 기반 의약품 정보를 조회할 수 있어요. 가족과 보관함 정보는 서버로 보내지 않아요.'
+                : '보관함은 사용할 수 있어요. 공식 검색과 사진 자동인식은 권한 승인 후 열립니다.',
           ),
           if (account == null) ...[
-            const SizedBox(height: 26),
+            const SizedBox(height: MedicalBoxSpacing.x7),
             if (restoring)
-              const Center(child: CircularProgressIndicator())
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: MedicalBoxSpacing.x10),
+                child: Center(child: CircularProgressIndicator()),
+              )
             else ...[
               CheckboxListTile(
                 value: _termsAccepted,
@@ -275,11 +279,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       },
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
-                title: const Text('현재 이용약관과 개인정보 처리방침을 확인했고 로그인 처리에 동의합니다.'),
+                minTileHeight: 48,
+                title: const Text('이용약관과 개인정보 처리방침에 동의합니다.'),
               ),
               Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 8,
+                spacing: MedicalBoxSpacing.x2,
+                runSpacing: MedicalBoxSpacing.x1,
                 children: [
                   TextButton(
                     onPressed: _working
@@ -295,56 +300,173 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: MedicalBoxSpacing.x4),
               for (final provider in supportedProviders)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: OutlinedButton(
+                  padding: const EdgeInsets.only(bottom: MedicalBoxSpacing.x3),
+                  child: OutlinedButton.icon(
                     onPressed: _working || !_termsAccepted
                         ? null
                         : () => _signIn(provider),
+                    icon: const PhosphorIcon(
+                      PhosphorIconsRegular.signIn,
+                      size: 20,
+                    ),
                     style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(54),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
+                      minimumSize: const Size.fromHeight(52),
                     ),
-                    child: Text(
-                      _providerLabel(provider),
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
+                    label: Text(_providerLabel(provider)),
                   ),
                 ),
             ],
           ],
           if (_message != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              _message!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
+            const SizedBox(height: MedicalBoxSpacing.x3),
+            _LoginMessage(_message!),
           ],
-          const SizedBox(height: 24),
-          if (account != null)
-            TextButton.icon(
-              onPressed: _working ? null : _signOut,
-              icon: Icon(PhosphorIconsRegular.signOut),
-              label: const Text('로그아웃'),
+          if (account != null) ...[
+            const CabinetSectionLabel('계정'),
+            CabinetSectionList(
+              children: [
+                _AccountActionRow(
+                  icon: PhosphorIconsRegular.signOut,
+                  label: '로그아웃',
+                  onTap: _working ? null : _signOut,
+                ),
+                _AccountActionRow(
+                  icon: PhosphorIconsRegular.trash,
+                  label: '서버 계정 삭제',
+                  color: MedicalBoxColors.accent,
+                  onTap: _working ? null : _deleteAccount,
+                ),
+              ],
             ),
-          if (account != null)
-            TextButton.icon(
-              onPressed: _working ? null : _deleteAccount,
-              icon: Icon(PhosphorIconsRegular.trash),
-              label: const Text('서버 계정 삭제'),
-            ),
-          if (account != null && !Navigator.of(context).canPop())
-            TextButton(
-              onPressed: _working ? null : () => context.go('/'),
-              child: const Text('구급키트로 돌아가기'),
-            ),
+            if (!Navigator.of(context).canPop()) ...[
+              const SizedBox(height: MedicalBoxSpacing.x4),
+              OutlinedButton(
+                onPressed: _working ? null : () => context.go('/'),
+                child: const Text('구급키트로 돌아가기'),
+              ),
+            ],
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _LoginHeader extends StatelessWidget {
+  const _LoginHeader({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.description,
+  });
+
+  final Object icon;
+  final Color iconColor;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: MedicalBoxSpacing.touchTarget,
+          height: MedicalBoxSpacing.touchTarget,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: PhosphorIcon(icon, size: 30, color: iconColor),
+          ),
+        ),
+        const SizedBox(height: MedicalBoxSpacing.x4),
+        Text(title, style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: MedicalBoxSpacing.x2),
+        Text(
+          description,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyLarge?.copyWith(color: MedicalBoxColors.muted),
+        ),
+      ],
+    );
+  }
+}
+
+class _LoginMessage extends StatelessWidget {
+  const _LoginMessage(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(
+            width: MedicalBoxSpacing.touchTarget,
+            height: MedicalBoxSpacing.touchTarget,
+            child: Center(
+              child: PhosphorIcon(
+                PhosphorIconsRegular.info,
+                size: 20,
+                color: MedicalBoxColors.warning,
+              ),
+            ),
+          ),
+          const SizedBox(width: MedicalBoxSpacing.x2),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: MedicalBoxColors.muted,
+                  height: 1.45,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountActionRow extends StatelessWidget {
+  const _AccountActionRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color,
+  });
+
+  final Object icon;
+  final String label;
+  final VoidCallback? onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      minTileHeight: 64,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      leading: PhosphorIcon(icon, size: 22, color: color),
+      title: Text(
+        label,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(color: color),
+      ),
+      trailing: const PhosphorIcon(
+        PhosphorIconsRegular.caretRight,
+        size: 18,
+        color: MedicalBoxColors.faint,
+      ),
+      enabled: onTap != null,
+      onTap: onTap,
     );
   }
 }
