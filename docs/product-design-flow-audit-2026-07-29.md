@@ -13,7 +13,9 @@ Target constraints:
 
 Preservation constraints:
 
-- Existing encrypted Drift databases and versioned `.medicalbox` exports remain readable.
+- Existing encrypted Drift databases remain readable.
+- The unpublished `.medicalbox` v1 envelope may be replaced before the first
+  TestFlight release; every format released to testers must remain readable.
 - Family, medicine, expiry, notes, visits, and reminders remain device-local.
 - Destructive actions retain confirmation.
 - Official medicine information and safety disclosures remain neutral and free.

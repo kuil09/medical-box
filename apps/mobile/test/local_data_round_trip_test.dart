@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:cryptography/cryptography.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -176,6 +178,41 @@ void main() {
       String.fromCharCodes(encrypted),
       isNot(contains('Private medicine')),
     );
+    final envelope = jsonDecode(utf8.decode(encrypted)) as Map<String, dynamic>;
+    final kdf = envelope['kdf'] as Map<String, dynamic>;
+    final cipher = envelope['cipher'] as Map<String, dynamic>;
+    expect(envelope['version'], 2);
+    expect(kdf['name'], 'argon2id');
+    expect(cipher['name'], 'aes-256-gcm');
+    expect(base64Url.decode(cipher['nonce'] as String), hasLength(12));
+    expect(base64Url.decode(cipher['mac'] as String), hasLength(16));
+
+    final secondEncrypted = await service.createExportBytes(
+      'strong-passphrase',
+    );
+    final secondEnvelope =
+        jsonDecode(utf8.decode(secondEncrypted)) as Map<String, dynamic>;
+    final secondKdf = secondEnvelope['kdf'] as Map<String, dynamic>;
+    final secondCipher = secondEnvelope['cipher'] as Map<String, dynamic>;
+    expect(secondKdf['salt'], isNot(kdf['salt']));
+    expect(secondCipher['nonce'], isNot(cipher['nonce']));
+
+    await expectLater(
+      service.importExport(encrypted, 'different-passphrase'),
+      throwsA(isA<SecretBoxAuthenticationError>()),
+    );
+    expect((await database.watchInventory().first).single.id, 'item');
+
+    final tamperedCiphertext = base64Url.decode(cipher['ciphertext'] as String);
+    tamperedCiphertext[0] ^= 1;
+    cipher['ciphertext'] = base64UrlEncode(tamperedCiphertext);
+    final tampered = Uint8List.fromList(utf8.encode(jsonEncode(envelope)));
+    await expectLater(
+      service.importExport(tampered, 'strong-passphrase'),
+      throwsA(isA<SecretBoxAuthenticationError>()),
+    );
+    expect((await database.watchInventory().first).single.id, 'item');
+
     await database.deleteAllLocalData();
     expect(await database.watchInventory().first, isEmpty);
 

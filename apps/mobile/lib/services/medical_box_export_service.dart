@@ -18,8 +18,8 @@ class MedicalBoxExportService {
        _temporaryDirectory = temporaryDirectory ?? getTemporaryDirectory;
 
   static const format = 'com.medicalbox.export';
-  static const version = 1;
-  static const _aad = 'medicalbox:v1';
+  static const version = 2;
+  static const _aad = 'medicalbox:v2';
   static const _argonMemoryKiB = 19456;
   static const _argonIterations = 2;
   static const _argonParallelism = 1;
@@ -58,7 +58,7 @@ class MedicalBoxExportService {
   Future<Uint8List> createExportBytes(String password) async {
     _validatePassword(password);
     final salt = _randomBytes(16);
-    final cipher = Xchacha20.poly1305Aead();
+    final cipher = AesGcm.with256bits();
     final nonce = cipher.newNonce();
     final key = await _deriveKey(password, salt);
     final payload = utf8.encode(
@@ -86,7 +86,7 @@ class MedicalBoxExportService {
         'salt': base64UrlEncode(salt),
       },
       'cipher': {
-        'name': 'xchacha20-poly1305',
+        'name': 'aes-256-gcm',
         'nonce': base64UrlEncode(secretBox.nonce),
         'ciphertext': base64UrlEncode(secretBox.cipherText),
         'mac': base64UrlEncode(secretBox.mac.bytes),
@@ -105,8 +105,7 @@ class MedicalBoxExportService {
     }
     final kdf = (envelope['kdf'] as Map).cast<String, dynamic>();
     final cipherData = (envelope['cipher'] as Map).cast<String, dynamic>();
-    if (kdf['name'] != 'argon2id' ||
-        cipherData['name'] != 'xchacha20-poly1305') {
+    if (kdf['name'] != 'argon2id' || cipherData['name'] != 'aes-256-gcm') {
       throw const FormatException('Unsupported cryptography suite.');
     }
     final memory = kdf['memoryKiB'];
@@ -122,7 +121,7 @@ class MedicalBoxExportService {
     final cipherText = base64Url.decode(cipherData['ciphertext'] as String);
     final mac = Mac(base64Url.decode(cipherData['mac'] as String));
     final key = await _deriveKey(password, salt);
-    final clearText = await Xchacha20.poly1305Aead().decrypt(
+    final clearText = await AesGcm.with256bits().decrypt(
       SecretBox(cipherText, nonce: nonce, mac: mac),
       secretKey: key,
       aad: utf8.encode(_aad),

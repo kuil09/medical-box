@@ -251,7 +251,7 @@ class SettingsScreen extends ConsumerWidget {
                 ListTile(
                   leading: Icon(PhosphorIconsRegular.uploadSimple),
                   title: const Text('내보내기'),
-                  subtitle: const Text('Argon2id + XChaCha20-Poly1305'),
+                  subtitle: const Text('Argon2id + AES-256-GCM'),
                   onTap: () => _export(context, ref),
                 ),
                 const Divider(height: 1),

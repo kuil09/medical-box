@@ -13,10 +13,10 @@
 
 ## Portable backups
 
-`.medicalbox` files are versioned JSON envelopes. The private snapshot is
-encrypted with XChaCha20-Poly1305 using a key derived by Argon2id with 19 MiB of
-memory, two iterations, and one lane. Authentication tokens are not part of the
-database snapshot. Imports authenticate and validate the full envelope before a
+`.medicalbox` files are versioned JSON envelopes. Version 2 encrypts the private
+snapshot with AES-256-GCM using a key derived by Argon2id with 19 MiB of memory,
+two iterations, and one lane. Authentication tokens are not part of the database
+snapshot. Imports authenticate and validate the full envelope before a
 transaction replaces local data.
 
 Exports are first created as `medical-box-*.medicalbox` files in the app
