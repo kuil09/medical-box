@@ -17,7 +17,9 @@ import 'package:medical_box/services/medicine_ocr_service.dart';
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
 
-  testWidgets('medicine editor omits exact quantity controls', (tester) async {
+  testWidgets('medicine editor omits low-value quantity and privacy notices', (
+    tester,
+  ) async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
 
@@ -29,6 +31,10 @@ void main() {
     );
 
     expect(find.text('수량'), findsNothing);
+    expect(
+      find.text('로그인 후 검색어만 공식 카탈로그 조회에 사용하고, 사진·사용기한·메모는 서버로 보내지 않아요.'),
+      findsNothing,
+    );
   });
 
   testWidgets('a stale autocomplete response cannot replace current results', (
