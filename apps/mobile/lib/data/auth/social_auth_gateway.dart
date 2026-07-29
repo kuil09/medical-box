@@ -40,6 +40,9 @@ class SdkSocialAuthGateway implements SocialAuthGateway {
 
   @override
   bool supportsProvider(LoginProvider provider) {
+    if (provider == LoginProvider.kakao && !kakaoNativeAppConfigured) {
+      return false;
+    }
     return isLoginProviderSupported(
       provider,
       _targetPlatform,
@@ -86,7 +89,7 @@ class SdkSocialAuthGateway implements SocialAuthGateway {
           authorizationCode: credential.authorizationCode,
         );
       case LoginProvider.kakao:
-        if (kakaoNativeAppKey.isEmpty) {
+        if (!kakaoNativeAppConfigured) {
           throw StateError('KAKAO_NATIVE_APP_KEY is not configured.');
         }
         final token = forceReauthentication

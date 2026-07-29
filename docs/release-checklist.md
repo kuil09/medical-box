@@ -104,9 +104,10 @@ Evidence date: 2026-07-28
 - [x] Android release signing is fail-closed; compile-only unsigned AAB and iOS
   release no-codesign builds pass locally with Flutter 3.44.7
 - [x] Protected manual mobile-release workflow validates secrets, signs and
-  verifies runner-local store outputs, persists no signed AAB/IPA as a public
-  Actions artifact, and uses an always-attempt, fail-closed cleanup for build
-  outputs and signing material
+  verifies runner-local store outputs, can upload the verified IPA directly to
+  TestFlight, persists no signed AAB/IPA as a public Actions artifact, and uses
+  an always-attempt, fail-closed cleanup for build outputs, upload keys, and
+  signing material
 - [x] GitHub `closed-beta` environment exists, permits only `main`, and rejects
   administrator bypass. Store promotion remains a separate account-authenticated
   action.
@@ -114,7 +115,9 @@ Evidence date: 2026-07-28
   macOS Keychain, and its signing secrets plus both Google client IDs are
   installed in the protected environment
 - [ ] The protected environment contains the expected Android upload-certificate
-  SHA-256, Kakao native key, and all Apple distribution-signing inputs
+  SHA-256 and all Apple distribution-signing and App Store Connect upload inputs
+- [ ] Kakao native key is installed before Kakao login is exposed in a store
+  build; an omitted key keeps the provider hidden
 - [x] Korean Play Store and App Store metadata source files are versioned
 - [x] Pull request 10 full CI run `30319463102` and both CodeQL runs pass after
   the repository became public; the former private-repository billing gate no

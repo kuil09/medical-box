@@ -12,7 +12,7 @@ import 'services/reminder_scheduler.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (kakaoNativeAppKey.isNotEmpty) {
+  if (kakaoNativeAppConfigured) {
     KakaoSdk.init(nativeAppKey: kakaoNativeAppKey);
   }
 

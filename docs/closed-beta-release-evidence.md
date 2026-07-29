@@ -298,14 +298,16 @@ user-controlled step. It requires an individual-or-organization choice, a
 Google payments profile, account details, private contact details, and public
 developer-profile details.
 
-App Store Connect reached the Apple sign-in page, but the available passkey
-attempt returned an error. The local project has automatic signing, team
-`GS344U4ZSG`, and bundle identifier `com.medicalbox.app`, but the current
-Keychain contains no valid Apple code-signing identity and the installed
-provisioning profiles do not cover `com.medicalbox.app`. TestFlight and CI
-signing remain blocked until the account owner completes Apple sign-in and
-two-factor authentication, then creates or downloads the distribution
-certificate and App Store profile.
+On 2026-07-29, the team App Store Connect API registered bundle identifier
+`com.medicalbox.app` as resource `6R8RCBZ2L7`, enabled Associated Domains and
+primary Sign in with Apple, and created active App Store profile
+`YKM6H94LAG` (`deb2a89e-e1d3-4861-a114-70969e901219`). The profile covers both
+required entitlements, disallows debugger attachment, and has no device scope.
+The existing Apple Distribution certificate resource `4S272BFVSV` and matching
+private key remain valid through 2027-07-15. The team API key also has verified
+recent TestFlight upload capability. App Store Connect still has no app record
+for `com.medicalbox.app`; creating that record requires an authenticated web
+session before the first build can be accepted.
 
 The Kakao Developers console is signed out. Railway production also lacks
 `KAKAO_APP_ID`, `APPLE_TEAM_ID`, and the Play App Signing

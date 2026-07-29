@@ -15,6 +15,12 @@ import 'package:medical_box/providers.dart';
 
 void main() {
   group('login provider platform support', () {
+    test('unconfigured Kakao login is hidden by the SDK gateway', () {
+      final gateway = SdkSocialAuthGateway(targetPlatform: TargetPlatform.iOS);
+
+      expect(gateway.supportsProvider(LoginProvider.kakao), isFalse);
+    });
+
     test('Apple is fail-closed on iOS until explicitly enabled', () {
       expect(
         isLoginProviderSupported(LoginProvider.apple, TargetPlatform.iOS),
@@ -94,13 +100,15 @@ void main() {
     expect(networkInvoked, isFalse);
   });
 
-  testWidgets('Android does not offer Apple sign-in', (tester) async {
+  testWidgets('Android hides Apple and unconfigured Kakao sign-in', (
+    tester,
+  ) async {
     await tester.pumpWidget(_loginApp(targetPlatform: TargetPlatform.android));
     await tester.pump();
 
     expect(find.text('Apple로 계속'), findsNothing);
     expect(find.text('Google로 계속'), findsOneWidget);
-    expect(find.text('카카오로 계속'), findsOneWidget);
+    expect(find.text('카카오로 계속'), findsNothing);
     final googleButton = tester.widget<OutlinedButton>(
       find.widgetWithText(OutlinedButton, 'Google로 계속'),
     );

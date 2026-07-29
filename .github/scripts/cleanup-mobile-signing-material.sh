@@ -65,6 +65,7 @@ cleanup_ios_signing_material() {
     "${runner_temp}/distribution.p12"
     "${runner_temp}/profile.mobileprovision"
     "${runner_temp}/ExportOptions.plist"
+    "${runner_temp}/app-store-connect"
     "${profile_uuid_file}"
     "ios/Flutter/ReleaseSecrets.xcconfig"
   )
@@ -86,8 +87,9 @@ cleanup_ios_signing_material() {
   remove_release_file "${targets[1]}"
   remove_release_file "${targets[2]}"
   remove_release_file "${targets[3]}"
-  remove_release_file "${targets[4]}"
+  remove_release_directory "${targets[4]}"
   remove_release_file "${targets[5]}"
+  remove_release_file "${targets[6]}"
 
   if [[ -e "${keychain}" ]] && ! security delete-keychain "${keychain}"; then
     printf 'security delete-keychain failed; removing the keychain file directly.\n' >&2
