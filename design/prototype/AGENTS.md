@@ -8,7 +8,7 @@ Before planning or implementing any mobile-app change, read this `AGENTS.md` in 
 
 Before making substantial visual changes, use the Product Design plugin's `get-context` skill when the visual source is unclear or no longer matches the current goal. When the user gives durable prototype-specific design feedback, preferences, or decisions, record them in `AGENTS.md`.
 
-Personal pouches must be rendered as real interactive UI objects, never as image hotspots. The core prototype must support family-member add, rename, and confirmed delete, plus medicine add, edit, quantity updates, and confirmed delete for both the shared tray and each personal pouch.
+Personal pouches must be rendered as real interactive UI objects, never as image hotspots. The core prototype must support family-member add, rename, and confirmed delete, plus medicine add, edit, and confirmed delete for both the shared tray and each personal pouch. Do not expose exact medicine quantity inputs, counters, or increment/decrement controls; the product manages which medicines are stored, their expiry, and their condition rather than stock counts.
 
 The shared medicine tray must be a cohesive open/close UI component with a
 layered lid, hinge, rim, tray, compartments, elevation, and coordinated motion.
@@ -17,7 +17,7 @@ or floating labels. The physical metaphor belongs to the box structure; the
 inventory remains readable semantic UI inside it. Opening is an
 information-disclosure state, not a decorative animation: the closed chest must
 conceal its contents, and the open chest must reveal the actual current
-inventory as category-grouped buttons with names and quantities. Selecting an
+inventory as category-grouped buttons with names and useful status metadata. Selecting an
 item must open that item's editor. An empty open chest must remain visibly empty
 rather than showing decorative or invented products. Keep keyboard-accessible
 open and close controls and honor reduced-motion preferences. Do not use a

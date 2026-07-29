@@ -16,17 +16,11 @@ class InventoryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final inventory = ref.watch(sharedInventoryProvider);
+    final hasItems = inventory.valueOrNull?.isNotEmpty == true;
     return Scaffold(
       appBar: AppBar(
         title: const Text('공용 트레이'),
         backgroundColor: Colors.transparent,
-        actions: [
-          IconButton(
-            onPressed: () => context.push('/inventory/new'),
-            icon: Icon(PhosphorIconsBold.plus),
-            tooltip: '의약품 등록',
-          ),
-        ],
       ),
       body: inventory.when(
         data: (items) {
@@ -48,22 +42,22 @@ class InventoryScreen extends ConsumerWidget {
               }
               final item = items[index];
               return Card(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-                  child: Row(
-                    children: [
-                      OfficialMedicineThumbnail(
-                        imageUrl: item.officialImageUrl,
-                        fallbackIcon: PhosphorIconsDuotone.pill,
-                        backgroundColor: index.isEven
-                            ? MedicalBoxColors.sky
-                            : const Color(0xFFFFD8C8),
-                      ),
-                      const SizedBox(width: 13),
-                      Expanded(
-                        child: InkWell(
-                          onTap: () =>
-                              context.push('/inventory/${item.id}/edit'),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => context.push('/inventory/${item.id}/edit'),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+                    child: Row(
+                      children: [
+                        OfficialMedicineThumbnail(
+                          imageUrl: item.officialImageUrl,
+                          fallbackIcon: PhosphorIconsDuotone.pill,
+                          backgroundColor: index.isEven
+                              ? MedicalBoxColors.sky
+                              : const Color(0xFFFFD8C8),
+                        ),
+                        const SizedBox(width: 13),
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -101,29 +95,14 @@ class InventoryScreen extends ConsumerWidget {
                             ],
                           ),
                         ),
-                      ),
-                      IconButton(
-                        onPressed: item.quantity <= 0
-                            ? null
-                            : () => ref
-                                  .read(databaseProvider)
-                                  .setQuantity(item.id, item.quantity - 1),
-                        icon: Icon(PhosphorIconsRegular.minus),
-                      ),
-                      Text(
-                        '${item.quantity}',
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
+                        const SizedBox(width: 10),
+                        Icon(
+                          PhosphorIconsRegular.caretRight,
+                          color: MedicalBoxColors.muted,
+                          size: 18,
                         ),
-                      ),
-                      IconButton(
-                        onPressed: () => ref
-                            .read(databaseProvider)
-                            .setQuantity(item.id, item.quantity + 1),
-                        icon: Icon(PhosphorIconsRegular.plus),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -133,13 +112,15 @@ class InventoryScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('보관함을 열 수 없어요: $error')),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/inventory/new'),
-        backgroundColor: MedicalBoxColors.orange,
-        foregroundColor: Colors.white,
-        icon: Icon(PhosphorIconsBold.plus),
-        label: const Text('약 등록'),
-      ),
+      floatingActionButton: hasItems
+          ? FloatingActionButton.extended(
+              onPressed: () => context.push('/inventory/new'),
+              backgroundColor: MedicalBoxColors.orange,
+              foregroundColor: Colors.white,
+              icon: Icon(PhosphorIconsBold.plus),
+              label: const Text('약 등록'),
+            )
+          : null,
     );
   }
 }

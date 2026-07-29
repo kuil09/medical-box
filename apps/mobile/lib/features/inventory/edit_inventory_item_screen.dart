@@ -31,7 +31,6 @@ class _EditInventoryItemScreenState
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _makerController = TextEditingController();
-  final _quantityController = TextEditingController(text: '1');
   final _storageController = TextEditingController();
   final _notesController = TextEditingController();
   Timer? _searchTimer;
@@ -46,6 +45,7 @@ class _EditInventoryItemScreenState
   bool _searching = false;
   bool _scanning = false;
   bool _saving = false;
+  int _preservedQuantity = 1;
   int _searchGeneration = 0;
 
   @override
@@ -66,7 +66,6 @@ class _EditInventoryItemScreenState
     setState(() {
       _nameController.text = item.productName;
       _makerController.text = item.manufacturer ?? '';
-      _quantityController.text = item.quantity.toString();
       _storageController.text = item.storageNote ?? '';
       _notesController.text = item.privateNote ?? '';
       _itemSeq = item.itemSeq;
@@ -76,6 +75,7 @@ class _EditInventoryItemScreenState
       _appearanceSummary = item.appearanceSummary;
       _expiresOn = item.expiresOn;
       _containerId = item.containerId;
+      _preservedQuantity = item.quantity;
     });
   }
 
@@ -390,7 +390,8 @@ class _EditInventoryItemScreenState
         identificationVariantKey: Value(_identificationVariantKey),
         officialImageUrl: Value(_officialImageUrl),
         appearanceSummary: Value(_appearanceSummary),
-        quantity: Value(int.parse(_quantityController.text)),
+        // Keep the legacy field for encrypted database and export compatibility.
+        quantity: Value(_preservedQuantity),
         expiresOn: Value(_expiresOn),
         storageNote: Value(
           _storageController.text.trim().isEmpty
@@ -449,7 +450,6 @@ class _EditInventoryItemScreenState
     _searchTimer?.cancel();
     _nameController.dispose();
     _makerController.dispose();
-    _quantityController.dispose();
     _storageController.dispose();
     _notesController.dispose();
     super.dispose();
@@ -545,22 +545,6 @@ class _EditInventoryItemScreenState
               decoration: const InputDecoration(labelText: '제조사 (선택)'),
             ),
             const SizedBox(height: 14),
-            TextFormField(
-              controller: _quantityController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: '수량',
-                suffixText: '개',
-              ),
-              validator: (value) {
-                final quantity = int.tryParse(value ?? '');
-                if (quantity == null || quantity < 0 || quantity > 9999) {
-                  return '0~9999 사이 수량을 입력해 주세요.';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 14),
             InkWell(
               onTap: _pickDate,
               borderRadius: BorderRadius.circular(16),
@@ -619,7 +603,7 @@ class _PrivacyNote extends StatelessWidget {
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
-              '로그인 후 검색어만 공식 카탈로그 조회에 사용하고, 사진·수량·사용기한·메모는 서버로 보내지 않아요.',
+              '로그인 후 검색어만 공식 카탈로그 조회에 사용하고, 사진·사용기한·메모는 서버로 보내지 않아요.',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
           ),

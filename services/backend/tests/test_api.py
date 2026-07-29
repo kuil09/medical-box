@@ -135,7 +135,7 @@ def test_web_health_and_security_headers(client: TestClient) -> None:
     assert "설정 → 로그인 및 검색 권한 → 서버 계정 삭제" in account_deletion.text
     privacy = client.get("/privacy")
     assert "검색어 또는 공개 품목기준코드(itemSeq)" in privacy.text
-    assert "기기 안의 재고 정보와 결합하거나 영구 저장하지 않습니다." in privacy.text
+    assert "기기 안의 보관 정보와 결합하거나 영구 저장하지 않습니다." in privacy.text
     live = client.get("/api/health/live")
     ready = client.get("/api/health/ready")
     assert live.json() == {"status": "ok"}

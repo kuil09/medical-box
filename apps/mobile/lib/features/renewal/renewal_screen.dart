@@ -176,7 +176,7 @@ class RenewalScreen extends ConsumerWidget {
                               ),
                             CheckboxListTile(
                               value: plan.remainingQuantityChecked,
-                              title: const Text('남은 수량을 직접 확인했어요'),
+                              title: const Text('필요한 약이 남아 있는지 확인했어요'),
                               controlAffinity: ListTileControlAffinity.leading,
                               onChanged: (value) => _setCheck(
                                 ref,

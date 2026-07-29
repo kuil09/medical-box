@@ -15,7 +15,6 @@ type MedicineChestItem = {
   name: string;
   category: string;
   meta: string;
-  quantity: number;
 };
 
 type MedicineChestUIProps = {
@@ -24,6 +23,7 @@ type MedicineChestUIProps = {
   onToggle: () => void;
   onItemSelect: (itemId: string) => void;
   onAdd: () => void;
+  onShowAll: () => void;
 };
 
 const categoryOrder: MedicineCategory[] = ["digestive", "wound", "other"];
@@ -52,6 +52,7 @@ export function MedicineChestUI({
   onToggle,
   onItemSelect,
   onAdd,
+  onShowAll,
 }: MedicineChestUIProps) {
   const groupedItems: Record<MedicineCategory, MedicineChestItem[]> = {
     digestive: items.filter((item) => categoryFor(item) === "digestive"),
@@ -65,8 +66,8 @@ export function MedicineChestUI({
       role="group"
       aria-label={
         open
-          ? `열린 공용 구급상자, 의약품 ${items.length}개가 보임`
-          : `닫힌 공용 구급상자, 의약품 ${items.length}개 보관 중`
+          ? `열린 공용 구급상자, 의약품 ${items.length}종이 보임`
+          : `닫힌 공용 구급상자, 의약품 ${items.length}종 보관 중`
       }
       data-testid="medicine-chest-ui"
     >
@@ -77,7 +78,7 @@ export function MedicineChestUI({
           className="medicine-chest-lid"
           type="button"
           aria-expanded={open}
-          aria-label={open ? "공용 구급상자 닫기" : `공용 구급상자 열기, 의약품 ${items.length}개`}
+          aria-label={open ? "공용 구급상자 닫기" : `공용 구급상자 열기, 의약품 ${items.length}종`}
           onClick={onToggle}
         >
           <span className="medicine-chest-lid-front" aria-hidden={open}>
@@ -87,7 +88,7 @@ export function MedicineChestUI({
             <span className="medicine-chest-lid-copy">
               <small>HOUSEHOLD MEDICAL BOX</small>
               <strong>공용 구급상자</strong>
-              <span>{items.length}개 정리됨 · 눌러서 열기</span>
+              <span>{items.length}종 정리됨 · 눌러서 열기</span>
             </span>
           </span>
           <span className="medicine-chest-lid-inside" aria-hidden={!open}>
@@ -96,7 +97,7 @@ export function MedicineChestUI({
             </span>
             <span>
               <small>공용 트레이</small>
-              <strong>{items.length}개 보관 중</strong>
+              <strong>{items.length}종 보관 중</strong>
               <span>칸별로 꺼내고 다시 놓기 쉽게 정리했어요</span>
             </span>
           </span>
@@ -119,7 +120,7 @@ export function MedicineChestUI({
                         className={`medicine-chest-compartment medicine-chest-compartment--${category}`}
                         style={{ "--compartment-index": categoryIndex } as CSSProperties}
                         role="group"
-                        aria-label={`${categoryLabels[category]} 의약품 ${categoryItems.length}개`}
+                        aria-label={`${categoryLabels[category]} 의약품 ${categoryItems.length}종`}
                         key={category}
                       >
                         <div className="medicine-chest-compartment-label">
@@ -127,7 +128,7 @@ export function MedicineChestUI({
                             <CategoryIcon category={category} />
                           </span>
                           <strong>{categoryLabels[category]}</strong>
-                          <small>{categoryItems.length}개</small>
+                          <small>{categoryItems.length}종</small>
                         </div>
                         <div className="medicine-chest-compartment-items">
                           {visibleItems.map((item, itemIndex) => (
@@ -135,7 +136,7 @@ export function MedicineChestUI({
                               className="medicine-chest-item"
                               type="button"
                               style={{ "--item-index": itemIndex } as CSSProperties}
-                              aria-label={`${item.name}, ${item.quantity}개, 편집`}
+                              aria-label={`${item.name}, 편집`}
                               data-item-id={item.id}
                               onClick={() => onItemSelect(item.id)}
                               key={item.id}
@@ -144,7 +145,6 @@ export function MedicineChestUI({
                                 <strong>{item.name}</strong>
                                 <small>{item.meta || item.category}</small>
                               </span>
-                              <span className="medicine-chest-item-quantity">{item.quantity}</span>
                               <ChevronRightIcon />
                             </button>
                           ))}
@@ -152,7 +152,14 @@ export function MedicineChestUI({
                             <span className="medicine-chest-empty-slot">비어 있음</span>
                           ) : null}
                           {categoryItems.length > visibleItems.length ? (
-                            <span className="medicine-chest-more">+{categoryItems.length - visibleItems.length}</span>
+                            <button
+                              className="medicine-chest-more"
+                              type="button"
+                              onClick={onShowAll}
+                              aria-label={`${categoryLabels[category]} 의약품 전체 보기`}
+                            >
+                              +{categoryItems.length - visibleItems.length}종 보기
+                            </button>
                           ) : null}
                         </div>
                       </div>
@@ -167,12 +174,9 @@ export function MedicineChestUI({
 
       <div className="medicine-chest-summary">
         <span>
-          <small>{open ? `상자 안 ${items.length}개` : "공용 구급상자"}</small>
+          <small>{open ? `상자 안 ${items.length}종` : "공용 구급상자"}</small>
           <strong>{open ? "칸 안의 의약품을 선택하세요" : "필요할 때 열어 바로 확인해요"}</strong>
         </span>
-        <button type="button" onClick={onToggle} aria-expanded={open}>
-          {open ? "닫기" : `${items.length}개 · 열기`}
-        </button>
       </div>
 
       <div className="medicine-chest-actions" aria-hidden={!open}>

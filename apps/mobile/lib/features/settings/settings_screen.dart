@@ -142,7 +142,7 @@ class SettingsScreen extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: const Text('기기 데이터를 삭제할까요?'),
         content: const Text(
-          '가족·보유약·수량·방문 준비·알림과 앱이 만든 임시 백업을 이 기기에서 삭제해요. '
+          '가족·보유약·방문 준비·알림과 앱이 만든 임시 백업을 이 기기에서 삭제해요. '
           '저장하거나 공유한 .medicalbox 복사본은 앱에서 지울 수 없으므로 별도로 삭제해야 해요. '
           '서버 계정은 삭제되지 않아요.',
         ),
