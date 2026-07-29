@@ -1222,7 +1222,7 @@ def _backup_plan_guard_payload(
     catalog_cron: str | None = None,
     api_catalog_min_free_bytes: str = "1200000000",
     catalog_sync_min_free_bytes: str = "1200000000",
-    terms_version: str = "2026-07-25",
+    terms_version: str = "2026-07-29",
     extra_resources: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     allowed_changes = _backup_plan_guard_allowed_changes()

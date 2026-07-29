@@ -7,6 +7,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../data/local/app_database.dart';
+import '../../product_limits.dart';
 import '../../providers.dart';
 import '../../theme.dart';
 
@@ -14,6 +15,17 @@ class PouchScreen extends ConsumerWidget {
   const PouchScreen({super.key});
 
   Future<void> _addPouch(BuildContext context, WidgetRef ref) async {
+    final database = ref.read(databaseProvider);
+    final members = await database.select(database.memberProfiles).get();
+    if (members.length >= maximumManagedMemberProfiles) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('가족 프로필은 최대 10명까지 관리할 수 있어요.')),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
     var input = '';
     final name = await showDialog<String>(
       context: context,
@@ -40,7 +52,6 @@ class PouchScreen extends ConsumerWidget {
       ),
     );
     if (name == null || name.isEmpty) return;
-    final database = ref.read(databaseProvider);
     final household = await database.select(database.households).getSingle();
     final memberId = const Uuid().v4();
     await database.transaction(() async {

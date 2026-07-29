@@ -7,6 +7,8 @@ import 'data/local/database_key_store.dart';
 import 'services/account_deletion_coordinator.dart';
 import 'services/local_data_lifecycle.dart';
 import 'services/medical_box_export_service.dart';
+import 'services/medicine_ocr_service.dart';
+import 'services/monetization_service.dart';
 import 'services/reminder_scheduler.dart';
 
 final databaseProvider = Provider<AppDatabase>(
@@ -22,6 +24,18 @@ final reminderSchedulerProvider = Provider<ReminderScheduling>(
 );
 
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
+
+final medicineScannerProvider = Provider<MedicineScanner>(
+  (ref) => DeviceMedicineScanner(),
+);
+
+final monetizationStateProvider = Provider<MonetizationState>(
+  (ref) => const MonetizationState.free(),
+);
+
+final bannerAdAdapterProvider = Provider<BannerAdAdapter>(
+  (ref) => const DisabledBannerAdAdapter(),
+);
 
 final authRepositoryProvider = Provider<AuthRepository>(
   (ref) => AuthRepository(

@@ -4,6 +4,29 @@ The iOS and Android client for “우리집 구급키트.” Household members, 
 inventory, reminders, renewal preparation, and selected official pill
 appearances remain in the encrypted on-device Drift database.
 
+## Access and local-data boundary
+
+- App access requires a Kakao, Apple, or Google account.
+- Authentication controls app entry, catalog permission, and future purchase
+  restoration.
+- Household, member, inventory, reminder, visit, and private-note data remain in
+  the encrypted device database.
+- Signing out locks the app without deleting the encrypted device database.
+
+## On-device medicine recognition
+
+The item editor can capture a package photo, run Korean OCR on-device, derive a
+small set of search terms, and query the authenticated official catalog. The
+temporary capture is deleted after recognition. The user must select a catalog
+candidate explicitly; recognition never saves an item automatically.
+
+## Monetization boundary
+
+Provider-independent access tiers and privacy-safe banner placements are
+defined, but live advertising is disabled by default. A production ad adapter,
+store receipt verification, product identifiers, and prices require separate
+approval.
+
 ## Toolchain
 
 Flutter is pinned to `3.44.7` through FVM.

@@ -2,6 +2,11 @@
 
 Evidence date: 2026-07-28
 
+> Historical evidence notice: the anonymous mobile onboarding observations in
+> this record were superseded by the required-account product decision dated
+> 2026-07-29. They remain here only as evidence of the earlier build and are not
+> current release requirements. Anonymous catalog requests must still fail.
+
 ## Scope
 
 This record covers the requested authentication and catalog entitlement

@@ -22,13 +22,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   void initState() {
     super.initState();
-    Future<void>(() async {
+    Future<void>.microtask(() async {
       final settings = await ref.read(databaseProvider).getSettings();
-      if (settings.onboardingCompleted && mounted) context.go('/');
+      if (settings.onboardingCompleted && mounted) context.go('/gate');
     });
   }
 
-  Future<void> _continueAnonymously() async {
+  Future<void> _continueToAccount() async {
     setState(() => _working = true);
     final database = ref.read(databaseProvider);
     if ((await database.select(database.households).get()).isEmpty) {
@@ -52,61 +52,59 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       });
     }
     await database.setOnboardingCompleted();
-    if (mounted) context.go('/');
+    if (mounted) context.go('/login');
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 7,
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: MedicalBoxColors.sky,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Text(
+                    '기기 안에서만',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                 ),
-                decoration: BoxDecoration(
-                  color: MedicalBoxColors.sky,
-                  borderRadius: BorderRadius.circular(999),
+                const SizedBox(height: 24),
+                Text(
+                  '우리 집 약을,\n꺼내 보기 쉽게.',
+                  style: Theme.of(context).textTheme.displaySmall,
                 ),
-                child: const Text(
-                  '기기 안에서만',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+                const SizedBox(height: 14),
+                const Text(
+                  '계정으로 앱 접근을 보호하고, 가족과 보유약 정보는 이 기기의 암호화된 보관함에만 저장해요. 로그인 후에도 개인 보관 데이터는 서버로 동기화되지 않아요.',
+                  style: TextStyle(
+                    fontSize: 16,
+                    height: 1.55,
+                    color: MedicalBoxColors.muted,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                '우리 집 약을,\n꺼내 보기 쉽게.',
-                style: Theme.of(context).textTheme.displaySmall,
-              ),
-              const SizedBox(height: 14),
-              const Text(
-                '가족과 보유약 정보는 이 기기의 암호화된 보관함에만 저장돼요. 보관함은 로그인 없이 쓸 수 있고, 공식 의약품 검색은 승인된 로그인이 필요해요.',
-                style: TextStyle(
-                  fontSize: 16,
-                  height: 1.55,
-                  color: MedicalBoxColors.muted,
+                const SizedBox(height: 28),
+                SizedBox(
+                  height: constraints.maxHeight >= 760 ? 350 : 300,
+                  child: const _InteractiveTrayPreview(),
                 ),
-              ),
-              const SizedBox(height: 28),
-              const Expanded(child: _InteractiveTrayPreview()),
-              const SizedBox(height: 20),
-              FilledButton(
-                onPressed: _working ? null : _continueAnonymously,
-                child: Text(_working ? '보관함 여는 중…' : '로그인 없이 시작'),
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: TextButton(
-                  onPressed: () => context.push('/login'),
-                  child: const Text('의약품 검색을 위해 로그인'),
+                const SizedBox(height: 20),
+                FilledButton(
+                  onPressed: _working ? null : _continueToAccount,
+                  child: Text(_working ? '준비하는 중…' : '가입 또는 로그인하고 시작'),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

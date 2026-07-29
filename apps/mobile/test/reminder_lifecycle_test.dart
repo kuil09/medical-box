@@ -6,7 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:medical_box/app.dart';
+import 'package:medical_box/data/api/api_client.dart';
+import 'package:medical_box/data/auth/auth_repository.dart';
 import 'package:medical_box/data/local/app_database.dart';
+import 'package:medical_box/data/local/database_key_store.dart';
 import 'package:medical_box/providers.dart';
 import 'package:medical_box/services/account_deletion_coordinator.dart';
 import 'package:medical_box/services/local_data_lifecycle.dart';
@@ -66,7 +69,13 @@ void main() {
     final database = RecordingDatabase(events);
     final scheduler = RecordingReminderScheduler(events);
     final lifecycle = LocalDataLifecycle(database, scheduler);
+    final auth = AuthRepository(
+      ApiClient(baseUrl: 'https://medicalbox.example/api'),
+      DatabaseKeyStore(),
+      targetPlatform: TargetPlatform.android,
+    );
     addTearDown(database.close);
+    addTearDown(auth.dispose);
     await _insertReminder(database, id: 'widget-resume');
 
     await tester.pumpWidget(
@@ -75,6 +84,8 @@ void main() {
           databaseProvider.overrideWithValue(database),
           reminderSchedulerProvider.overrideWithValue(scheduler),
           localDataLifecycleProvider.overrideWithValue(lifecycle),
+          authRepositoryProvider.overrideWithValue(auth),
+          authSessionProvider.overrideWith((ref) async => null),
         ],
         child: const MedicalBoxApp(),
       ),

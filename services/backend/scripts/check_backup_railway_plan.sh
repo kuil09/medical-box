@@ -199,7 +199,7 @@ if ! jq -e \
       and .[0].variables.CATALOG_MIN_FREE_BYTES
         == {type: "literal", value: "1200000000"}
       and .[0].variables.TERMS_VERSION
-        == {type: "literal", value: "2026-07-25"}
+        == {type: "literal", value: "2026-07-29"}
     )
     and (
       [.desiredGraph.resources[] | select(.address == "service.catalog-sync")]

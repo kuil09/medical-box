@@ -5,3 +5,7 @@ const appleSignInFeatureEnabled = bool.fromEnvironment(
   'APPLE_SIGN_IN_ENABLED',
   defaultValue: false,
 );
+const bannerAdvertisingEnabled = bool.fromEnvironment(
+  'MEDICAL_BOX_BANNER_ADS_ENABLED',
+  defaultValue: false,
+);

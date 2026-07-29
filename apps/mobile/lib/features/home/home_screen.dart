@@ -9,6 +9,8 @@ import '../../providers.dart';
 import '../../services/inventory_share_service.dart';
 import '../../theme.dart';
 import '../../widgets/official_medicine_thumbnail.dart';
+import '../../widgets/privacy_safe_banner_slot.dart';
+import '../../services/monetization_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -303,6 +305,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onTap: () => context.push('/renewal'),
           ),
           const SizedBox(height: 20),
+          const PrivacySafeBannerSlot(
+            placement: BannerAdPlacement.homeAfterSummary,
+          ),
           const _PrivacyStrip(),
         ],
       ),
