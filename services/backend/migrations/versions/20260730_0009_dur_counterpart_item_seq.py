@@ -34,8 +34,8 @@ def upgrade() -> None:
                 SET counterpart_item_seq = NULLIF(
                     btrim(
                         COALESCE(
-                            record.public_data ->> 'MIXTURE_ITEM_SEQ',
-                            record.public_data ->> 'mixtureItemSeq'
+                            record.payload ->> 'MIXTURE_ITEM_SEQ',
+                            record.payload ->> 'mixtureItemSeq'
                         )
                     ),
                     ''

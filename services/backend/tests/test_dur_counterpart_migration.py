@@ -71,6 +71,8 @@ def test_postgresql_upgrade_indexes_and_backfills_counterpart(
         )
     ]
     assert len(statements) == 1
+    assert "record.payload" in statements[0]
+    assert "record.public_data" not in statements[0]
     assert "MIXTURE_ITEM_SEQ" in statements[0]
     assert "mixtureItemSeq" in statements[0]
     assert "concomitant_contraindication" in statements[0]
