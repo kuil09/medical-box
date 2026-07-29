@@ -12,6 +12,7 @@ import '../../providers.dart';
 import '../../services/local_data_lifecycle.dart';
 import '../../services/monetization_service.dart';
 import '../../theme.dart';
+import '../../widgets/cabinet_index_components.dart';
 import '../../widgets/privacy_safe_banner_slot.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -190,123 +191,135 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('설정')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+        padding: const EdgeInsets.fromLTRB(
+          MedicalBoxSpacing.screen,
+          MedicalBoxSpacing.x1,
+          MedicalBoxSpacing.screen,
+          MedicalBoxSpacing.x8,
+        ),
         children: [
-          const _SectionLabel('계정'),
-          Card(
-            child: ListTile(
-              leading: PhosphorIcon(PhosphorIconsDuotone.userCircle),
-              title: const Text('계정과 검색 권한'),
-              subtitle: Text(
-                ref.watch(authSessionProvider).valueOrNull?.email ??
-                    ref.read(authRepositoryProvider).account?.email ??
-                    '앱 사용에는 로그인이 필요함',
+          const CabinetSectionLabel('계정'),
+          CabinetSectionList(
+            showDividers: false,
+            children: [
+              _SettingsRow(
+                icon: PhosphorIconsRegular.userCircle,
+                title: '계정 관리·삭제',
+                subtitle: Text(
+                  ref.watch(authSessionProvider).valueOrNull?.email ??
+                      ref.read(authRepositoryProvider).account?.email ??
+                      '앱 사용에는 로그인이 필요함',
+                ),
+                onTap: () => context.push('/login'),
               ),
-              trailing: Icon(PhosphorIconsRegular.caretRight),
-              onTap: () => context.push('/login'),
-            ),
+            ],
           ),
-          const _SectionLabel('개인정보와 공유'),
-          Card(
-            child: Column(
-              children: [
-                SwitchListTile(
-                  secondary: PhosphorIcon(PhosphorIconsDuotone.bellSlash),
-                  title: const Text('잠금화면에서 의약품명 숨기기'),
-                  subtitle: const Text('알림에는 일반적인 확인 문구만 표시'),
-                  value:
-                      ref
-                          .watch(appSettingsProvider)
-                          .valueOrNull
-                          ?.notificationPrivacy ??
-                      true,
-                  onChanged: (value) async {
-                    await ref
-                        .read(localDataLifecycleProvider)
-                        .setNotificationPrivacy(value);
-                    ref.invalidate(appSettingsProvider);
-                  },
+          const CabinetSectionLabel('개인정보와 공유'),
+          CabinetSectionList(
+            children: [
+              SwitchListTile(
+                minTileHeight: 64,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                secondary: const PhosphorIcon(
+                  PhosphorIconsRegular.bellSlash,
+                  size: 22,
                 ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: PhosphorIcon(PhosphorIconsDuotone.shareNetwork),
-                  title: const Text('공유 전 항상 미리보기'),
-                  subtitle: const Text('개인 메모는 기본적으로 포함하지 않음'),
-                  trailing: Icon(
-                    PhosphorIconsFill.checkCircle,
-                    color: MedicalBoxColors.skyDeep,
-                  ),
+                title: const Text('잠금화면에서 의약품명 숨기기'),
+                subtitle: const Text('알림에는 일반적인 확인 문구만 표시'),
+                value:
+                    ref
+                        .watch(appSettingsProvider)
+                        .valueOrNull
+                        ?.notificationPrivacy ??
+                    true,
+                onChanged: (value) async {
+                  await ref
+                      .read(localDataLifecycleProvider)
+                      .setNotificationPrivacy(value);
+                  ref.invalidate(appSettingsProvider);
+                },
+              ),
+              const _SettingsRow(
+                icon: PhosphorIconsRegular.shareNetwork,
+                title: '공유 전 항상 미리보기',
+                subtitle: Text('개인 메모는 기본적으로 포함하지 않음'),
+                trailing: PhosphorIcon(
+                  PhosphorIconsRegular.checkCircle,
+                  color: MedicalBoxColors.official,
+                  size: 20,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: MedicalBoxSpacing.x4),
           const PrivacySafeBannerSlot(
             placement: BannerAdPlacement.settingsGeneralFooter,
           ),
-          const _SectionLabel('암호화 백업'),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(PhosphorIconsRegular.uploadSimple),
-                  title: const Text('내보내기'),
-                  subtitle: const Text('Argon2id + AES-256-GCM'),
-                  onTap: () => _export(context, ref),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: Icon(PhosphorIconsRegular.downloadSimple),
-                  title: const Text('가져오기'),
-                  subtitle: const Text('.medicalbox 파일만 지원'),
-                  onTap: () => _import(context, ref),
-                ),
-              ],
-            ),
-          ),
-          const _SectionLabel('법적 문서와 지원'),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  title: const Text('개인정보 처리방침'),
-                  onTap: () => _open('/privacy'),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  title: const Text('이용약관'),
-                  onTap: () => _open('/terms'),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  title: const Text('지원'),
-                  onTap: () => _open('/support'),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  title: const Text('계정 삭제 안내'),
-                  onTap: () => _open('/account-deletion'),
-                ),
-              ],
-            ),
-          ),
-          const _SectionLabel('데이터 삭제'),
-          Card(
-            child: ListTile(
-              leading: Icon(
-                PhosphorIconsRegular.trash,
-                color: MedicalBoxColors.orange,
+          const CabinetSectionLabel('암호화 백업'),
+          CabinetSectionList(
+            children: [
+              _SettingsRow(
+                icon: PhosphorIconsRegular.uploadSimple,
+                title: '내보내기',
+                subtitle: const Text('Argon2id + AES-256-GCM'),
+                onTap: () => _export(context, ref),
               ),
-              title: const Text('이 기기의 모든 데이터 삭제'),
-              subtitle: const Text('앱 임시 백업 포함 · 외부 저장/공유 복사본은 별도 삭제'),
-              onTap: () => _deleteLocalData(context, ref),
-            ),
+              _SettingsRow(
+                icon: PhosphorIconsRegular.downloadSimple,
+                title: '가져오기',
+                subtitle: const Text('.medicalbox 파일만 지원'),
+                onTap: () => _import(context, ref),
+              ),
+            ],
           ),
-          const SizedBox(height: 18),
+          const CabinetSectionLabel('법적 문서와 지원'),
+          CabinetSectionList(
+            children: [
+              _SettingsRow(
+                icon: PhosphorIconsRegular.shieldCheck,
+                title: '개인정보 처리방침',
+                onTap: () => _open('/privacy'),
+              ),
+              _SettingsRow(
+                icon: PhosphorIconsRegular.fileText,
+                title: '이용약관',
+                onTap: () => _open('/terms'),
+              ),
+              _SettingsRow(
+                icon: PhosphorIconsRegular.lifebuoy,
+                title: '지원',
+                onTap: () => _open('/support'),
+              ),
+              _SettingsRow(
+                icon: PhosphorIconsRegular.userMinus,
+                title: '계정 삭제 안내',
+                onTap: () => _open('/account-deletion'),
+              ),
+            ],
+          ),
+          const CabinetSectionLabel('기기 데이터'),
+          CabinetSectionList(
+            showDividers: false,
+            children: [
+              _SettingsRow(
+                icon: PhosphorIconsRegular.trash,
+                iconColor: MedicalBoxColors.accent,
+                title: '이 기기의 모든 데이터 삭제',
+                titleColor: MedicalBoxColors.accent,
+                subtitle: const Text('서버 계정은 유지 · 외부 저장/공유 복사본은 별도 삭제'),
+                onTap: () => _deleteLocalData(context, ref),
+              ),
+            ],
+          ),
+          const SizedBox(height: MedicalBoxSpacing.x6),
           const Text(
             '의약품 정보는 건강 관리 참고용입니다. 응급 상황이나 의학적 판단이 필요한 경우 의료기관 또는 약사에게 문의하세요.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: MedicalBoxColors.muted, fontSize: 12),
+            style: TextStyle(
+              color: MedicalBoxColors.muted,
+              fontSize: 12,
+              height: 1.45,
+            ),
           ),
         ],
       ),
@@ -314,22 +327,48 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.label);
+class _SettingsRow extends StatelessWidget {
+  const _SettingsRow({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.onTap,
+    this.trailing,
+    this.iconColor,
+    this.titleColor,
+  });
 
-  final String label;
+  final Object icon;
+  final String title;
+  final Widget? subtitle;
+  final VoidCallback? onTap;
+  final Widget? trailing;
+  final Color? iconColor;
+  final Color? titleColor;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 22, 8, 8),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: MedicalBoxColors.muted,
-          fontWeight: FontWeight.w800,
-        ),
+    return ListTile(
+      minTileHeight: 64,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      leading: PhosphorIcon(icon, color: iconColor, size: 22),
+      title: Text(
+        title,
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(color: titleColor),
       ),
+      subtitle: subtitle,
+      trailing:
+          trailing ??
+          (onTap == null
+              ? null
+              : const PhosphorIcon(
+                  PhosphorIconsRegular.caretRight,
+                  size: 18,
+                  color: MedicalBoxColors.faint,
+                )),
+      onTap: onTap,
     );
   }
 }

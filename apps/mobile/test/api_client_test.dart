@@ -232,6 +232,50 @@ void main() {
     },
   );
 
+  test('concomitant rules load every cursor page', () async {
+    final requests = <http.Request>[];
+    final client = MockClient((request) async {
+      requests.add(request);
+      final cursor = request.url.queryParameters['cursor'];
+      return http.Response(
+        jsonEncode({
+          'items': [
+            {
+              'ruleType': 'concomitant_contraindication',
+              'sourceCode': 'mfds_dur_product_concomitant',
+              'counterpartItemSeq': cursor == null ? '200000002' : '200000003',
+            },
+          ],
+          'nextCursor': cursor == null ? 'second-page' : null,
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+    final repository = CatalogRepository(
+      ApiClient(client: client, baseUrl: 'https://medicalbox.example/api'),
+      accessTokenProvider: () async => 'access-token',
+      refreshAccessTokenProvider: () async => null,
+    );
+
+    final rules = await repository.concomitantRules('200000001');
+
+    expect(rules.map((rule) => rule.counterpartItemSeq), [
+      '200000002',
+      '200000003',
+    ]);
+    expect(requests, hasLength(2));
+    expect(requests.first.url.queryParameters, {
+      'ruleType': 'concomitant_contraindication',
+      'limit': '50',
+    });
+    expect(requests.last.url.queryParameters, {
+      'ruleType': 'concomitant_contraindication',
+      'cursor': 'second-page',
+      'limit': '50',
+    });
+  });
+
   test('drug detail treats absent optional projections as empty', () {
     final detail = DrugDetail.fromJson({
       'itemSeq': '123',

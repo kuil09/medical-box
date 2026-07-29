@@ -453,6 +453,9 @@ def normalize(
             )
             db.add(rule)
         rule.item_seq = sequence
+        rule.counterpart_item_seq = _string(
+            first_value(payload, "MIXTURE_ITEM_SEQ", "mixtureItemSeq")
+        )
         rule.rule_type = source.rule_type or _string(
             first_value(payload, "TYPE_NAME", "typeName", "DUR_TYPE", "durType")
         )

@@ -10,6 +10,8 @@ import '../../data/local/app_database.dart';
 import '../../product_limits.dart';
 import '../../providers.dart';
 import '../../theme.dart';
+import '../../widgets/cabinet_index_components.dart';
+import '../../widgets/official_medicine_thumbnail.dart';
 
 class PouchScreen extends ConsumerWidget {
   const PouchScreen({super.key});
@@ -140,9 +142,13 @@ class PouchScreen extends ConsumerWidget {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('취소'),
           ),
-          FilledButton(
+          TextButton.icon(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('삭제'),
+            icon: const PhosphorIcon(PhosphorIconsRegular.trash, size: 18),
+            label: const Text('삭제'),
+            style: TextButton.styleFrom(
+              foregroundColor: MedicalBoxColors.accent,
+            ),
           ),
         ],
       ),
@@ -162,107 +168,239 @@ class PouchScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final containers = ref.watch(containersProvider);
-    final hasPouches =
-        containers.valueOrNull?.any((entry) => entry.kind == 'personal') ??
-        false;
     return Scaffold(
-      appBar: AppBar(title: const Text('가족과 개인 파우치')),
+      appBar: AppBar(title: const Text('가족 프로필')),
       body: containers.when(
         data: (all) {
           final pouches = all
               .where((entry) => entry.kind == 'personal')
               .toList();
-          if (pouches.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    PhosphorIcon(
-                      PhosphorIconsDuotone.handbagSimple,
-                      size: 68,
-                      color: MedicalBoxColors.orange,
-                    ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      '가족 구성원을 추가해 보세요',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(
+              MedicalBoxSpacing.screen,
+              MedicalBoxSpacing.x2,
+              MedicalBoxSpacing.screen,
+              MedicalBoxSpacing.x6,
+            ),
+            children: [
+              const CabinetSectionLabel('관리 프로필'),
+              CabinetSectionList(
+                children: [
+                  if (pouches.isEmpty)
+                    const _EmptyProfileRow()
+                  else
+                    for (final pouch in pouches)
+                      _ManagedProfileRow(
+                        pouch: pouch,
+                        onOpen: () => context.push(
+                          '/pouch/${Uri.encodeComponent(pouch.id)}',
+                        ),
+                        onRename: () => _renamePouch(context, ref, pouch),
+                        onDelete: () => _deletePouch(context, ref, pouch),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      '가족 이름과 파우치 내용은 암호화된\n기기 보관함에만 저장돼요.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: MedicalBoxColors.muted),
-                    ),
-                    const SizedBox(height: 22),
-                    FilledButton(
-                      onPressed: () => _addPouch(context, ref),
-                      child: const Text('가족 추가'),
-                    ),
-                  ],
+                ],
+              ),
+              const SizedBox(height: MedicalBoxSpacing.x3),
+              Text(
+                '프로필 이름과 개인 파우치는 이 기기에만 저장돼요.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: MedicalBoxColors.muted),
+              ),
+              const SizedBox(height: MedicalBoxSpacing.x6),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => _addPouch(context, ref),
+                  icon: const PhosphorIcon(PhosphorIconsRegular.plus, size: 20),
+                  label: const Text('가족 프로필 추가'),
                 ),
               ),
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(20),
-            itemCount: pouches.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final pouch = pouches[index];
-              return Card(
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 12,
-                  ),
-                  leading: CircleAvatar(
-                    backgroundColor: index.isEven
-                        ? MedicalBoxColors.sky
-                        : const Color(0xFFFFD8C8),
-                    child: Icon(PhosphorIconsFill.handbagSimple),
-                  ),
-                  title: Text(
-                    pouch.name,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  subtitle: const Text('이 기기에서만 보임'),
-                  onTap: () =>
-                      context.push('/pouch/${Uri.encodeComponent(pouch.id)}'),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (action) {
-                      if (action == 'rename') {
-                        _renamePouch(context, ref, pouch);
-                      } else if (action == 'delete') {
-                        _deletePouch(context, ref, pouch);
-                      }
-                    },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(value: 'rename', child: Text('이름 바꾸기')),
-                      PopupMenuItem(value: 'delete', child: Text('구성원·파우치 삭제')),
-                    ],
-                  ),
-                ),
-              );
-            },
+            ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('$error')),
       ),
-      floatingActionButton: hasPouches
-          ? FloatingActionButton.extended(
-              onPressed: () => _addPouch(context, ref),
-              icon: Icon(PhosphorIconsBold.plus),
-              label: const Text('가족 추가'),
-            )
-          : null,
     );
   }
+}
+
+class _ManagedProfileRow extends StatelessWidget {
+  const _ManagedProfileRow({
+    required this.pouch,
+    required this.onOpen,
+    required this.onRename,
+    required this.onDelete,
+  });
+
+  final InventoryContainer pouch;
+  final VoidCallback onOpen;
+  final VoidCallback onRename;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onOpen,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight: MedicalBoxSpacing.touchTarget,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            MedicalBoxSpacing.x4,
+            MedicalBoxSpacing.x3,
+            MedicalBoxSpacing.x2,
+            MedicalBoxSpacing.x3,
+          ),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 40,
+                child: PhosphorIcon(
+                  PhosphorIconsRegular.user,
+                  size: 24,
+                  color: MedicalBoxColors.ink,
+                ),
+              ),
+              const SizedBox(width: MedicalBoxSpacing.x3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _profileName(pouch.name),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: MedicalBoxSpacing.x1),
+                    Text(
+                      '가족 프로필 · 개인 파우치',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: MedicalBoxColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const PhosphorIcon(
+                PhosphorIconsRegular.caretRight,
+                size: 18,
+                color: MedicalBoxColors.muted,
+              ),
+              PopupMenuButton<String>(
+                tooltip: '프로필 작업',
+                icon: const PhosphorIcon(
+                  PhosphorIconsRegular.dotsThreeVertical,
+                  size: 20,
+                ),
+                onSelected: (action) {
+                  if (action == 'rename') {
+                    onRename();
+                  } else if (action == 'delete') {
+                    onDelete();
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'rename',
+                    child: _ProfileMenuItem(
+                      icon: PhosphorIconsRegular.pencilSimple,
+                      label: '이름 바꾸기',
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: const _ProfileMenuItem(
+                      icon: PhosphorIconsRegular.trash,
+                      label: '구성원·파우치 삭제',
+                      color: MedicalBoxColors.accent,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileMenuItem extends StatelessWidget {
+  const _ProfileMenuItem({
+    required this.icon,
+    required this.label,
+    this.color = MedicalBoxColors.ink,
+  });
+
+  final Object icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        PhosphorIcon(icon, size: 18, color: color),
+        const SizedBox(width: MedicalBoxSpacing.x3),
+        Text(label, style: TextStyle(color: color)),
+      ],
+    );
+  }
+}
+
+class _EmptyProfileRow extends StatelessWidget {
+  const _EmptyProfileRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: MedicalBoxSpacing.x4,
+        vertical: MedicalBoxSpacing.x6,
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 40,
+            child: PhosphorIcon(
+              PhosphorIconsRegular.users,
+              size: 24,
+              color: MedicalBoxColors.muted,
+            ),
+          ),
+          const SizedBox(width: MedicalBoxSpacing.x3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '등록된 가족 프로필이 없어요',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: MedicalBoxSpacing.x1),
+                Text(
+                  '가족별 개인 파우치를 만들 수 있어요.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: MedicalBoxColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _profileName(String pouchName) {
+  return pouchName.endsWith(' 파우치')
+      ? pouchName.substring(0, pouchName.length - 4)
+      : pouchName;
 }
 
 class PouchDetailScreen extends ConsumerWidget {
@@ -295,136 +433,114 @@ class PouchDetailScreen extends ConsumerWidget {
       ),
       body: inventory.when(
         data: (items) => ListView(
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 96),
+          padding: const EdgeInsets.fromLTRB(
+            MedicalBoxSpacing.screen,
+            MedicalBoxSpacing.x2,
+            MedicalBoxSpacing.screen,
+            MedicalBoxSpacing.x6,
+          ),
           children: [
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: MedicalBoxColors.sky.withValues(alpha: 0.62),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.78),
-                      borderRadius: BorderRadius.circular(17),
-                    ),
-                    child: PhosphorIcon(
-                      PhosphorIconsDuotone.handbagSimple,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 13),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          '개인 파우치',
-                          style: TextStyle(
-                            color: MedicalBoxColors.muted,
-                            fontSize: 12,
-                          ),
-                        ),
-                        Text(
-                          '${items.length}개 항목',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+            const CabinetSectionLabel('보관 의약품'),
+            CabinetSectionList(
+              showDividers: items.isNotEmpty,
+              children: [
+                if (items.isEmpty)
+                  const _EmptyPouchRow()
+                else
+                  for (final item in items) _PouchInventoryRow(item: item),
+              ],
+            ),
+            const SizedBox(height: MedicalBoxSpacing.x6),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => context.push(
+                  '/inventory/new?containerId=${Uri.encodeQueryComponent(containerId)}',
+                ),
+                icon: const PhosphorIcon(PhosphorIconsRegular.plus, size: 20),
+                label: const Text('의약품 추가'),
               ),
             ),
-            const SizedBox(height: 16),
-            if (items.isEmpty)
-              const _EmptyPouch()
-            else
-              for (var index = 0; index < items.length; index++) ...[
-                _PouchInventoryCard(item: items[index], index: index),
-                if (index != items.length - 1) const SizedBox(height: 10),
-              ],
           ],
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('파우치를 열 수 없어요: $error')),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push(
-          '/inventory/new?containerId=${Uri.encodeQueryComponent(containerId)}',
-        ),
-        icon: Icon(PhosphorIconsBold.plus),
-        label: const Text('의약품 추가'),
-      ),
     );
   }
 }
 
-class _PouchInventoryCard extends StatelessWidget {
-  const _PouchInventoryCard({required this.item, required this.index});
+class _PouchInventoryRow extends StatelessWidget {
+  const _PouchInventoryRow({required this.item});
 
   final InventoryItem item;
-  final int index;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => context.push('/inventory/${item.id}/edit'),
+    final metadata = [
+      if (item.manufacturer?.isNotEmpty ?? false) item.manufacturer!,
+      if (item.expiresOn != null)
+        '${DateFormat('yyyy.MM.dd').format(item.expiresOn!)}까지',
+    ].join(' · ');
+
+    return InkWell(
+      onTap: () => context.push('/inventory/${item.id}'),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 88),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: const EdgeInsets.fromLTRB(
+            MedicalBoxSpacing.x4,
+            MedicalBoxSpacing.x3,
+            MedicalBoxSpacing.x3,
+            MedicalBoxSpacing.x3,
+          ),
           child: Row(
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: index.isEven
-                      ? const Color(0xFFFFD8C8)
-                      : MedicalBoxColors.sky,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: PhosphorIcon(PhosphorIconsDuotone.pill),
+              OfficialMedicineThumbnail(
+                imageUrl: item.officialImageUrl,
+                fallbackIcon: PhosphorIconsRegular.pill,
+                size: 48,
+                backgroundColor: MedicalBoxColors.surfaceRaised,
+                borderRadius: MedicalBoxRadius.control,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: MedicalBoxSpacing.x3),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 5),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.productName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    if (metadata.isNotEmpty) ...[
+                      const SizedBox(height: MedicalBoxSpacing.x1),
                       Text(
-                        item.productName,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                        ),
+                        metadata,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
-                      const SizedBox(height: 3),
+                    ],
+                    if (item.appearanceSummary?.isNotEmpty ?? false) ...[
+                      const SizedBox(height: MedicalBoxSpacing.x1),
                       Text(
-                        [
-                          if (item.manufacturer != null) item.manufacturer!,
-                          if (item.expiresOn != null)
-                            '${DateFormat('yyyy.MM.dd').format(item.expiresOn!)}까지',
-                        ].join(' · '),
-                        style: const TextStyle(
+                        item.appearanceSummary!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: MedicalBoxColors.muted,
-                          fontSize: 11,
                         ),
                       ),
                     ],
-                  ),
+                    const SizedBox(height: MedicalBoxSpacing.x2),
+                    OfficialSourceLabel(connected: item.itemSeq != null),
+                  ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Icon(
+              const SizedBox(width: MedicalBoxSpacing.x2),
+              const PhosphorIcon(
                 PhosphorIconsRegular.caretRight,
                 color: MedicalBoxColors.muted,
                 size: 18,
@@ -437,29 +553,32 @@ class _PouchInventoryCard extends StatelessWidget {
   }
 }
 
-class _EmptyPouch extends StatelessWidget {
-  const _EmptyPouch();
+class _EmptyPouchRow extends StatelessWidget {
+  const _EmptyPouchRow();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 42),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.72),
-        border: Border.all(color: MedicalBoxColors.line),
-        borderRadius: BorderRadius.circular(24),
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: MedicalBoxSpacing.x4,
+        vertical: MedicalBoxSpacing.x8,
       ),
-      child: const Column(
+      child: Column(
         children: [
-          Text(
-            '파우치가 비어 있어요',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          const PhosphorIcon(
+            PhosphorIconsRegular.handbagSimple,
+            size: 32,
+            color: MedicalBoxColors.ink,
           ),
-          SizedBox(height: 7),
+          const SizedBox(height: MedicalBoxSpacing.x3),
+          Text('파우치가 비어 있어요', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: MedicalBoxSpacing.x1),
           Text(
             '아래 버튼으로 첫 의약품을 추가해 주세요.',
-            style: TextStyle(color: MedicalBoxColors.muted),
             textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: MedicalBoxColors.muted),
           ),
         ],
       ),

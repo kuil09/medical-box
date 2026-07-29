@@ -940,6 +940,7 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
                 ),
                 DurRule(
                     item_seq="200000001",
+                    counterpart_item_seq="200000002",
                     rule_type="concomitant_contraindication",
                     source_record=concomitant_source_record,
                 ),
@@ -1133,6 +1134,59 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
     assert concomitant.status_code == 200
     assert concomitant.json()["items"][0]["counterpartItemName"] == "상대 의약품"
     assert concomitant.json()["items"][0]["counterpartIngredientName"] == "상대성분"
+
+    with SessionLocal() as db:
+        db.add(
+            DrugProduct(
+                item_seq="200000002",
+                item_name="상대 의약품",
+                manufacturer="상대제약",
+                status="정상",
+            )
+        )
+        db.add(
+            SourceRecord(
+                source_code="mfds_product",
+                record_key="200000002",
+                content_hash="counterpart-product-hash",
+                public_data={"ITEM_SEQ": "200000002"},
+                active=True,
+                last_seen_run_id=uuid.uuid4(),
+            )
+        )
+        db.commit()
+
+    reverse_concomitant = client.get(
+        "/api/v1/drugs/200000002/dur-rules",
+        params={"ruleType": "concomitant_contraindication"},
+        headers=headers,
+    )
+    assert reverse_concomitant.status_code == 200
+    assert reverse_concomitant.json()["items"] == [
+        {
+            "ruleType": "concomitant_contraindication",
+            "typeName": "병용금기",
+            "ingredientName": "상대성분",
+            "counterpartItemSeq": "200000001",
+            "counterpartItemName": "테스트 효소제",
+            "counterpartIngredientName": "테스트성분",
+            "prohibitionContent": "함께 사용하지 않음",
+            "remark": None,
+            "notificationDate": None,
+            "sourceCode": "mfds_dur_product_concomitant",
+        }
+    ]
+    reverse_detail = client.get(
+        "/api/v1/drugs/200000002",
+        headers=headers,
+    )
+    assert reverse_detail.status_code == 200
+    assert reverse_detail.json()["safetyOverview"] == {
+        "totalCount": 1,
+        "categories": [
+            {"ruleType": "concomitant_contraindication", "count": 1},
+        ],
+    }
 
     with SessionLocal() as db:
         product_record = db.scalar(

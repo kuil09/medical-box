@@ -46,6 +46,13 @@ fvm dart run build_runner build --delete-conflicting-outputs
   image URL in the encrypted local inventory.
 - DUR detail begins with category counts. Rules load only when a category is
   expanded and are never personalized against a household member.
+- Official product-level concomitant contraindications are fetched for only the
+  selected catalog item and matched against official item sequence values in
+  the encrypted local inventory. The server never receives the household
+  inventory list.
+- The local match covers only catalog-linked medicines registered on this
+  device. It is not a complete medication review and never replaces confirmation
+  by a physician or pharmacist.
 - Remote pill-image binaries are displayed from the official URL and are not
   copied into app-owned storage.
 - Share text is assembled on device. Official appearance is opt-in, private

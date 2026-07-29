@@ -14,6 +14,7 @@ import '../../providers.dart';
 import '../../services/medicine_ocr_service.dart';
 import '../../theme.dart';
 import 'drug_catalog_projection_sections.dart';
+import 'local_contraindication_section.dart';
 
 class EditInventoryItemScreen extends ConsumerStatefulWidget {
   const EditInventoryItemScreen({this.itemId, this.containerId, super.key});
@@ -291,6 +292,7 @@ class _EditInventoryItemScreenState
         builder: (context) => _DrugDetailSheet(
           detail: detail,
           initialVariantKey: _identificationVariantKey,
+          excludeInventoryItemId: widget.itemId,
         ),
       );
       if (selected != null && mounted) {
@@ -406,7 +408,7 @@ class _EditInventoryItemScreenState
         updatedAt: Value(now),
       ),
     );
-    if (mounted) context.pop();
+    if (mounted) context.pop(false);
   }
 
   Future<void> _delete() async {
@@ -433,7 +435,7 @@ class _EditInventoryItemScreenState
       await ref
           .read(localDataLifecycleProvider)
           .deleteInventoryItem(widget.itemId!);
-      if (mounted) context.pop();
+      if (mounted) context.pop(true);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -458,27 +460,24 @@ class _EditInventoryItemScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.itemId == null ? '의약품 등록' : '보유약 수정'),
-        actions: [
-          if (widget.itemId != null)
-            IconButton(
-              onPressed: _delete,
-              icon: Icon(PhosphorIconsRegular.trash),
-              tooltip: '삭제',
-            ),
-        ],
-      ),
+      appBar: AppBar(title: Text(widget.itemId == null ? '의약품 등록' : '의약품 수정')),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+          padding: const EdgeInsets.fromLTRB(
+            MedicalBoxSpacing.screen,
+            MedicalBoxSpacing.x2,
+            MedicalBoxSpacing.screen,
+            MedicalBoxSpacing.x8,
+          ),
           children: [
-            _PhotoRecognitionCard(
-              scanning: _scanning,
-              onPressed: _scanMedicine,
-            ),
-            const SizedBox(height: 18),
+            if (widget.itemId == null) ...[
+              _PhotoRecognitionCard(
+                scanning: _scanning,
+                onPressed: _scanMedicine,
+              ),
+              const SizedBox(height: 18),
+            ],
             TextFormField(
               controller: _nameController,
               onChanged: _onSearchChanged,
@@ -507,24 +506,38 @@ class _EditInventoryItemScreenState
                   color: Colors.white,
                   clipBehavior: Clip.antiAlias,
                   shape: RoundedRectangleBorder(
-                    side: const BorderSide(color: MedicalBoxColors.line),
-                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(color: MedicalBoxColors.rail),
+                    borderRadius: BorderRadius.circular(MedicalBoxRadius.group),
                   ),
                   child: Column(
-                    children: _results.take(5).map((result) {
-                      return ListTile(
-                        dense: true,
-                        title: Text(result.itemName),
-                        subtitle: Text(
-                          [
-                            result.manufacturer ?? '제조사 정보 없음',
-                            if (result.status?.isNotEmpty ?? false)
-                              result.status!,
-                          ].join(' · '),
+                    children: [
+                      for (
+                        var index = 0;
+                        index < _results.take(5).length;
+                        index++
+                      ) ...[
+                        if (index > 0) const Divider(height: 1),
+                        ListTile(
+                          minTileHeight: 64,
+                          title: Text(
+                            _results[index].itemName,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: Text(
+                            [
+                              _results[index].manufacturer ?? '제조사 정보 없음',
+                              if (_results[index].status?.isNotEmpty ?? false)
+                                _results[index].status!,
+                            ].join(' · '),
+                          ),
+                          trailing: Icon(
+                            PhosphorIconsRegular.caretRight,
+                            size: 18,
+                          ),
+                          onTap: () => _openDrugDetail(_results[index]),
                         ),
-                        onTap: () => _openDrugDetail(result),
-                      );
-                    }).toList(),
+                      ],
+                    ],
                   ),
                 ),
               ),
@@ -545,7 +558,7 @@ class _EditInventoryItemScreenState
             const SizedBox(height: 14),
             InkWell(
               onTap: _pickDate,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(MedicalBoxRadius.control),
               child: InputDecorator(
                 decoration: const InputDecoration(
                   labelText: '사용기한 (선택)',
@@ -573,10 +586,30 @@ class _EditInventoryItemScreenState
               decoration: const InputDecoration(labelText: '개인 메모 (기기 안에만 저장)'),
             ),
             const SizedBox(height: 24),
-            FilledButton(
-              onPressed: _saving ? null : _save,
-              child: Text(_saving ? '저장 중…' : '보관함에 저장'),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _saving ? null : _save,
+                child: Text(
+                  _saving
+                      ? '저장 중…'
+                      : widget.itemId == null
+                      ? '보관함에 등록'
+                      : '변경사항 저장',
+                ),
+              ),
             ),
+            if (widget.itemId != null) ...[
+              const SizedBox(height: MedicalBoxSpacing.x3),
+              TextButton.icon(
+                onPressed: _saving ? null : _delete,
+                style: TextButton.styleFrom(
+                  foregroundColor: MedicalBoxColors.accent,
+                ),
+                icon: Icon(PhosphorIconsRegular.trash, size: 20),
+                label: const Text('이 의약품 삭제'),
+              ),
+            ],
           ],
         ),
       ),
@@ -598,9 +631,9 @@ class _PhotoRecognitionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF4E9),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: MedicalBoxColors.line),
+        color: MedicalBoxColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(MedicalBoxRadius.group),
+        border: Border.all(color: MedicalBoxColors.rail),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -609,12 +642,13 @@ class _PhotoRecognitionCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.82),
-              borderRadius: BorderRadius.circular(15),
+              color: MedicalBoxColors.surface,
+              borderRadius: BorderRadius.circular(MedicalBoxRadius.control),
+              border: Border.all(color: MedicalBoxColors.rail),
             ),
             child: PhosphorIcon(
-              PhosphorIconsDuotone.camera,
-              color: MedicalBoxColors.orange,
+              PhosphorIconsRegular.camera,
+              color: MedicalBoxColors.ink,
             ),
           ),
           const SizedBox(width: 12),
@@ -624,7 +658,7 @@ class _PhotoRecognitionCard extends StatelessWidget {
               children: [
                 const Text(
                   '사진으로 의약품 찾기',
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
                 ),
                 const SizedBox(height: 4),
                 const Text(
@@ -636,7 +670,7 @@ class _PhotoRecognitionCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 11),
-                FilledButton.icon(
+                OutlinedButton.icon(
                   onPressed: scanning ? null : onPressed,
                   icon: scanning
                       ? const SizedBox.square(
@@ -677,7 +711,7 @@ class _PhotoCandidateSheet extends StatelessWidget {
               width: 42,
               height: 5,
               decoration: BoxDecoration(
-                color: MedicalBoxColors.line,
+                color: MedicalBoxColors.rail,
                 borderRadius: BorderRadius.circular(99),
               ),
             ),
@@ -686,8 +720,8 @@ class _PhotoCandidateSheet extends StatelessWidget {
           Row(
             children: [
               PhosphorIcon(
-                PhosphorIconsDuotone.scan,
-                color: MedicalBoxColors.skyDeep,
+                PhosphorIconsRegular.scan,
+                color: MedicalBoxColors.official,
               ),
               const SizedBox(width: 9),
               Expanded(
@@ -717,32 +751,37 @@ class _PhotoCandidateSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          for (final candidate in candidates)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Material(
-                color: Colors.white,
-                shape: RoundedRectangleBorder(
-                  side: const BorderSide(color: MedicalBoxColors.line),
-                  borderRadius: BorderRadius.circular(17),
-                ),
-                child: ListTile(
-                  title: Text(
-                    candidate.itemName,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  subtitle: Text(
-                    [
-                      candidate.manufacturer ?? '제조사 정보 없음',
-                      if (candidate.status?.isNotEmpty ?? false)
-                        candidate.status!,
-                    ].join(' · '),
-                  ),
-                  trailing: Icon(PhosphorIconsRegular.caretRight),
-                  onTap: () => Navigator.pop(context, candidate),
-                ),
-              ),
+          Material(
+            color: MedicalBoxColors.surface,
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              side: const BorderSide(color: MedicalBoxColors.rail),
+              borderRadius: BorderRadius.circular(MedicalBoxRadius.group),
             ),
+            child: Column(
+              children: [
+                for (var index = 0; index < candidates.length; index++) ...[
+                  if (index > 0) const Divider(height: 1),
+                  ListTile(
+                    minTileHeight: 64,
+                    title: Text(
+                      candidates[index].itemName,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Text(
+                      [
+                        candidates[index].manufacturer ?? '제조사 정보 없음',
+                        if (candidates[index].status?.isNotEmpty ?? false)
+                          candidates[index].status!,
+                      ].join(' · '),
+                    ),
+                    trailing: Icon(PhosphorIconsRegular.caretRight, size: 18),
+                    onTap: () => Navigator.pop(context, candidates[index]),
+                  ),
+                ],
+              ],
+            ),
+          ),
           const SizedBox(height: 8),
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -822,11 +861,14 @@ class _ConnectedCatalogCard extends StatelessWidget {
         imageUri.scheme == 'https' &&
         imageUri.host.isNotEmpty;
     return Material(
-      color: MedicalBoxColors.sky.withValues(alpha: 0.34),
-      borderRadius: BorderRadius.circular(18),
+      color: MedicalBoxColors.officialSoft,
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: MedicalBoxColors.official),
+        borderRadius: BorderRadius.circular(MedicalBoxRadius.group),
+      ),
       child: InkWell(
         onTap: onOpen,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(MedicalBoxRadius.group),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -835,8 +877,8 @@ class _ConnectedCatalogCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.78),
-                  borderRadius: BorderRadius.circular(14),
+                  color: MedicalBoxColors.surface,
+                  borderRadius: BorderRadius.circular(MedicalBoxRadius.control),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: canLoadImage
@@ -844,13 +886,13 @@ class _ConnectedCatalogCard extends StatelessWidget {
                         imageUri.toString(),
                         fit: BoxFit.contain,
                         errorBuilder: (_, _, _) => PhosphorIcon(
-                          PhosphorIconsDuotone.scan,
-                          color: MedicalBoxColors.skyDeep,
+                          PhosphorIconsRegular.scan,
+                          color: MedicalBoxColors.official,
                         ),
                       )
                     : PhosphorIcon(
-                        PhosphorIconsDuotone.scan,
-                        color: MedicalBoxColors.skyDeep,
+                        PhosphorIconsRegular.scan,
+                        color: MedicalBoxColors.official,
                       ),
               ),
               const SizedBox(width: 11),
@@ -860,7 +902,10 @@ class _ConnectedCatalogCard extends StatelessWidget {
                   children: [
                     const Text(
                       '공식 제품 정보 연결됨',
-                      style: TextStyle(fontWeight: FontWeight.w900),
+                      style: TextStyle(
+                        color: MedicalBoxColors.official,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -887,10 +932,15 @@ class _ConnectedCatalogCard extends StatelessWidget {
 }
 
 class _DrugDetailSheet extends ConsumerStatefulWidget {
-  const _DrugDetailSheet({required this.detail, this.initialVariantKey});
+  const _DrugDetailSheet({
+    required this.detail,
+    this.initialVariantKey,
+    this.excludeInventoryItemId,
+  });
 
   final DrugDetail detail;
   final String? initialVariantKey;
+  final String? excludeInventoryItemId;
 
   @override
   ConsumerState<_DrugDetailSheet> createState() => _DrugDetailSheetState();
@@ -932,7 +982,7 @@ class _DrugDetailSheetState extends ConsumerState<_DrugDetailSheet> {
               width: 42,
               height: 5,
               decoration: BoxDecoration(
-                color: MedicalBoxColors.line,
+                color: MedicalBoxColors.rail,
                 borderRadius: BorderRadius.circular(99),
               ),
             ),
@@ -973,6 +1023,10 @@ class _DrugDetailSheetState extends ConsumerState<_DrugDetailSheet> {
               overview: detail.safetyOverview,
             ),
           ],
+          LocalContraindicationSection(
+            selectedItemSeq: detail.itemSeq,
+            excludeInventoryItemId: widget.excludeInventoryItemId,
+          ),
           DrugCatalogProjectionSections(detail: detail),
           _DetailSection(title: '보관 방법', body: detail.storageMethod),
           _DetailSection(title: '소비자 설명', body: detail.efficacy),
@@ -992,7 +1046,7 @@ class _DrugDetailSheetState extends ConsumerState<_DrugDetailSheet> {
           ),
           const SizedBox(height: 16),
           if (detail.sources.isNotEmpty) ...[
-            const Text('출처', style: TextStyle(fontWeight: FontWeight.w900)),
+            const Text('출처', style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
             for (final source in detail.sources)
               Text(
@@ -1078,9 +1132,9 @@ class _OfficialAppearanceCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: MedicalBoxColors.sky.withValues(alpha: 0.34),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: MedicalBoxColors.line),
+        color: MedicalBoxColors.surface,
+        borderRadius: BorderRadius.circular(MedicalBoxRadius.group),
+        border: Border.all(color: MedicalBoxColors.rail),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1088,14 +1142,14 @@ class _OfficialAppearanceCard extends StatelessWidget {
           Row(
             children: [
               PhosphorIcon(
-                PhosphorIconsDuotone.scan,
-                color: MedicalBoxColors.skyDeep,
+                PhosphorIconsRegular.scan,
+                color: MedicalBoxColors.official,
               ),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
                   '공식 외형·낱알 식별 정보',
-                  style: TextStyle(fontWeight: FontWeight.w900),
+                  style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
               if (detail.identificationVariants.length > 1)
@@ -1144,7 +1198,7 @@ class _OfficialAppearanceCard extends StatelessWidget {
           if (canLoadImage) ...[
             const SizedBox(height: 12),
             ClipRRect(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(MedicalBoxRadius.control),
               child: AspectRatio(
                 aspectRatio: 16 / 7,
                 child: ColoredBox(
@@ -1197,9 +1251,9 @@ class _SafetyOverviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF4E9),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: MedicalBoxColors.line),
+        color: MedicalBoxColors.surface,
+        borderRadius: BorderRadius.circular(MedicalBoxRadius.group),
+        border: Border.all(color: MedicalBoxColors.warning),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1210,8 +1264,8 @@ class _SafetyOverviewCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 PhosphorIcon(
-                  PhosphorIconsDuotone.shieldWarning,
-                  color: MedicalBoxColors.orange,
+                  PhosphorIconsRegular.shieldWarning,
+                  color: MedicalBoxColors.warning,
                 ),
                 const SizedBox(width: 9),
                 Expanded(
@@ -1220,7 +1274,7 @@ class _SafetyOverviewCard extends StatelessWidget {
                     children: [
                       const Text(
                         'DUR 공식 안전 참고정보',
-                        style: TextStyle(fontWeight: FontWeight.w900),
+                        style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 3),
                       Text(
@@ -1324,8 +1378,8 @@ class _SafetyCategoryTileState extends ConsumerState<_SafetyCategoryTile> {
         '${widget.category.count}',
         semanticsLabel: '${widget.category.count}개',
         style: const TextStyle(
-          color: MedicalBoxColors.orange,
-          fontWeight: FontWeight.w900,
+          color: MedicalBoxColors.warning,
+          fontWeight: FontWeight.w700,
         ),
       ),
       onExpansionChanged: (expanded) {
@@ -1392,14 +1446,14 @@ class _SafetyRuleCard extends StatelessWidget {
       margin: const EdgeInsets.only(top: 7),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.78),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: MedicalBoxColors.line),
+        color: MedicalBoxColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(MedicalBoxRadius.control),
+        border: Border.all(color: MedicalBoxColors.rail),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
           if ((rule.typeName?.isNotEmpty ?? false) ||
               (rule.notificationDate?.isNotEmpty ?? false)) ...[
             const SizedBox(height: 4),
@@ -1556,7 +1610,7 @@ class _DetailSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
           const SizedBox(height: 5),
           Text(body!, style: const TextStyle(height: 1.55)),
         ],

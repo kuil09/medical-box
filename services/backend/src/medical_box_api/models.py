@@ -328,6 +328,7 @@ class DurRule(Base):
         unique=True,
     )
     item_seq: Mapped[str | None] = mapped_column(String(40), index=True)
+    counterpart_item_seq: Mapped[str | None] = mapped_column(String(40), index=True)
     rule_type: Mapped[str | None] = mapped_column(String(120))
 
     source_record: Mapped[SourceRecord] = relationship()

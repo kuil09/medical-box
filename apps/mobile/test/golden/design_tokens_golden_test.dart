@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:medical_box/theme.dart';
 
 void main() {
-  testWidgets('hinged attention deck color and radius tokens', (tester) async {
+  testWidgets('cabinet index v2 color and radius tokens', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -11,49 +11,69 @@ void main() {
       MaterialApp(
         debugShowCheckedModeBanner: false,
         home: Scaffold(
-          backgroundColor: MedicalBoxColors.ivory,
+          backgroundColor: MedicalBoxColors.canvas,
           body: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(MedicalBoxSpacing.screen),
             child: Column(
               children: [
                 Container(
-                  height: 280,
+                  height: 240,
                   decoration: BoxDecoration(
-                    color: MedicalBoxColors.sky,
-                    borderRadius: BorderRadius.circular(32),
+                    color: MedicalBoxColors.surface,
+                    borderRadius: BorderRadius.circular(
+                      MedicalBoxRadius.cabinet,
+                    ),
+                    border: Border.all(
+                      color: MedicalBoxColors.railStrong,
+                      width: 1.5,
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x1A17191C),
+                        blurRadius: 18,
+                        offset: Offset(0, 6),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: MedicalBoxSpacing.x4),
                 Row(
                   children: [
                     Expanded(
                       child: Container(
                         height: 164,
                         decoration: BoxDecoration(
-                          color: MedicalBoxColors.paper,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: MedicalBoxColors.line),
+                          color: MedicalBoxColors.surface,
+                          borderRadius: BorderRadius.circular(
+                            MedicalBoxRadius.group,
+                          ),
+                          border: Border.all(color: MedicalBoxColors.rail),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: MedicalBoxSpacing.x3),
                     Expanded(
                       child: Container(
                         height: 164,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFD8C8),
-                          borderRadius: BorderRadius.circular(24),
+                          color: MedicalBoxColors.accentSoft,
+                          borderRadius: BorderRadius.circular(
+                            MedicalBoxRadius.group,
+                          ),
+                          border: Border.all(color: MedicalBoxColors.rail),
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: MedicalBoxSpacing.x4),
                 Container(
-                  height: 56,
+                  height: 52,
                   decoration: BoxDecoration(
-                    color: MedicalBoxColors.orange,
-                    borderRadius: BorderRadius.circular(18),
+                    color: MedicalBoxColors.accent,
+                    borderRadius: BorderRadius.circular(
+                      MedicalBoxRadius.control,
+                    ),
                   ),
                 ),
               ],

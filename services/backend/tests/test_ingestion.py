@@ -1092,7 +1092,13 @@ def test_initial_dur_bootstrap_commits_run_gated_batches_and_resumes() -> None:
                     raise SourceResponseError(f"page {page} failed")
                 yield (
                     page,
-                    [{"DUR_SEQ": f"DUR-{page}", "ITEM_SEQ": str(page)}],
+                    [
+                        {
+                            "DUR_SEQ": f"DUR-{page}",
+                            "ITEM_SEQ": str(page),
+                            "MIXTURE_ITEM_SEQ": f"counterpart-{page}",
+                        }
+                    ],
                     11,
                 )
 
@@ -1140,6 +1146,11 @@ def test_initial_dur_bootstrap_commits_run_gated_batches_and_resumes() -> None:
             == 0
         )
         assert database.scalar(select(func.count()).select_from(DurRule)) == 11
+        first_rule = database.scalar(
+            select(DurRule).where(DurRule.item_seq == "1")
+        )
+        assert first_rule is not None
+        assert first_rule.counterpart_item_seq == "counterpart-1"
 
 
 def test_unchanged_dur_snapshot_keeps_successful_record_run_ids() -> None:
