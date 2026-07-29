@@ -162,6 +162,9 @@ class PouchScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final containers = ref.watch(containersProvider);
+    final hasPouches =
+        containers.valueOrNull?.any((entry) => entry.kind == 'personal') ??
+        false;
     return Scaffold(
       appBar: AppBar(title: const Text('가족과 개인 파우치')),
       body: containers.when(
@@ -251,11 +254,13 @@ class PouchScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('$error')),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _addPouch(context, ref),
-        icon: Icon(PhosphorIconsBold.plus),
-        label: const Text('가족 추가'),
-      ),
+      floatingActionButton: hasPouches
+          ? FloatingActionButton.extended(
+              onPressed: () => _addPouch(context, ref),
+              icon: Icon(PhosphorIconsBold.plus),
+              label: const Text('가족 추가'),
+            )
+          : null,
     );
   }
 }
@@ -334,13 +339,6 @@ class PouchDetailScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  TextButton.icon(
-                    onPressed: () => context.push(
-                      '/inventory/new?containerId=${Uri.encodeQueryComponent(containerId)}',
-                    ),
-                    icon: Icon(PhosphorIconsBold.plus),
-                    label: const Text('추가'),
-                  ),
                 ],
               ),
             ),
@@ -368,35 +366,35 @@ class PouchDetailScreen extends ConsumerWidget {
   }
 }
 
-class _PouchInventoryCard extends ConsumerWidget {
+class _PouchInventoryCard extends StatelessWidget {
   const _PouchInventoryCard({required this.item, required this.index});
 
   final InventoryItem item;
   final int index;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: index.isEven
-                    ? const Color(0xFFFFD8C8)
-                    : MedicalBoxColors.sky,
-                borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.push('/inventory/${item.id}/edit'),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: index.isEven
+                      ? const Color(0xFFFFD8C8)
+                      : MedicalBoxColors.sky,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: PhosphorIcon(PhosphorIconsDuotone.pill),
               ),
-              child: PhosphorIcon(PhosphorIconsDuotone.pill),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: InkWell(
-                onTap: () => context.push('/inventory/${item.id}/edit'),
-                borderRadius: BorderRadius.circular(12),
+              const SizedBox(width: 12),
+              Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 5),
                   child: Column(
@@ -425,28 +423,14 @@ class _PouchInventoryCard extends ConsumerWidget {
                   ),
                 ),
               ),
-            ),
-            IconButton(
-              onPressed: item.quantity <= 0
-                  ? null
-                  : () => ref
-                        .read(databaseProvider)
-                        .setQuantity(item.id, item.quantity - 1),
-              icon: Icon(PhosphorIconsRegular.minus),
-              tooltip: '수량 줄이기',
-            ),
-            Text(
-              '${item.quantity}',
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
-            IconButton(
-              onPressed: () => ref
-                  .read(databaseProvider)
-                  .setQuantity(item.id, item.quantity + 1),
-              icon: Icon(PhosphorIconsRegular.plus),
-              tooltip: '수량 늘리기',
-            ),
-          ],
+              const SizedBox(width: 10),
+              Icon(
+                PhosphorIconsRegular.caretRight,
+                color: MedicalBoxColors.muted,
+                size: 18,
+              ),
+            ],
+          ),
         ),
       ),
     );

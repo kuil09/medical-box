@@ -921,19 +921,6 @@ button {
   display: none;
 }
 
-.medicine-chest-item-quantity {
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 7px;
-  background: rgba(111, 91, 68, 0.08);
-  color: #65584a;
-  font-size: 8px;
-  font-weight: 800;
-}
-
 .medicine-chest-item > svg {
   width: 10px;
   height: 10px;
@@ -954,10 +941,12 @@ button {
 }
 
 .medicine-chest-more {
-  width: 28px;
+  min-width: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 0 6px;
+  border: 0;
   border-radius: 9px;
   background: rgba(255, 253, 248, 0.72);
   color: #6c6053;
@@ -1008,18 +997,6 @@ button {
   letter-spacing: -0.025em;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.medicine-chest-summary > button {
-  flex: 0 0 auto;
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid rgba(88, 71, 51, 0.13);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 4px 8px rgba(73, 54, 32, 0.07);
-  font-size: 10px;
-  font-weight: 780;
 }
 
 .medicine-chest-actions {
@@ -1193,11 +1170,6 @@ button {
   height: 14px;
 }
 
-.tabbed-pouch-quantity {
-  font-size: 11px;
-  font-weight: 760;
-}
-
 .tabbed-pouch-empty {
   min-height: 92px;
   display: flex;
@@ -1353,6 +1325,11 @@ button {
   font-weight: 800;
 }
 
+.progress-card > span svg {
+  width: 25px;
+  height: 25px;
+}
+
 .progress-card div {
   display: grid;
   gap: 4px;
@@ -1374,58 +1351,35 @@ button {
 }
 
 .inventory-row {
+  width: 100%;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
+  gap: 12px;
   min-height: 94px;
-  padding: 12px;
+  padding: 14px 16px;
   border: 1px solid var(--kit-line);
   border-radius: 20px;
   background: rgba(255, 253, 249, 0.86);
-  transition: opacity 160ms ease, background 160ms ease;
+  text-align: left;
+  transition: background 160ms ease, transform 160ms ease;
 }
 
-.inventory-row--checked {
-  background: rgba(225, 235, 226, 0.82);
-  opacity: 0.72;
+.inventory-row:active {
+  background: rgba(232, 238, 243, 0.9);
+  transform: translateY(1px);
 }
 
-.check-button {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  background: transparent;
-}
-
-.check-button span {
-  width: 23px;
-  height: 23px;
-  border: 1.5px solid #9b9085;
-  border-radius: 50%;
-}
-
-.check-button svg {
-  width: 25px;
-  height: 25px;
-  color: #56765f;
+.inventory-row > svg {
+  width: 18px;
+  height: 18px;
+  color: var(--kit-muted);
 }
 
 .inventory-copy {
   min-width: 0;
   display: grid;
   gap: 2px;
-}
-
-.inventory-copy-button {
-  width: 100%;
-  padding: 4px 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
 }
 
 .inventory-copy > small {
@@ -1463,33 +1417,6 @@ button {
   color: #4b684e;
 }
 
-.quantity-stepper {
-  display: grid;
-  grid-template-columns: 27px 23px 27px;
-  align-items: center;
-  justify-items: center;
-}
-
-.quantity-stepper button {
-  width: 27px;
-  height: 27px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--kit-line);
-  border-radius: 50%;
-  background: white;
-}
-
-.quantity-stepper svg {
-  width: 13px;
-  height: 13px;
-}
-
-.quantity-stepper strong {
-  font-size: 13px;
-}
-
 .search-field {
   min-height: 48px;
   display: grid;
@@ -1518,6 +1445,50 @@ button {
   color: var(--kit-muted);
   font-size: 10px;
   line-height: 1.45;
+}
+
+.search-results {
+  display: grid;
+  margin: -12px 0 20px;
+  overflow: hidden;
+  border: 1px solid var(--kit-line);
+  border-radius: 16px;
+  background: rgba(255, 253, 249, 0.96);
+}
+
+.search-results button {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 1fr 18px;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  border: 0;
+  border-bottom: 1px solid var(--kit-line);
+  background: transparent;
+  text-align: left;
+}
+
+.search-results button:last-child {
+  border-bottom: 0;
+}
+
+.search-results span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.search-results strong,
+.search-results small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-results small {
+  color: var(--kit-muted);
+  font-size: 10px;
 }
 
 .form-section {
@@ -2033,26 +2004,17 @@ button {
   margin-top: 16px;
 }
 
-.pouch-items article {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 10px 10px 14px;
-  border: 1px solid var(--kit-line);
-  border-radius: 20px;
-  background: rgba(255, 253, 249, 0.85);
-}
-
 .pouch-item-open {
+  width: 100%;
   min-width: 0;
   display: grid;
   grid-template-columns: 1fr 18px;
   align-items: center;
   gap: 8px;
-  padding: 7px 2px;
-  border: 0;
-  background: transparent;
+  padding: 14px;
+  border: 1px solid var(--kit-line);
+  border-radius: 20px;
+  background: rgba(255, 253, 249, 0.85);
   text-align: left;
 }
 
@@ -2079,37 +2041,6 @@ button {
 .pouch-items span {
   color: #7d746a;
   font-size: 11px;
-}
-
-.reminder-toggle {
-  display: grid;
-  grid-template-columns: 42px 1fr auto;
-  align-items: center;
-  gap: 10px;
-  margin-top: 18px;
-  padding: 15px;
-  border-radius: 20px;
-  background: rgba(255, 253, 249, 0.82);
-}
-
-.reminder-toggle > span:nth-child(2) {
-  display: grid;
-  gap: 3px;
-}
-
-.reminder-toggle strong {
-  font-size: 13px;
-}
-
-.reminder-toggle small {
-  color: var(--kit-muted);
-  font-size: 10px;
-}
-
-.reminder-toggle input {
-  width: 42px;
-  height: 24px;
-  accent-color: var(--kit-red);
 }
 
 .access-screen {

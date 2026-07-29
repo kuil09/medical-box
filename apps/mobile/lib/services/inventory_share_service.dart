@@ -2,28 +2,24 @@ import '../data/local/app_database.dart';
 
 class InventoryShareOptions {
   const InventoryShareOptions({
-    this.includeQuantity = true,
     this.includeExpiry = true,
     this.includeOfficialLinks = true,
     this.includeOfficialAppearance = false,
     this.includePrivateNotes = false,
   });
 
-  final bool includeQuantity;
   final bool includeExpiry;
   final bool includeOfficialLinks;
   final bool includeOfficialAppearance;
   final bool includePrivateNotes;
 
   InventoryShareOptions copyWith({
-    bool? includeQuantity,
     bool? includeExpiry,
     bool? includeOfficialLinks,
     bool? includeOfficialAppearance,
     bool? includePrivateNotes,
   }) {
     return InventoryShareOptions(
-      includeQuantity: includeQuantity ?? this.includeQuantity,
       includeExpiry: includeExpiry ?? this.includeExpiry,
       includeOfficialLinks: includeOfficialLinks ?? this.includeOfficialLinks,
       includeOfficialAppearance:
@@ -55,9 +51,6 @@ String buildInventoryShareText({
   } else {
     for (final item in items) {
       lines.add('• ${item.productName}');
-      if (options.includeQuantity) {
-        lines.add('  수량: ${item.quantity}${item.unit}');
-      }
       if (options.includeExpiry) {
         lines.add(
           '  사용기한: ${item.expiresOn == null ? '미입력' : _date(item.expiresOn!)}',

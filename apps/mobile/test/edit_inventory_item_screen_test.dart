@@ -17,6 +17,20 @@ import 'package:medical_box/services/medicine_ocr_service.dart';
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
 
+  testWidgets('medicine editor omits exact quantity controls', (tester) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: const MaterialApp(home: EditInventoryItemScreen()),
+      ),
+    );
+
+    expect(find.text('수량'), findsNothing);
+  });
+
   testWidgets('a stale autocomplete response cannot replace current results', (
     tester,
   ) async {

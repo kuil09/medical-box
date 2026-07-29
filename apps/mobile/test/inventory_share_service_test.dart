@@ -29,7 +29,7 @@ void main() {
       items: [item],
     );
 
-    expect(text, contains('수량: 2정'));
+    expect(text, isNot(contains('수량:')));
     expect(text, contains('사용기한: 2027-03-05'));
     expect(
       text,
@@ -58,7 +58,6 @@ void main() {
       containerName: '하준 파우치',
       items: [item],
       options: const InventoryShareOptions(
-        includeQuantity: false,
         includeExpiry: false,
         includeOfficialLinks: false,
         includeOfficialAppearance: true,

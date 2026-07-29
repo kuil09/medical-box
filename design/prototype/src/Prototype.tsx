@@ -14,7 +14,6 @@ import {
   GearIcon,
   LockClosedIcon,
   MagnifyingGlassIcon,
-  MinusIcon,
   Pencil2Icon,
   PersonIcon,
   PlusIcon,
@@ -40,7 +39,6 @@ type InventoryItem = {
   name: string;
   category: string;
   meta: string;
-  quantity: number;
   state: "ok" | "soon" | "low";
   note: string;
   official?: {
@@ -68,7 +66,6 @@ type KitContextValue = {
   removeMember: (memberId: string) => void;
   saveItem: (containerId: ContainerId, item: InventoryItem) => void;
   deleteItem: (containerId: ContainerId, itemId: string) => void;
-  updateQuantity: (containerId: ContainerId, itemId: string, quantity: number) => void;
 };
 
 type AuthContextValue = {
@@ -86,7 +83,6 @@ const initialSharedItems: InventoryItem[] = [
     name: "공식 데이터 연결 예시 의약품",
     category: "소화",
     meta: "2026.09까지",
-    quantity: 1,
     state: "soon",
     note: "식탁 옆 트레이",
     official: {
@@ -102,8 +98,7 @@ const initialSharedItems: InventoryItem[] = [
     id: "shared-bandage",
     name: "혼합형 밴드",
     category: "상처 관리",
-    meta: "20매",
-    quantity: 2,
+    meta: "2027.05까지",
     state: "ok",
     note: "",
   },
@@ -111,8 +106,7 @@ const initialSharedItems: InventoryItem[] = [
     id: "shared-gauze",
     name: "멸균거즈 5×5cm",
     category: "상처 관리",
-    meta: "5매",
-    quantity: 1,
+    meta: "포장 상태 확인됨",
     state: "low",
     note: "",
   },
@@ -120,8 +114,7 @@ const initialSharedItems: InventoryItem[] = [
     id: "shared-wipe",
     name: "소독 티슈",
     category: "상처 관리",
-    meta: "10매",
-    quantity: 3,
+    meta: "2027.11까지",
     state: "ok",
     note: "",
   },
@@ -138,16 +131,14 @@ const initialMembers: FamilyMember[] = [
         name: "알레르기 처방약",
         category: "다음 진료 준비",
         meta: "8월 12일 방문 예정",
-        quantity: 1,
         state: "ok",
-        note: "진료 전 남은 수량 확인",
+        note: "진료 전 처방전과 약 봉투 확인",
       },
       {
         id: "hajun-thermometer",
         name: "어린이 체온계",
         category: "개인 용품",
         meta: "배터리 확인 완료",
-        quantity: 1,
         state: "ok",
         note: "",
       },
@@ -163,7 +154,6 @@ const initialMembers: FamilyMember[] = [
         name: "피부 연고",
         category: "개인 용품",
         meta: "2027.01까지",
-        quantity: 1,
         state: "ok",
         note: "",
       },
@@ -178,8 +168,7 @@ const initialMembers: FamilyMember[] = [
         id: "youngsoo-eye-drops",
         name: "인공눈물",
         category: "개인 용품",
-        meta: "6개 남음",
-        quantity: 6,
+        meta: "보관 상태 확인됨",
         state: "ok",
         note: "",
       },
@@ -260,22 +249,6 @@ export default function Prototype() {
           ),
         );
       },
-      updateQuantity: (containerId, itemId, quantity) => {
-        const update = (items: InventoryItem[]) =>
-          items.map((item) =>
-            item.id === itemId ? { ...item, quantity: Math.max(0, quantity) } : item,
-          );
-
-        if (containerId === "shared") {
-          setSharedItems(update);
-          return;
-        }
-        setMembers((current) =>
-          current.map((member) =>
-            member.id === containerId ? { ...member, items: update(member.items) } : member,
-          ),
-        );
-      },
     }),
     [members, sharedItems],
   );
@@ -342,7 +315,7 @@ function WelcomeScreen({ flow }: { flow: FlowControls }) {
           <div>
             <h1>우리 집 약을,<br />꺼내 보기 쉽게.</h1>
             <p>
-              앱을 사용하려면 계정이 필요해요. 가족·재고·메모는 로그인 후에도 이 기기의 암호화
+              앱을 사용하려면 계정이 필요해요. 가족·보관약·메모는 로그인 후에도 이 기기의 암호화
               보관함에만 저장합니다.
             </p>
           </div>
@@ -452,20 +425,16 @@ function HomeScreen({ flow }: { flow: FlowControls }) {
   const [kitOpen, setKitOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareStatus, setShareStatus] = useState("");
-  const [shareOptions, setShareOptions] = useState({
-    quantity: true,
-    expiry: true,
-    links: true,
-    notes: false,
-  });
+  const [includePrivateNotes, setIncludePrivateNotes] = useState(false);
   const activeMember = members.find((member) => member.id === activeContainerId);
   const sheetMember =
     memberSheet && memberSheet !== "add"
       ? members.find((member) => member.id === memberSheet)
       : undefined;
   const activeItems = activeMember?.items ?? sharedItems;
+  const attentionCount = activeItems.filter((item) => item.state === "soon").length;
   const activeContainerName = activeMember ? `${activeMember.name} 개인 파우치` : "공용 트레이";
-  const shareText = buildPrototypeShareText(activeContainerName, activeItems, shareOptions);
+  const shareText = buildPrototypeShareText(activeContainerName, activeItems, includePrivateNotes);
   const openActiveContainer = () => {
     if (activeMember) {
       flow.push(createPouchScreen(activeMember.id));
@@ -558,7 +527,7 @@ function HomeScreen({ flow }: { flow: FlowControls }) {
             <ArchiveIcon />
             <span>
               <strong>공용</strong>
-              <small>{sharedItems.length}개</small>
+              <small>{sharedItems.length}종</small>
             </span>
           </button>
           {members.map((member) => (
@@ -574,7 +543,7 @@ function HomeScreen({ flow }: { flow: FlowControls }) {
               <PersonIcon />
               <span>
                 <strong>{member.name}</strong>
-                <small>{member.items.length}개</small>
+                <small>{member.items.length}종</small>
               </span>
             </button>
           ))}
@@ -587,32 +556,23 @@ function HomeScreen({ flow }: { flow: FlowControls }) {
           </button>
         </Carousel>
 
-        <h2 className="section-title">{activeMember ? `${activeMember.name} 파우치 점검` : "오늘의 점검"}</h2>
-
-        <section className="attention-list" aria-label="오늘 확인할 항목">
-          <button className="attention-card" onClick={openActiveContainer}>
-            <span className="attention-icon attention-icon--pink">
-              <CheckCircledIcon />
-            </span>
-            <span className="attention-copy">
-              <strong>
-                {activeMember ? `${activeMember.name} 보관품` : "공용품"} {activeItems.length}개 확인
-              </strong>
-              <small>수량과 사용기한을 확인해요</small>
-            </span>
-            <ChevronRightIcon className="chevron" />
-          </button>
-          <button className="attention-card" onClick={openActiveContainer}>
-            <span className="attention-icon attention-icon--sand">
-              <ClockIcon />
-            </span>
-            <span className="attention-copy">
-              <strong>{activeMember ? "진료·갱신 준비" : "유통기한 임박"}</strong>
-              <small>{activeItems.filter((item) => item.state === "soon").length}개 항목 확인 필요</small>
-            </span>
-            <ChevronRightIcon className="chevron" />
-          </button>
-        </section>
+        {attentionCount ? (
+          <>
+            <h2 className="section-title">{activeMember ? `${activeMember.name} 파우치` : "확인할 내용"}</h2>
+            <section className="attention-list" aria-label="오늘 확인할 항목">
+              <button className="attention-card" onClick={openActiveContainer}>
+                <span className="attention-icon attention-icon--sand">
+                  <ClockIcon />
+                </span>
+                <span className="attention-copy">
+                  <strong>{activeMember ? "진료·갱신 준비" : "유통기한 임박"}</strong>
+                  <small>{attentionCount}개 항목 확인 필요</small>
+                </span>
+                <ChevronRightIcon className="chevron" />
+              </button>
+            </section>
+          </>
+        ) : null}
 
         <PrototypeBannerAd placement="홈 점검 요약 아래" />
 
@@ -642,7 +602,6 @@ function HomeScreen({ flow }: { flow: FlowControls }) {
                       <strong>{item.name}</strong>
                       <small>{item.meta}</small>
                     </span>
-                    <span className="tabbed-pouch-quantity">{item.quantity}개</span>
                     <ChevronRightIcon />
                   </button>
                 ))
@@ -656,16 +615,18 @@ function HomeScreen({ flow }: { flow: FlowControls }) {
                 </button>
               )}
             </div>
-            <div className="tabbed-pouch-actions">
-              <button onClick={() => flow.push(createItemEditorScreen(activeMember.id))}>
-                <PlusIcon />
-                의약품 추가
-              </button>
-              <button onClick={() => flow.push(createPouchScreen(activeMember.id))}>
-                전체 파우치 열기
-                <ChevronRightIcon />
-              </button>
-            </div>
+            {activeMember.items.length ? (
+              <div className="tabbed-pouch-actions">
+                <button onClick={() => flow.push(createItemEditorScreen(activeMember.id))}>
+                  <PlusIcon />
+                  의약품 추가
+                </button>
+                <button onClick={() => flow.push(createPouchScreen(activeMember.id))}>
+                  전체 파우치 열기
+                  <ChevronRightIcon />
+                </button>
+              </div>
+            ) : null}
           </section>
         ) : (
           <section className={`kit-card ${kitOpen ? "kit-card--open" : ""}`} aria-label="공용 의약품 구급상자">
@@ -675,14 +636,11 @@ function HomeScreen({ flow }: { flow: FlowControls }) {
               onToggle={() => setKitOpen((current) => !current)}
               onItemSelect={(itemId) => flow.push(createItemEditorScreen("shared", itemId))}
               onAdd={() => flow.push(createItemEditorScreen("shared"))}
+              onShowAll={() => flow.push(createInventoryScreen())}
             />
           </section>
         )}
 
-        <button className="primary-cta" onClick={openActiveContainer}>
-          <span>{activeMember ? `${activeMember.name} 파우치 열기` : "재고 점검하기"}</span>
-          <ChevronRightIcon />
-        </button>
         <p className="safety-note">의약품 정보는 보관과 확인을 돕기 위한 참고 자료예요.</p>
       </main>
 
@@ -735,32 +693,23 @@ function HomeScreen({ flow }: { flow: FlowControls }) {
       <BottomSheet
         open={shareOpen}
         onOpenChange={setShareOpen}
-        title="문자로 공유할 정보 고르기"
-        description="선택한 내용만 기기에서 조합하고, 보내기 전에 미리 보여드려요."
-        snap={0.84}
+        title="공유 전에 확인해 주세요"
+        description="제품명·사용기한·공식 링크를 기본으로 포함하고 기기에서 미리 보여드려요."
+        snap={0.68}
       >
         <div className="share-sheet">
           <div className="share-options">
-            {[
-              ["quantity", "수량", "각 의약품의 현재 개수"],
-              ["expiry", "사용기한", "입력된 사용기한 또는 상태"],
-              ["links", "공식 제품 정보 링크", "품목기준코드가 있는 항목만"],
-              ["notes", "개인 메모", "민감할 수 있어 기본 제외"],
-            ].map(([key, label, description]) => (
-              <label key={key}>
-                <span>
-                  <strong>{label}</strong>
-                  <small>{description}</small>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={shareOptions[key as keyof typeof shareOptions]}
-                  onChange={(event) =>
-                    setShareOptions((current) => ({ ...current, [key]: event.target.checked }))
-                  }
-                />
-              </label>
-            ))}
+            <label>
+              <span>
+                <strong>개인 메모도 포함</strong>
+                <small>민감할 수 있어 기본적으로 제외해요.</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={includePrivateNotes}
+                onChange={(event) => setIncludePrivateNotes(event.target.checked)}
+              />
+            </label>
           </div>
           <div className="share-preview" aria-label="공유 내용 미리보기">
             <small>미리보기</small>
@@ -780,16 +729,15 @@ function HomeScreen({ flow }: { flow: FlowControls }) {
 function buildPrototypeShareText(
   containerName: string,
   items: InventoryItem[],
-  options: { quantity: boolean; expiry: boolean; links: boolean; notes: boolean },
+  includePrivateNotes: boolean,
 ) {
   const lines = [`우리집 구급키트 · ${containerName}`, "공유 전에 선택한 정보만 포함했어요.", ""];
   if (!items.length) lines.push("등록된 의약품이 없어요.");
   items.forEach((item) => {
     lines.push(`• ${item.name}`);
-    if (options.quantity) lines.push(`  수량: ${item.quantity}개`);
-    if (options.expiry) lines.push(`  사용기한·상태: ${item.meta || "미입력"}`);
-    if (options.notes && item.note) lines.push(`  개인 메모: ${item.note}`);
-    if (options.links && item.official?.itemSeq) {
+    lines.push(`  사용기한·상태: ${item.meta || "미입력"}`);
+    if (includePrivateNotes && item.note) lines.push(`  개인 메모: ${item.note}`);
+    if (item.official?.itemSeq) {
       lines.push(
         `  공식 제품 정보: https://medicalbox.outoftokens.ai/api/v1/drugs/${item.official.itemSeq}`,
       );
@@ -823,7 +771,7 @@ function MedicineChest3D({
   const toggleRef = useRef(onToggle);
   const itemSelectRef = useRef(onItemSelect);
   const itemKey = items
-    .map((item) => `${item.id}:${item.name}:${item.category}:${item.quantity}:${item.meta}`)
+    .map((item) => `${item.id}:${item.name}:${item.category}:${item.meta}`)
     .join("|");
 
   useEffect(() => {
@@ -956,7 +904,7 @@ function MedicineChest3D({
       context.fillText(shortName, 24, 66);
       context.fillStyle = "#786f65";
       context.font = "600 29px -apple-system, BlinkMacSystemFont, sans-serif";
-      context.fillText(`${item.quantity}개 · ${item.meta || item.category}`, 24, 119);
+      context.fillText(item.meta || item.category, 24, 119);
       const texture = new THREE.CanvasTexture(canvas);
       texture.colorSpace = THREE.SRGBColorSpace;
       textures.push(texture);
@@ -1139,14 +1087,14 @@ function MedicineChest3D({
       className={`medicine-chest-3d ${open ? "medicine-chest-3d--open" : ""}`}
       ref={hostRef}
       role="group"
-      aria-label={open ? `열린 공용 구급상자, 의약품 ${items.length}개가 보임` : "닫힌 공용 구급상자"}
+      aria-label={open ? `열린 공용 구급상자, 의약품 ${items.length}종이 보임` : "닫힌 공용 구급상자"}
       data-testid="medicine-chest-3d"
     >
       {!open ? (
         <button
           className="medicine-chest-open-hitarea"
           type="button"
-          aria-label={`공용 구급상자 열기, 의약품 ${items.length}개`}
+          aria-label={`공용 구급상자 열기, 의약품 ${items.length}종`}
           onPointerDown={(event) => event.preventDefault()}
           onClick={onToggle}
         >
@@ -1158,68 +1106,37 @@ function MedicineChest3D({
 }
 
 function InventoryScreen({ flow }: { flow: FlowControls }) {
-  const { sharedItems, updateQuantity } = useKit();
-  const [done, setDone] = useState<string[]>([]);
-  const [completed, setCompleted] = useState(false);
-  const checkedCount = done.filter((id) => sharedItems.some((item) => item.id === id)).length;
+  const { sharedItems } = useKit();
 
   return (
     <MobileScroll className="app-screen">
       <main className="sub-screen inventory-screen" data-testid="inventory-screen">
         <section className="progress-card">
           <span>
-            {checkedCount}/{sharedItems.length}
+            <ArchiveIcon />
           </span>
           <div>
-            <strong>하나씩 꺼내서 확인해요</strong>
-            <small>항목을 누르면 이름·수량·기한을 편집할 수 있어요.</small>
+            <strong>보관약을 한눈에 확인해요</strong>
+            <small>항목 전체를 누르면 이름·사용기한·메모를 편집할 수 있어요.</small>
           </div>
         </section>
 
         <section className="inventory-list">
-          {sharedItems.map((item) => {
-            const checked = done.includes(item.id);
-            return (
-              <article className={`inventory-row ${checked ? "inventory-row--checked" : ""}`} key={item.id}>
-                <button
-                  className="check-button"
-                  aria-label={`${item.name} 확인`}
-                  aria-pressed={checked}
-                  onClick={() =>
-                    setDone((current) =>
-                      checked ? current.filter((id) => id !== item.id) : [...current, item.id],
-                    )
-                  }
-                >
-                  {checked ? <CheckCircledIcon /> : <span />}
-                </button>
-                <button
-                  className="inventory-copy inventory-copy-button"
-                  onClick={() => flow.push(createItemEditorScreen("shared", item.id))}
-                  aria-label={`${item.name} 편집`}
-                >
+          {sharedItems.map((item) => (
+            <button
+              className="inventory-row inventory-row--open"
+              onClick={() => flow.push(createItemEditorScreen("shared", item.id))}
+              aria-label={`${item.name} 편집`}
+              key={item.id}
+            >
+              <span className="inventory-copy">
                   <small>{item.category}</small>
                   <strong>{item.name}</strong>
                   <span className={`state-pill state-pill--${item.state}`}>{item.meta || "정보 없음"}</span>
-                </button>
-                <div className="quantity-stepper" aria-label={`${item.name} 수량`}>
-                  <button
-                    onClick={() => updateQuantity("shared", item.id, item.quantity - 1)}
-                    aria-label="수량 줄이기"
-                  >
-                    <MinusIcon />
-                  </button>
-                  <strong>{item.quantity}</strong>
-                  <button
-                    onClick={() => updateQuantity("shared", item.id, item.quantity + 1)}
-                    aria-label="수량 늘리기"
-                  >
-                    <PlusIcon />
-                  </button>
-                </div>
-              </article>
-            );
-          })}
+              </span>
+              <ChevronRightIcon />
+            </button>
+          ))}
           {!sharedItems.length ? (
             <div className="empty-inventory">
               <strong>공용 트레이가 비어 있어요</strong>
@@ -1228,42 +1145,13 @@ function InventoryScreen({ flow }: { flow: FlowControls }) {
           ) : null}
         </section>
 
-        <PrototypeBannerAd placement="재고 목록 끝" />
+        <PrototypeBannerAd placement="보관약 목록 끝" />
 
         <button className="secondary-cta" onClick={() => flow.push(createItemEditorScreen("shared"))}>
           <PlusIcon />
           새 의약품 추가
         </button>
-        <button
-          className="primary-cta primary-cta--compact"
-          disabled={!sharedItems.length || checkedCount !== sharedItems.length}
-          onClick={() => setCompleted(true)}
-        >
-          점검 완료
-        </button>
       </main>
-      <BottomSheet
-        open={completed}
-        onOpenChange={setCompleted}
-        title="점검을 마쳤어요"
-        description="다음 점검은 한 달 뒤에 알려드릴게요."
-      >
-        <div className="success-sheet">
-          <span className="success-mark">
-            <CheckCircledIcon />
-          </span>
-          <p>확인한 내용은 이 기기에 안전하게 저장됐어요.</p>
-          <button
-            className="primary-cta primary-cta--compact"
-            onClick={() => {
-              setCompleted(false);
-              flow.pop();
-            }}
-          >
-            홈으로 돌아가기
-          </button>
-        </div>
-      </BottomSheet>
     </MobileScroll>
   );
 }
@@ -1286,25 +1174,33 @@ function ItemEditorScreen({
   const [name, setName] = useState(existing?.name ?? "");
   const [category, setCategory] = useState(existing?.category ?? "상처 관리");
   const [meta, setMeta] = useState(existing?.meta ?? "");
-  const [quantity, setQuantity] = useState(String(existing?.quantity ?? 1));
   const [note, setNote] = useState(existing?.note ?? "");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedOfficial, setSelectedOfficial] = useState(existing?.official);
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanComplete, setScanComplete] = useState(false);
+  const knownItems = [...sharedItems, ...members.flatMap((member) => member.items)];
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase("ko");
+  const searchResults =
+    normalizedQuery.length < 2
+      ? []
+      : knownItems
+          .filter((item) => item.name.toLocaleLowerCase("ko").includes(normalizedQuery))
+          .filter((item, index, all) => all.findIndex((candidate) => candidate.name === item.name) === index)
+          .slice(0, 4);
 
   const save = () => {
     const trimmedName = name.trim();
-    const parsedQuantity = Number.parseInt(quantity, 10);
-    if (!trimmedName || Number.isNaN(parsedQuantity) || parsedQuantity < 0) return;
+    if (!trimmedName) return;
     saveItem(containerId, {
       id: existing?.id ?? `item-${Date.now()}`,
       name: trimmedName,
       category,
       meta: meta.trim(),
-      quantity: parsedQuantity,
       state: existing?.state ?? "ok",
       note: note.trim(),
-      official: existing?.official,
+      official: selectedOfficial,
     });
     flow.pop();
   };
@@ -1328,37 +1224,64 @@ function ItemEditorScreen({
         </button>
         <label className="search-field">
           <MagnifyingGlassIcon />
-          <KeyboardInput placeholder="제품명 또는 품목기준코드 검색" aria-label="의약품 검색" />
+          <KeyboardInput
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="제품명 또는 품목기준코드 검색"
+            aria-label="의약품 검색"
+          />
         </label>
         <p className="field-help">검색 결과는 계정과 연결하지 않으며 검색 기록도 저장하지 않아요.</p>
+        {searchResults.length ? (
+          <section className="search-results" aria-label="의약품 검색 결과">
+            {searchResults.map((result) => (
+              <button
+                key={result.id}
+                onClick={() => {
+                  setName(result.name);
+                  setCategory(result.category);
+                  setMeta(result.meta);
+                  setSelectedOfficial(result.official);
+                  setSearchQuery("");
+                }}
+              >
+                <span>
+                  <strong>{result.name}</strong>
+                  <small>{result.meta || result.category}</small>
+                </span>
+                <ChevronRightIcon />
+              </button>
+            ))}
+          </section>
+        ) : null}
 
-        {existing?.official ? (
+        {selectedOfficial ? (
           <section className="official-drug-card" aria-label="공식 의약품 정보">
             <div className="official-drug-heading">
               <span>
                 <MagnifyingGlassIcon />
               </span>
               <div>
-                <small>품목기준코드 {existing.official.itemSeq}</small>
+                <small>품목기준코드 {selectedOfficial.itemSeq}</small>
                 <strong>공식 복용·외형 정보</strong>
               </div>
             </div>
             <dl>
               <div>
                 <dt>성상·외형</dt>
-                <dd>{existing.official.appearance}</dd>
+                <dd>{selectedOfficial.appearance}</dd>
               </div>
               <div>
                 <dt>낱알 식별</dt>
-                <dd>{existing.official.identification}</dd>
+                <dd>{selectedOfficial.identification}</dd>
               </div>
               <div>
                 <dt>사용 방법</dt>
-                <dd>{existing.official.useMethod}</dd>
+                <dd>{selectedOfficial.useMethod}</dd>
               </div>
             </dl>
             <p>
-              {existing.official.source} · 갱신 {existing.official.updatedAt}
+              {selectedOfficial.source} · 갱신 {selectedOfficial.updatedAt}
             </p>
             <small className="official-disclaimer">
               프로토타입 연결 예시이며 실제 앱은 공식 원문을 표시하고 복용량을 계산하거나 치료를 추천하지 않아요.
@@ -1391,15 +1314,6 @@ function ItemEditorScreen({
             </div>
           </div>
           <label>
-            <span>수량</span>
-            <KeyboardInput
-              value={quantity}
-              onChange={(event) => setQuantity(event.target.value)}
-              inputMode="numeric"
-              aria-label="수량"
-            />
-          </label>
-          <label>
             <span>사용기한·상태</span>
             <KeyboardInput
               value={meta}
@@ -1421,7 +1335,7 @@ function ItemEditorScreen({
 
         <button
           className="primary-cta primary-cta--compact"
-          disabled={!name.trim() || Number.isNaN(Number.parseInt(quantity, 10))}
+          disabled={!name.trim()}
           onClick={save}
         >
           {existing ? "변경사항 저장" : "의약품 추가"}
@@ -1592,7 +1506,7 @@ function SettingsScreen({ flow }: { flow: FlowControls }) {
         </section>
         <PrototypeBannerAd placement="설정 일반 정보 하단" />
         <p className="safety-note">
-          가족·재고·수량·방문 일정·알림은 이 기기의 암호화 저장소에만 보관돼요.
+          가족·보관약·방문 일정·알림은 이 기기의 암호화 저장소에만 보관돼요.
         </p>
       </main>
     </MobileScroll>
@@ -1612,8 +1526,7 @@ function PrototypeBannerAd({ placement }: { placement: string }) {
 }
 
 function PouchScreen({ flow, memberId }: { flow: FlowControls; memberId: string }) {
-  const { members, updateQuantity } = useKit();
-  const [reminder, setReminder] = useState(false);
+  const { members } = useKit();
   const member = members.find((entry) => entry.id === memberId);
 
   if (!member) {
@@ -1638,40 +1551,24 @@ function PouchScreen({ flow, memberId }: { flow: FlowControls; memberId: string 
             <small>개인 파우치</small>
             <h2>{member.name}</h2>
           </div>
-          <span>{member.items.length}개</span>
+          <span>{member.items.length}종</span>
         </section>
 
         <section className="pouch-items">
           {member.items.map((item) => (
-            <article key={item.id}>
-              <button
-                className="pouch-item-open"
-                onClick={() => flow.push(createItemEditorScreen(member.id, item.id))}
-                aria-label={`${item.name} 편집`}
-              >
-                <div>
-                  <small>{item.category}</small>
-                  <strong>{item.name}</strong>
-                  <span>{item.meta || "상태 정보 없음"}</span>
-                </div>
-                <ChevronRightIcon />
-              </button>
-              <div className="quantity-stepper" aria-label={`${item.name} 수량`}>
-                <button
-                  onClick={() => updateQuantity(member.id, item.id, item.quantity - 1)}
-                  aria-label="수량 줄이기"
-                >
-                  <MinusIcon />
-                </button>
-                <strong>{item.quantity}</strong>
-                <button
-                  onClick={() => updateQuantity(member.id, item.id, item.quantity + 1)}
-                  aria-label="수량 늘리기"
-                >
-                  <PlusIcon />
-                </button>
+            <button
+              className="pouch-item-open"
+              onClick={() => flow.push(createItemEditorScreen(member.id, item.id))}
+              aria-label={`${item.name} 편집`}
+              key={item.id}
+            >
+              <div>
+                <small>{item.category}</small>
+                <strong>{item.name}</strong>
+                <span>{item.meta || "상태 정보 없음"}</span>
               </div>
-            </article>
+              <ChevronRightIcon />
+            </button>
           ))}
           {!member.items.length ? (
             <div className="empty-inventory">
@@ -1680,22 +1577,6 @@ function PouchScreen({ flow, memberId }: { flow: FlowControls; memberId: string 
             </div>
           ) : null}
         </section>
-
-        <label className="reminder-toggle">
-          <span className="attention-icon attention-icon--sand">
-            <BellIcon />
-          </span>
-          <span>
-            <strong>방문 준비 알림</strong>
-            <small>약 이름 없이 기기에만 알려드려요.</small>
-          </span>
-          <input
-            type="checkbox"
-            checked={reminder}
-            onChange={(event) => setReminder(event.target.checked)}
-            aria-label="방문 준비 알림"
-          />
-        </label>
 
         <button className="secondary-cta" onClick={() => flow.push(createItemEditorScreen(member.id))}>
           <PlusIcon />
@@ -1719,9 +1600,7 @@ function ScreenHeader({ title, flow }: { title: string; flow: FlowControls }) {
         <ChevronLeftIcon />
       </button>
       <strong>{title}</strong>
-      <button aria-label="닫기" onClick={() => flow.replace(createHomeScreen())}>
-        <Cross2Icon />
-      </button>
+      <span className="screen-header-spacer" aria-hidden="true" />
     </div>
   );
 }
