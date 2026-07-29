@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+pysqlite:///./medical_box.db"
     public_origin: str = "https://medicalbox.outoftokens.ai"
     support_email: str | None = None
-    terms_version: str = "2026-07-25"
+    terms_version: str = "2026-07-29"
     allowed_hosts: str = "localhost,127.0.0.1,testserver"
     jwt_secret: str = DEVELOPMENT_JWT_SECRET
     jwt_issuer: str = "medicalbox.outoftokens.ai"

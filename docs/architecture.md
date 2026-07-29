@@ -12,8 +12,9 @@ Flutter device
   │  └─ App settings
   ├─ Keychain / Android Keystore
   │  ├─ 256-bit database key
-  │  └─ Optional account tokens
+  │  └─ Required account tokens
   ├─ Local notifications
+  ├─ Provider-isolated banner adapter (disabled by default)
   └─ Explicit network calls
      ├─ Account authentication
      └─ Permission-gated medicine catalog lookup
@@ -37,6 +38,16 @@ Railway private network
 No household or inventory synchronization API exists. This makes accidental
 server persistence structurally harder: mobile-local entities are not present
 in the backend schema or OpenAPI contract.
+
+The app starts at an authentication gate. Incomplete onboarding routes to the
+onboarding flow; completed onboarding without a restored account routes to
+sign-in; only an authenticated account can enter organizer routes. Signing out
+locks, but does not erase, the encrypted local database.
+
+Advertising is isolated behind an adapter whose public input is only an
+allowlisted placement enum. The default adapter performs no network request and
+the build-time advertising flag defaults to false. Store receipt verification,
+purchase restoration, and Family Plus sync are not implemented.
 
 ## Public host routing
 

@@ -20,7 +20,7 @@ void main() {
     expect(appLinkRedirects, isNot(contains('/account-deletion')));
   });
 
-  test('local-data routes cannot bypass incomplete onboarding', () {
+  test('onboarding and authentication both gate app routes', () {
     for (final path in [
       '/',
       '/inventory',
@@ -30,22 +30,66 @@ void main() {
       '/app/inventory',
     ]) {
       expect(
-        onboardingGuardRedirect(path: path, onboardingCompleted: false),
+        appAccessRedirect(
+          path: path,
+          onboardingCompleted: false,
+          authenticated: false,
+        ),
         '/onboarding',
       );
     }
     expect(
-      onboardingGuardRedirect(path: '/onboarding', onboardingCompleted: false),
+      appAccessRedirect(
+        path: '/onboarding',
+        onboardingCompleted: false,
+        authenticated: false,
+      ),
       isNull,
     );
     expect(
-      onboardingGuardRedirect(path: '/login', onboardingCompleted: false),
+      appAccessRedirect(
+        path: '/login',
+        onboardingCompleted: false,
+        authenticated: false,
+      ),
+      '/onboarding',
+    );
+    expect(
+      appAccessRedirect(
+        path: '/inventory',
+        onboardingCompleted: true,
+        authenticated: false,
+      ),
+      '/login?from=%2Finventory',
+    );
+    expect(
+      appAccessRedirect(
+        path: '/inventory',
+        onboardingCompleted: true,
+        authenticated: true,
+      ),
       isNull,
     );
     expect(
-      onboardingGuardRedirect(path: '/inventory', onboardingCompleted: true),
+      appAccessRedirect(
+        path: '/login',
+        onboardingCompleted: true,
+        authenticated: false,
+      ),
       isNull,
     );
+  });
+
+  test('post-login locations cannot escape the app route boundary', () {
+    expect(safePostLoginLocation('/inventory'), '/inventory');
+    expect(
+      safePostLoginLocation('/inventory/item/edit'),
+      '/inventory/item/edit',
+    );
+    expect(safePostLoginLocation('//attacker.example'), isNull);
+    expect(safePostLoginLocation('https://attacker.example'), isNull);
+    expect(safePostLoginLocation('/login'), isNull);
+    expect(safePostLoginLocation('/onboarding'), isNull);
   });
 
   test('Android verified-link paths match the Flutter route boundary', () {

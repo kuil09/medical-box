@@ -11,6 +11,7 @@ import 'package:uuid/uuid.dart';
 import '../../data/api/api_client.dart';
 import '../../data/local/app_database.dart';
 import '../../providers.dart';
+import '../../services/medicine_ocr_service.dart';
 import '../../theme.dart';
 import 'drug_catalog_projection_sections.dart';
 
@@ -43,6 +44,7 @@ class _EditInventoryItemScreenState
   DateTime? _expiresOn;
   String? _containerId;
   bool _searching = false;
+  bool _scanning = false;
   bool _saving = false;
   int _searchGeneration = 0;
 
@@ -133,6 +135,135 @@ class _EditInventoryItemScreenState
         }
       }
     });
+  }
+
+  Future<void> _scanMedicine() async {
+    final repository = ref.read(authRepositoryProvider);
+    var account = repository.account;
+    if (account == null) {
+      try {
+        account = await ref.read(authSessionProvider.future);
+      } catch (_) {
+        account = null;
+      }
+    }
+    if (!mounted) return;
+    if (account == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('사진 자동인식은 가입 또는 로그인이 필요해요.')),
+      );
+      await context.push(_loginLocation());
+      return;
+    }
+    if (!account.canReadCatalog) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('사진 자동인식은 의약품 검색 권한 승인 후 사용할 수 있어요.')),
+      );
+      await context.push('/login');
+      return;
+    }
+
+    _searchTimer?.cancel();
+    ++_searchGeneration;
+    setState(() {
+      _scanning = true;
+      _results = const [];
+    });
+    try {
+      final scan = await ref.read(medicineScannerProvider).scan();
+      if (scan == null || !mounted) return;
+      final terms = const MedicineSearchTermExtractor().extract(scan.lines);
+      if (terms.isEmpty) {
+        await _showNoRecognizedMedicine();
+        return;
+      }
+
+      final candidates = <String, DrugSummary>{};
+      for (final term in terms.take(4)) {
+        final matches = await ref.read(catalogRepositoryProvider).search(term);
+        for (final match in matches) {
+          candidates.putIfAbsent(match.itemSeq, () => match);
+          if (candidates.length >= 10) break;
+        }
+        if (candidates.length >= 10) break;
+      }
+      if (!mounted) return;
+      if (candidates.isEmpty) {
+        await _showNoCatalogCandidates(terms);
+        return;
+      }
+
+      final selected = await showModalBottomSheet<DrugSummary>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (context) => _PhotoCandidateSheet(
+          terms: terms,
+          candidates: candidates.values.toList(growable: false),
+        ),
+      );
+      if (selected != null && mounted) await _openDrugDetail(selected);
+    } on MedicineScanException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_scanErrorMessage(error.failure))));
+    } catch (error) {
+      if (!mounted) return;
+      final message = _isCatalogAccessError(error)
+          ? _catalogErrorMessage(error)
+          : '사진에서 의약품 후보를 찾지 못했어요. 다시 촬영하거나 직접 검색해 주세요.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } finally {
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
+
+  String _loginLocation() {
+    final returnLocation = widget.itemId == null
+        ? Uri(
+            path: '/inventory/new',
+            queryParameters: {'containerId': ?widget.containerId},
+          ).toString()
+        : '/inventory/${Uri.encodeComponent(widget.itemId!)}/edit';
+    return Uri(
+      path: '/login',
+      queryParameters: {'from': returnLocation},
+    ).toString();
+  }
+
+  Future<void> _showNoRecognizedMedicine() async {
+    final retry = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('제품명을 읽지 못했어요'),
+        content: const Text('상자나 포장의 제품명이 화면을 크게 채우도록 밝은 곳에서 정면으로 다시 촬영해 주세요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('직접 검색'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('다시 촬영'),
+          ),
+        ],
+      ),
+    );
+    if (retry == true && mounted) await _scanMedicine();
+  }
+
+  Future<void> _showNoCatalogCandidates(List<String> terms) async {
+    final selectedTerm = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => _NoPhotoCandidateSheet(terms: terms),
+    );
+    if (selectedTerm == null || !mounted) return;
+    _nameController.text = selectedTerm;
+    _onSearchChanged(selectedTerm);
   }
 
   Future<void> _pickDate() async {
@@ -344,6 +475,11 @@ class _EditInventoryItemScreenState
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
           children: [
             const _PrivacyNote(),
+            const SizedBox(height: 12),
+            _PhotoRecognitionCard(
+              scanning: _scanning,
+              onPressed: _scanMedicine,
+            ),
             const SizedBox(height: 18),
             TextFormField(
               controller: _nameController,
@@ -483,8 +619,218 @@ class _PrivacyNote extends StatelessWidget {
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
-              '검색어는 공식 카탈로그 조회에만 사용하고, 수량·사용기한·메모는 서버로 보내지 않아요.',
+              '로그인 후 검색어만 공식 카탈로그 조회에 사용하고, 사진·수량·사용기한·메모는 서버로 보내지 않아요.',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PhotoRecognitionCard extends StatelessWidget {
+  const _PhotoRecognitionCard({
+    required this.scanning,
+    required this.onPressed,
+  });
+
+  final bool scanning;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E9),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: MedicalBoxColors.line),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.82),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: PhosphorIcon(
+              PhosphorIconsDuotone.camera,
+              color: MedicalBoxColors.orange,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '사진으로 의약품 찾기',
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  '상자·포장 앞면의 제품명을 기기에서 읽어요. 사진은 인식 직후 삭제돼요.',
+                  style: TextStyle(
+                    color: MedicalBoxColors.muted,
+                    fontSize: 12,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 11),
+                FilledButton.icon(
+                  onPressed: scanning ? null : onPressed,
+                  icon: scanning
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(PhosphorIconsRegular.camera),
+                  label: Text(scanning ? '기기에서 읽는 중…' : '제품명 촬영'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PhotoCandidateSheet extends StatelessWidget {
+  const _PhotoCandidateSheet({required this.terms, required this.candidates});
+
+  final List<String> terms;
+  final List<DrugSummary> candidates;
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.72,
+      minChildSize: 0.48,
+      maxChildSize: 0.92,
+      builder: (context, controller) => ListView(
+        controller: controller,
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        children: [
+          Center(
+            child: Container(
+              width: 42,
+              height: 5,
+              decoration: BoxDecoration(
+                color: MedicalBoxColors.line,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              PhosphorIcon(
+                PhosphorIconsDuotone.scan,
+                color: MedicalBoxColors.skyDeep,
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  '사진에서 찾은 등록 후보',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          const Text(
+            '사진 인식은 틀릴 수 있어요. 실제 포장과 제품명·제조사를 확인한 뒤 선택하세요.',
+            style: TextStyle(color: MedicalBoxColors.muted, height: 1.45),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: [
+              for (final term in terms)
+                Chip(
+                  avatar: Icon(PhosphorIconsRegular.textT, size: 15),
+                  label: Text(term),
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          for (final candidate in candidates)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Material(
+                color: Colors.white,
+                shape: RoundedRectangleBorder(
+                  side: const BorderSide(color: MedicalBoxColors.line),
+                  borderRadius: BorderRadius.circular(17),
+                ),
+                child: ListTile(
+                  title: Text(
+                    candidate.itemName,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: Text(
+                    [
+                      candidate.manufacturer ?? '제조사 정보 없음',
+                      if (candidate.status?.isNotEmpty ?? false)
+                        candidate.status!,
+                    ].join(' · '),
+                  ),
+                  trailing: Icon(PhosphorIconsRegular.caretRight),
+                  onTap: () => Navigator.pop(context, candidate),
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('직접 검색할게요'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoPhotoCandidateSheet extends StatelessWidget {
+  const _NoPhotoCandidateSheet({required this.terms});
+
+  final List<String> terms;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('공식 등록 후보가 없어요', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          const Text(
+            '읽힌 검색어가 맞다면 선택해 다시 검색하거나, 제품명을 직접 입력해 주세요.',
+            style: TextStyle(color: MedicalBoxColors.muted, height: 1.45),
+          ),
+          const SizedBox(height: 14),
+          for (final term in terms)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(PhosphorIconsRegular.magnifyingGlass),
+              title: Text(term),
+              onTap: () => Navigator.pop(context, term),
+            ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('닫기'),
             ),
           ),
         ],
@@ -1172,6 +1518,19 @@ String _catalogErrorMessage(
     return '현재 계정에는 의약품 검색 권한이 없어요. 베타 승인을 확인해 주세요.';
   }
   return fallback;
+}
+
+String _scanErrorMessage(MedicineScanFailure failure) {
+  return switch (failure) {
+    MedicineScanFailure.cameraDenied =>
+      '카메라 권한이 필요해요. 기기 설정에서 우리집 구급키트의 카메라 접근을 허용해 주세요.',
+    MedicineScanFailure.cameraUnavailable =>
+      '이 기기에서 카메라를 열 수 없어요. 잠시 후 다시 시도해 주세요.',
+    MedicineScanFailure.recognitionUnavailable =>
+      '이 기기에서는 한글 사진 인식을 사용할 수 없어요. 제품명을 직접 검색해 주세요.',
+    MedicineScanFailure.recognitionFailed =>
+      '사진의 글자를 읽지 못했어요. 밝은 곳에서 제품명을 크게 촬영해 주세요.',
+  };
 }
 
 String _safetyCategoryLabel(String ruleType) {

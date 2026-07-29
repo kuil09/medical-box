@@ -9,7 +9,14 @@ import '../../providers.dart';
 import '../../theme.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({
+    this.returnLocation,
+    this.restoreFailed = false,
+    super.key,
+  });
+
+  final String? returnLocation;
+  final bool restoreFailed;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -19,6 +26,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _working = false;
   bool _termsAccepted = false;
   String? _message;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.restoreFailed) {
+      _message = '로그인 상태를 확인하지 못했어요. 다시 로그인해 주세요.';
+    }
+  }
 
   Future<void> _signIn(LoginProvider provider) async {
     if (!_termsAccepted) {
@@ -35,12 +50,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .signIn(provider, termsAccepted: _termsAccepted);
       ref.invalidate(authSessionProvider);
       if (mounted) {
+        if (widget.returnLocation != null) {
+          context.go(widget.returnLocation!);
+          return;
+        }
         setState(() {
           _termsAccepted = false;
           _message = account.canReadCatalog
-              ? '${account.displayName ?? account.email ?? '계정'}으로 로그인했고 의약품 검색 권한이 확인됐어요.'
-              : '로그인했지만 이 계정에는 아직 의약품 검색 권한이 없어요.';
+              ? '${account.displayName ?? account.email ?? '계정'}으로 시작할 준비가 됐어요.'
+              : '로그인했어요. 공식 의약품 검색 권한은 아직 승인 대기 중이에요.';
         });
+        context.go('/');
       }
     } catch (error) {
       if (mounted) {
@@ -221,7 +241,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           const SizedBox(height: 18),
           Text(
             account == null
-                ? '공식 의약품 검색은 로그인이 필요해요'
+                ? '가입 또는 로그인 후 시작하세요'
                 : account.canReadCatalog
                 ? '검색 권한이 확인됐어요'
                 : '검색 권한 승인 대기 중이에요',
@@ -231,10 +251,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           const SizedBox(height: 8),
           Text(
             account == null
-                ? '승인된 계정으로 로그인하면 공공데이터 기반 의약품 검색·상세·DUR 정보를 조회할 수 있어요. 가족·보유약·알림 데이터는 서버로 동기화되지 않아요.'
+                ? '우리집 구급키트는 계정으로 보관함 접근을 보호해요. 가족·보유약·알림 데이터는 로그인 후에도 이 기기의 암호화 저장소에만 남아요.'
                 : account.canReadCatalog
                 ? '이 계정은 공공데이터 기반 의약품 정보를 조회할 수 있어요. 기기 데이터는 계속 이 기기에만 저장돼요.'
-                : '로그인은 완료됐지만 서버의 catalog:read 권한이 아직 부여되지 않았어요. 베타 운영자에게 계정 승인을 요청해 주세요.',
+                : '앱은 사용할 수 있지만 서버의 catalog:read 권한이 아직 부여되지 않았어요. 공식 검색과 사진 자동인식은 승인 후 사용할 수 있어요.',
             textAlign: TextAlign.center,
             style: const TextStyle(color: MedicalBoxColors.muted, height: 1.5),
           ),
@@ -318,7 +338,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               icon: Icon(PhosphorIconsRegular.trash),
               label: const Text('서버 계정 삭제'),
             ),
-          if (!Navigator.of(context).canPop())
+          if (account != null && !Navigator.of(context).canPop())
             TextButton(
               onPressed: _working ? null : () => context.go('/'),
               child: const Text('구급키트로 돌아가기'),

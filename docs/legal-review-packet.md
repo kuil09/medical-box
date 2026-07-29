@@ -16,7 +16,7 @@ The legal-source check was refreshed on 2026-07-27 against:
 
 ## Product boundary
 
-Medical Box is a device-local household medicine organizer with an optional
+Medical Box is a device-local household medicine organizer with a required
 account. Household members, containers, quantities, expiry dates, notes, visit
 plans, and reminder content remain in the encrypted device database. The server
 stores only account identities, refresh-session hashes, terms acceptances,
@@ -46,7 +46,7 @@ The reviewer should confirm that the following product rules are sufficient:
 
 ## Personal information and cross-border processing
 
-The optional account may contain provider subject, provider name, display name,
+The required account may contain provider subject, provider name, display name,
 and email address. Railway hosts the account and public catalog database in
 Singapore, while Railway states that its primary processing operations take
 place in the United States. Railway Corporation is the processor named in its
@@ -83,6 +83,29 @@ The reviewer must confirm:
 No household inventory field is intended to cross the device boundary. A proxy
 capture remains required evidence for this implementation claim.
 
+Mandatory account use creates an App Review risk while household functionality
+remains device-local. The reviewer must assess whether access control, catalog
+authorization, terms acceptance, and future purchase restoration are sufficient
+account-based value, and must approve the exact review explanation before store
+submission.
+
+## Advertising and purchases
+
+The confirmed business model permits non-personalized banners for free accounts
+and a future lifetime ad-removal purchase. No advertising provider, production
+ad identifier, store product, price, or receipt-verification service is
+currently approved. Advertising remains disabled until those choices are made.
+
+The reviewer must confirm:
+
+- the provider's exact identifiers, network data, processors, countries, and
+  retention;
+- whether ATT is required and that denial cannot restrict free features;
+- the sensitive advertising category blocklist and creative-review process;
+- that medicine, supplement, and health claims cannot appear as official
+  information or product recommendations; and
+- the lifetime purchase, restoration, refund, and offline-entitlement language.
+
 ## Public data and image rights
 
 The reviewer should confirm source-specific attribution and redistribution terms
@@ -110,9 +133,9 @@ trigger a new classification review before implementation.
 
 The support and account-deletion pages must explain:
 
-- the difference between deleting only the optional server account and deleting
+- the difference between deleting only the required server account and deleting
   both the account and device-local organizer data;
-- that deleting device data alone does not delete the optional account;
+- that deleting device data alone does not delete the required account;
 - that uninstalling the app removes device-local data because backup and device
   transfer are disabled;
 - that an account deletion requires recent provider reauthentication;
@@ -126,6 +149,9 @@ The support and account-deletion pages must explain:
 | Medical-device boundary | Confirm the organizer/reference positioning | Architecture and feature inventory |
 | Singapore transfer | Approve notice, consent, and retention language | Privacy page and server schema |
 | Social login | Approve provider disclosures and terms | Provider console configuration and login screens |
+| Mandatory account | Approve App Review rationale and access flow | Onboarding, session gate, and review notes |
+| Advertising | Approve provider, disclosures, category blocks, and ATT boundary | Proxy capture and provider console |
+| Purchases | Approve lifetime entitlement and restoration language | Store products and receipt verification |
 | Account deletion | Approve scope choices and support process | Reauthentication and deletion recordings |
 | Public data | Approve attribution, reuse, and image-link behavior | Catalog metadata and source registry |
 | Emergency sharing | Approve selected-field preview and safety copy | Share preview recordings |

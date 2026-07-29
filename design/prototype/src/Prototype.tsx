@@ -3,13 +3,16 @@ import * as THREE from "three";
 import {
   ArchiveIcon,
   BellIcon,
+  CameraIcon,
   CheckCircledIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ClockIcon,
   Cross2Icon,
   EyeNoneIcon,
+  ExitIcon,
   GearIcon,
+  LockClosedIcon,
   MagnifyingGlassIcon,
   MinusIcon,
   Pencil2Icon,
@@ -68,7 +71,13 @@ type KitContextValue = {
   updateQuantity: (containerId: ContainerId, itemId: string, quantity: number) => void;
 };
 
+type AuthContextValue = {
+  signIn: () => void;
+  signOut: () => void;
+};
+
 const KitContext = createContext<KitContextValue | null>(null);
+const AuthContext = createContext<AuthContextValue | null>(null);
 const pouchTones: PouchTone[] = ["mint", "blush", "blue"];
 
 const initialSharedItems: InventoryItem[] = [
@@ -184,25 +193,35 @@ function useKit() {
   return context;
 }
 
+function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used inside AuthContext.");
+  return context;
+}
+
 export default function Prototype() {
   const [sharedItems, setSharedItems] = useState(initialSharedItems);
   const [members, setMembers] = useState(initialMembers);
-  const initial = useMemo<FlowScreen>(() => createHomeScreen(), []);
+  const initial = useMemo<FlowScreen>(() => createWelcomeScreen(), []);
 
   const value = useMemo<KitContextValue>(
     () => ({
       sharedItems,
       members,
       addMember: (name) => {
-        setMembers((current) => [
-          ...current,
-          {
-            id: `member-${Date.now()}`,
-            name,
-            tone: pouchTones[current.length % pouchTones.length],
-            items: [],
-          },
-        ]);
+        setMembers((current) =>
+          current.length >= 10
+            ? current
+            : [
+                ...current,
+                {
+                  id: `member-${Date.now()}`,
+                  name,
+                  tone: pouchTones[current.length % pouchTones.length],
+                  items: [],
+                },
+              ],
+        );
       },
       renameMember: (memberId, name) => {
         setMembers((current) =>
@@ -263,9 +282,42 @@ export default function Prototype() {
 
   return (
     <KitContext.Provider value={value}>
-      <FlowStack initial={initial} />
+      <PrototypeFlow initial={initial} />
     </KitContext.Provider>
   );
+}
+
+function PrototypeFlow({ initial }: { initial: FlowScreen }) {
+  const [authenticated, setAuthenticated] = useState(false);
+  const auth = useMemo<AuthContextValue>(
+    () => ({
+      signIn: () => setAuthenticated(true),
+      signOut: () => setAuthenticated(false),
+    }),
+    [],
+  );
+
+  return (
+    <AuthContext.Provider value={auth}>
+      <FlowStack initial={authenticated ? createHomeScreen() : initial} />
+    </AuthContext.Provider>
+  );
+}
+
+function createWelcomeScreen(): FlowScreen {
+  return {
+    id: "welcome",
+    render: (flow) => <WelcomeScreen flow={flow} />,
+  };
+}
+
+function createLoginScreen(): FlowScreen {
+  return {
+    id: "login",
+    headerHeight: 58,
+    header: (flow) => <ScreenHeader title="가입 또는 로그인" flow={flow} />,
+    render: (flow) => <LoginScreen flow={flow} />,
+  };
 }
 
 function createHomeScreen(): FlowScreen {
@@ -273,6 +325,86 @@ function createHomeScreen(): FlowScreen {
     id: "home",
     render: (flow) => <HomeScreen flow={flow} />,
   };
+}
+
+function WelcomeScreen({ flow }: { flow: FlowControls }) {
+  return (
+    <MobileScroll className="app-screen">
+      <main className="access-screen" data-testid="welcome-screen">
+        <span className="access-kicker">
+          <LockClosedIcon />
+          회원 전용 보관함
+        </span>
+        <section className="access-hero">
+          <span className="access-kit-mark">
+            <ArchiveIcon />
+          </span>
+          <div>
+            <h1>우리 집 약을,<br />꺼내 보기 쉽게.</h1>
+            <p>
+              앱을 사용하려면 계정이 필요해요. 가족·재고·메모는 로그인 후에도 이 기기의 암호화
+              보관함에만 저장합니다.
+            </p>
+          </div>
+        </section>
+        <section className="access-principles" aria-label="계정과 개인정보 원칙">
+          <div>
+            <CheckCircledIcon />
+            <span><strong>기본 기능은 무료</strong><small>의약품 수나 안전정보를 제한하지 않아요.</small></span>
+          </div>
+          <div>
+            <EyeNoneIcon />
+            <span><strong>건강정보는 광고에 사용하지 않음</strong><small>초기 광고는 비개인화 배너만 허용해요.</small></span>
+          </div>
+        </section>
+        <button className="primary-cta" onClick={() => flow.push(createLoginScreen())}>
+          가입 또는 로그인하고 시작
+          <ChevronRightIcon />
+        </button>
+      </main>
+    </MobileScroll>
+  );
+}
+
+function LoginScreen({ flow }: { flow: FlowControls }) {
+  const { signIn } = useAuth();
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const complete = () => {
+    if (!termsAccepted) return;
+    signIn();
+    flow.replace(createHomeScreen());
+  };
+
+  return (
+    <MobileScroll className="app-screen">
+      <main className="access-screen access-screen--login" data-testid="login-screen">
+        <section className="login-heading">
+          <span className="access-kit-mark access-kit-mark--small"><LockClosedIcon /></span>
+          <h1>안전한 보관함을 열어볼까요?</h1>
+          <p>계정은 앱 접근과 구매 권한 복원에 사용하고, 개인 보관 데이터는 서버로 보내지 않아요.</p>
+        </section>
+        <label className="terms-check">
+          <input
+            type="checkbox"
+            checked={termsAccepted}
+            onChange={(event) => setTermsAccepted(event.target.checked)}
+          />
+          <span>
+            <strong>이용약관과 개인정보 처리방침에 동의합니다</strong>
+            <small>계정을 만들기 전에 필수 문서를 확인해 주세요.</small>
+          </span>
+        </label>
+        <section className="provider-buttons" aria-label="소셜 계정 선택">
+          <button disabled={!termsAccepted} onClick={complete}><span>K</span>카카오로 계속</button>
+          <button disabled={!termsAccepted} onClick={complete}><span>G</span>Google로 계속</button>
+          <button disabled={!termsAccepted} onClick={complete}><span></span>Apple로 계속</button>
+        </section>
+        <p className="access-footnote">
+          로그인하지 않으면 홈, 의약품 검색, 사진 자동인식, 보관함에 접근할 수 없어요.
+        </p>
+      </main>
+    </MobileScroll>
+  );
 }
 
 function createInventoryScreen(): FlowScreen {
@@ -307,7 +439,7 @@ function createSettingsScreen(): FlowScreen {
     id: "settings",
     headerHeight: 58,
     header: (flow) => <ScreenHeader title="설정" flow={flow} />,
-    render: () => <SettingsScreen />,
+    render: (flow) => <SettingsScreen flow={flow} />,
   };
 }
 
@@ -481,6 +613,8 @@ function HomeScreen({ flow }: { flow: FlowControls }) {
             <ChevronRightIcon className="chevron" />
           </button>
         </section>
+
+        <PrototypeBannerAd placement="홈 점검 요약 아래" />
 
         {activeMember ? (
           <section className={`tabbed-pouch-panel tabbed-pouch-panel--${activeMember.tone}`}>
@@ -1094,6 +1228,8 @@ function InventoryScreen({ flow }: { flow: FlowControls }) {
           ) : null}
         </section>
 
+        <PrototypeBannerAd placement="재고 목록 끝" />
+
         <button className="secondary-cta" onClick={() => flow.push(createItemEditorScreen("shared"))}>
           <PlusIcon />
           새 의약품 추가
@@ -1153,6 +1289,8 @@ function ItemEditorScreen({
   const [quantity, setQuantity] = useState(String(existing?.quantity ?? 1));
   const [note, setNote] = useState(existing?.note ?? "");
   const [deleteArmed, setDeleteArmed] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanComplete, setScanComplete] = useState(false);
 
   const save = () => {
     const trimmedName = name.trim();
@@ -1174,6 +1312,20 @@ function ItemEditorScreen({
   return (
     <MobileScroll className="app-screen">
       <main className="sub-screen add-screen" data-testid="item-editor-screen">
+        <button
+          className="photo-scan-card"
+          onClick={() => {
+            setScanComplete(false);
+            setScannerOpen(true);
+          }}
+        >
+          <span><CameraIcon /></span>
+          <span>
+            <strong>사진으로 의약품 찾기</strong>
+            <small>포장 글자를 기기에서 읽고 공식 데이터 후보를 보여드려요.</small>
+          </span>
+          <ChevronRightIcon />
+        </button>
         <label className="search-field">
           <MagnifyingGlassIcon />
           <KeyboardInput placeholder="제품명 또는 품목기준코드 검색" aria-label="의약품 검색" />
@@ -1296,11 +1448,53 @@ function ItemEditorScreen({
           </>
         ) : null}
       </main>
+      <BottomSheet
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        title={scanComplete ? "사진에서 찾은 등록 후보" : "제품명이 보이게 촬영"}
+        description={
+          scanComplete
+            ? "자동인식은 틀릴 수 있어요. 실제 포장의 제품명과 제조사를 확인한 뒤 선택하세요."
+            : "사진은 서버에 업로드하지 않고 인식이 끝나면 임시 파일을 삭제해요."
+        }
+        snap={scanComplete ? 0.72 : 0.5}
+      >
+        {scanComplete ? (
+          <div className="scan-candidates">
+            <span className="scan-term">인식 문구 · 타이레놀정 500밀리그람</span>
+            {[
+              ["타이레놀정500밀리그람", "한국얀센 · 품목기준코드 200000001"],
+              ["어린이타이레놀산160밀리그람", "한국존슨앤드존슨판매 · 품목기준코드 200000002"],
+            ].map(([candidateName, detail]) => (
+              <button
+                key={candidateName}
+                onClick={() => {
+                  setName(candidateName);
+                  setScannerOpen(false);
+                }}
+              >
+                <span><strong>{candidateName}</strong><small>{detail}</small></span>
+                <ChevronRightIcon />
+              </button>
+            ))}
+            <button className="scan-manual" onClick={() => setScannerOpen(false)}>직접 검색할게요</button>
+          </div>
+        ) : (
+          <div className="scan-start">
+            <span className="scan-frame"><CameraIcon /></span>
+            <p>제품명이 화면을 크게 채우도록 밝은 곳에서 정면으로 촬영해 주세요.</p>
+            <button className="primary-cta primary-cta--compact" onClick={() => setScanComplete(true)}>
+              촬영하고 기기에서 읽기
+            </button>
+          </div>
+        )}
+      </BottomSheet>
     </MobileScroll>
   );
 }
 
-function SettingsScreen() {
+function SettingsScreen({ flow }: { flow: FlowControls }) {
+  const { signOut } = useAuth();
   const [hideMedicineNames, setHideMedicineNames] = useState(true);
   const [localReminders, setLocalReminders] = useState(true);
 
@@ -1349,6 +1543,28 @@ function SettingsScreen() {
           </label>
         </section>
 
+        <h2>계정</h2>
+        <section className="settings-group">
+          <div className="settings-static-row">
+            <span className="settings-row-icon"><PersonIcon /></span>
+            <span>
+              <strong>무료 회원 · 비개인화 광고</strong>
+              <small>구매 권한은 계정으로 복원하고 보관 데이터는 이 기기에 남아요.</small>
+            </span>
+            <CheckCircledIcon />
+          </div>
+          <button
+            className="settings-link-row"
+            onClick={() => {
+              signOut();
+              flow.replace(createWelcomeScreen());
+            }}
+          >
+            <span><ExitIcon /> 로그아웃</span>
+            <ChevronRightIcon />
+          </button>
+        </section>
+
         <h2>공유</h2>
         <section className="settings-group">
           <div className="settings-static-row">
@@ -1374,11 +1590,24 @@ function SettingsScreen() {
             ),
           )}
         </section>
+        <PrototypeBannerAd placement="설정 일반 정보 하단" />
         <p className="safety-note">
           가족·재고·수량·방문 일정·알림은 이 기기의 암호화 저장소에만 보관돼요.
         </p>
       </main>
     </MobileScroll>
+  );
+}
+
+function PrototypeBannerAd({ placement }: { placement: string }) {
+  return (
+    <aside className="prototype-banner-ad" aria-label={`광고, ${placement}`}>
+      <span>광고</span>
+      <div>
+        <strong>비개인화 배너 영역</strong>
+        <small>건강정보·검색어·계정 식별자를 광고 요청에 사용하지 않아요.</small>
+      </div>
+    </aside>
   );
 }
 

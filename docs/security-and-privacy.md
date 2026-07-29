@@ -27,6 +27,8 @@ the app's control and must be deleted separately by the user.
 
 ## Server account security
 
+- Account creation and sign-in are required before entering organizer routes.
+- Signing out locks the app while preserving encrypted device-local data.
 - Identities are keyed by provider and provider subject.
 - Email addresses never trigger automatic identity merging.
 - Provider tokens are verified and never persisted.
@@ -48,3 +50,14 @@ The production container disables Uvicorn access logs. Application code does
 not log catalog search query strings, request bodies, or response bodies.
 Proxy-level verification before release must still demonstrate that private
 household fields never leave the device.
+
+## Advertising boundary
+
+- Only non-personalized banner advertising is permitted.
+- The provider-independent adapter receives only an allowlisted placement enum.
+- Account identifiers, household data, medicine data, search terms, reminders,
+  sharing content, and health-related behavior segments are not valid adapter
+  inputs.
+- Advertising is disabled by default and cannot block startup or core features.
+- Real provider integration is blocked on legal review, disclosure updates,
+  sensitive-category configuration, test identifiers, and proxy evidence.

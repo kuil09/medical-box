@@ -19,9 +19,15 @@ medicine catalog service for a closed beta. The Korean product name is
 Household names, member profiles, containers, inventory quantities, expiry
 dates, private notes, visit plans, and reminder bodies are stored only in the
 encrypted on-device Drift database. The backend has no tables or endpoints for
-those entities. The organizer remains usable without an account, while official
-catalog search, detail, and DUR requests require an authenticated account with
-the server-side `catalog:read` permission.
+those entities. Account creation and sign-in are required before entering the
+organizer. Official catalog search, detail, and DUR requests additionally
+require the server-side `catalog:read` permission.
+
+Free accounts may eventually show non-personalized banner ads only in explicitly
+allowlisted locations. The advertising adapter cannot receive account,
+household, medicine, search, reminder, or sharing data and is disabled until an
+advertising provider and its disclosures are approved. See
+`docs/monetization-decisions.md`.
 
 The product does not diagnose, calculate doses, recommend treatment, or suggest
 replacement medicines. Prescription functionality is limited to visit and

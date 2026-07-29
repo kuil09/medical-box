@@ -5,8 +5,10 @@ import 'package:intl/intl.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../../providers.dart';
+import '../../services/monetization_service.dart';
 import '../../theme.dart';
 import '../../widgets/official_medicine_thumbnail.dart';
+import '../../widgets/privacy_safe_banner_slot.dart';
 
 class InventoryScreen extends ConsumerWidget {
   const InventoryScreen({super.key});
@@ -33,9 +35,17 @@ class InventoryScreen extends ConsumerWidget {
           }
           return ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            itemCount: items.length,
+            itemCount: items.length + 1,
             separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
+              if (index == items.length) {
+                return const Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: PrivacySafeBannerSlot(
+                    placement: BannerAdPlacement.inventoryListEnd,
+                  ),
+                );
+              }
               final item = items[index];
               return Card(
                 child: Padding(

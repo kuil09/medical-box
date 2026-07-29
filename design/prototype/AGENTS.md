@@ -29,6 +29,25 @@ Settings must remain a separate screen. Inventory sharing must always be
 preview-first, must exclude private notes by default, and must require an
 explicit user action before opening a text or operating-system share surface.
 
+App access now requires account creation or sign-in. The prototype must start
+with the account-required onboarding flow, must not expose an anonymous bypass,
+and must return to that locked state after sign-out. Account access and purchase
+restoration are server concerns; family, inventory, notes, visits, and reminders
+remain local during phase one.
+
+Photo recognition is an authenticated registration aid. It must present a
+camera action in the item editor, explain that OCR runs on-device and temporary
+captures are deleted, show official catalog candidates, and require explicit
+selection before populating the form. It must never silently save or claim a
+certain medicine identity.
+
+Monetization prototypes may show only clearly labeled non-personalized banner
+slots after the home summary, at the end of the inventory list, and below
+general settings information. Never place ads inside the chest interaction,
+editing, official medicine details, safety information, sharing, deletion,
+backup, or error flows. Do not imply that a live ad provider, price, or Family
+Plus synchronization design has been selected.
+
 When implementing from a selected generated mock, treat that image as the source of truth for layout, component anatomy, density, spacing, color, typography, visible content, and hierarchy.
 
 ## Editing Boundary

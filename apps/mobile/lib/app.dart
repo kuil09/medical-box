@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import 'app_links.dart';
 import 'features/auth/login_screen.dart';
+import 'features/auth/session_gate_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/inventory/edit_inventory_item_screen.dart';
 import 'features/inventory/inventory_screen.dart';
@@ -27,71 +28,100 @@ class MedicalBoxApp extends ConsumerStatefulWidget {
 
 class _MedicalBoxAppState extends ConsumerState<MedicalBoxApp>
     with WidgetsBindingObserver {
-  late final GoRouter _router = GoRouter(
-    initialLocation: '/onboarding',
-    redirect: (context, state) async {
-      final settings = await ref.read(databaseProvider).getSettings();
-      return onboardingGuardRedirect(
-        path: state.uri.path,
-        onboardingCompleted: settings.onboardingCompleted,
-      );
-    },
-    routes: [
-      GoRoute(
-        path: '/onboarding',
-        builder: (context, state) => const OnboardingScreen(),
-      ),
-      ShellRoute(
-        builder: (context, state, child) =>
-            AppShell(location: state.uri.path, child: child),
-        routes: [
-          GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
-          GoRoute(
-            path: '/inventory',
-            builder: (context, state) => const InventoryScreen(),
-          ),
-          GoRoute(
-            path: '/reminders',
-            builder: (context, state) => const RemindersScreen(),
-          ),
-          GoRoute(
-            path: '/settings',
-            builder: (context, state) => const SettingsScreen(),
-          ),
-        ],
-      ),
-      GoRoute(
-        path: '/inventory/new',
-        builder: (context, state) => EditInventoryItemScreen(
-          containerId: state.uri.queryParameters['containerId'],
-        ),
-      ),
-      GoRoute(
-        path: '/inventory/:id/edit',
-        builder: (context, state) =>
-            EditInventoryItemScreen(itemId: state.pathParameters['id']),
-      ),
-      GoRoute(path: '/pouch', builder: (context, state) => const PouchScreen()),
-      GoRoute(
-        path: '/pouch/:containerId',
-        builder: (context, state) => PouchDetailScreen(
-          containerId: state.pathParameters['containerId']!,
-        ),
-      ),
-      GoRoute(
-        path: '/renewal',
-        builder: (context, state) => const RenewalScreen(),
-      ),
-      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-      for (final entry in appLinkRedirects.entries)
-        GoRoute(path: entry.key, redirect: (context, state) => entry.value),
-    ],
-  );
+  late final GoRouter _router;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _router = GoRouter(
+      initialLocation: '/gate',
+      refreshListenable: ref.read(authRepositoryProvider),
+      redirect: (context, state) async {
+        final settings = await ref.read(databaseProvider).getSettings();
+        if (state.uri.path == '/gate') return null;
+        var account = ref.read(authRepositoryProvider).account;
+        if (settings.onboardingCompleted && account == null) {
+          try {
+            account = await ref.read(authSessionProvider.future);
+          } catch (_) {
+            account = null;
+          }
+        }
+        return appAccessRedirect(
+          path: state.uri.path,
+          onboardingCompleted: settings.onboardingCompleted,
+          authenticated: account != null,
+        );
+      },
+      routes: [
+        GoRoute(
+          path: '/gate',
+          builder: (context, state) => const SessionGateScreen(),
+        ),
+        GoRoute(
+          path: '/onboarding',
+          builder: (context, state) => const OnboardingScreen(),
+        ),
+        ShellRoute(
+          builder: (context, state, child) =>
+              AppShell(location: state.uri.path, child: child),
+          routes: [
+            GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
+            GoRoute(
+              path: '/inventory',
+              builder: (context, state) => const InventoryScreen(),
+            ),
+            GoRoute(
+              path: '/reminders',
+              builder: (context, state) => const RemindersScreen(),
+            ),
+            GoRoute(
+              path: '/settings',
+              builder: (context, state) => const SettingsScreen(),
+            ),
+          ],
+        ),
+        GoRoute(
+          path: '/inventory/new',
+          builder: (context, state) => EditInventoryItemScreen(
+            containerId: state.uri.queryParameters['containerId'],
+          ),
+        ),
+        GoRoute(
+          path: '/inventory/:id/edit',
+          builder: (context, state) =>
+              EditInventoryItemScreen(itemId: state.pathParameters['id']),
+        ),
+        GoRoute(
+          path: '/pouch',
+          builder: (context, state) => const PouchScreen(),
+        ),
+        GoRoute(
+          path: '/pouch/:containerId',
+          builder: (context, state) => PouchDetailScreen(
+            containerId: state.pathParameters['containerId']!,
+          ),
+        ),
+        GoRoute(
+          path: '/renewal',
+          builder: (context, state) => const RenewalScreen(),
+        ),
+        GoRoute(
+          path: '/login',
+          builder: (context, state) => LoginScreen(
+            returnLocation: safePostLoginLocation(
+              state.uri.queryParameters['from'],
+            ),
+            restoreFailed:
+                state.uri.queryParameters['restoreFailed']?.toLowerCase() ==
+                'true',
+          ),
+        ),
+        for (final entry in appLinkRedirects.entries)
+          GoRoute(path: entry.key, redirect: (context, state) => entry.value),
+      ],
+    );
   }
 
   @override

@@ -10,7 +10,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers.dart';
 import '../../services/local_data_lifecycle.dart';
+import '../../services/monetization_service.dart';
 import '../../theme.dart';
+import '../../widgets/privacy_safe_banner_slot.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -194,8 +196,12 @@ class SettingsScreen extends ConsumerWidget {
           Card(
             child: ListTile(
               leading: PhosphorIcon(PhosphorIconsDuotone.userCircle),
-              title: const Text('로그인 및 검색 권한'),
-              subtitle: const Text('공식 의약품 검색에는 승인된 계정이 필요함'),
+              title: const Text('계정과 검색 권한'),
+              subtitle: Text(
+                ref.watch(authSessionProvider).valueOrNull?.email ??
+                    ref.read(authRepositoryProvider).account?.email ??
+                    '앱 사용에는 로그인이 필요함',
+              ),
               trailing: Icon(PhosphorIconsRegular.caretRight),
               onTap: () => context.push('/login'),
             ),
@@ -233,6 +239,10 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 14),
+          const PrivacySafeBannerSlot(
+            placement: BannerAdPlacement.settingsGeneralFooter,
           ),
           const _SectionLabel('암호화 백업'),
           Card(

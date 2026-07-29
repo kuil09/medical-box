@@ -69,7 +69,7 @@ def run_probe(config: ProbeConfig) -> None:
                 f"/v1/auth/exchange/{config.provider}",
                 json={
                     "providerToken": config.provider_token,
-                    "termsVersion": "2026-07-25",
+                    "termsVersion": "2026-07-29",
                     "termsAccepted": True,
                     "deviceLabel": "deployment-probe",
                 },

@@ -69,12 +69,17 @@ Evidence date: 2026-07-28
 
 ## Product and privacy gates
 
-- [x] Anonymous operation completes every device-local organizer workflow; official
-  catalog lookup requires an approved authenticated account
+- [ ] First-use onboarding requires account creation or sign-in before entering
+  organizer routes; returning users see an explicit session-restoration gate
+- [ ] Signing out locks all organizer routes without deleting encrypted local
+  household data
+- [ ] Camera OCR is available only to an authenticated account with
+  `catalog:read`, keeps the image on-device, deletes the temporary capture, and
+  requires explicit confirmation of an official candidate
 - [x] Account deletion offers an explicit account-only or account-and-device-data
   choice after provider reauthentication
-- [x] Local deletion leaves the optional account unless the user separately deletes
-  it
+- [ ] Local deletion leaves the required account unless the user separately
+  deletes it
 - [x] Local deletion removes app-created temporary `.medicalbox` exports while
   preserving unrelated files and accurately warning that externally saved or
   shared copies require separate deletion
@@ -86,6 +91,11 @@ Evidence date: 2026-07-28
   APIs still return HTTP 403 and remain disabled.
 - [ ] Legal review approves medicine wording and Singapore cross-border processing
   disclosure
+- [ ] Mandatory-account App Review rationale and store disclosures pass legal
+  and platform-policy review
+- [ ] Advertising remains disabled until a provider is selected, sensitive
+  categories are blocked, privacy/store disclosures are updated, and proxy
+  tests show zero account or health identifiers in requests
 
 ## Provider and distribution gates
 

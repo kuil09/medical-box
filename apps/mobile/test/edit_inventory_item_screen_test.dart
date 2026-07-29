@@ -7,9 +7,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:medical_box/data/api/api_client.dart';
+import 'package:medical_box/data/auth/auth_repository.dart';
 import 'package:medical_box/data/local/app_database.dart';
+import 'package:medical_box/data/local/database_key_store.dart';
 import 'package:medical_box/features/inventory/edit_inventory_item_screen.dart';
 import 'package:medical_box/providers.dart';
+import 'package:medical_box/services/medicine_ocr_service.dart';
 
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -110,6 +113,53 @@ void main() {
     expect(item.officialImageUrl, isNull);
     expect(item.appearanceSummary, isNull);
   });
+
+  testWidgets('on-device OCR opens official candidates without auto-saving', (
+    tester,
+  ) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    final catalog = _PhotoCatalogRepository();
+    final auth = AuthRepository(
+      ApiClient(baseUrl: 'https://medicalbox.example/api'),
+      DatabaseKeyStore(),
+      targetPlatform: TargetPlatform.android,
+    );
+    addTearDown(database.close);
+    addTearDown(auth.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          catalogRepositoryProvider.overrideWithValue(catalog),
+          authRepositoryProvider.overrideWithValue(auth),
+          authSessionProvider.overrideWith(
+            (ref) async => const AccountProfile(
+              id: 'account-1',
+              providers: ['google'],
+              permissions: ['catalog:read'],
+            ),
+          ),
+          medicineScannerProvider.overrideWithValue(
+            const _FakeMedicineScanner(),
+          ),
+        ],
+        child: const MaterialApp(home: EditInventoryItemScreen()),
+      ),
+    );
+
+    await tester.tap(find.text('제품명 촬영'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('사진에서 찾은 등록 후보'), findsOneWidget);
+    expect(find.text('타이레놀정500밀리그람'), findsOneWidget);
+    expect(catalog.queries, contains('타이레놀정'));
+    final productField = tester.widget<TextFormField>(
+      find.widgetWithText(TextFormField, '제품명'),
+    );
+    expect(productField.controller?.text, isEmpty);
+  });
 }
 
 Future<void> _insertOfficialInventoryItem(AppDatabase database) async {
@@ -161,5 +211,47 @@ class _ControlledCatalogRepository extends CatalogRepository {
 
   void complete(String query, List<DrugSummary> results) {
     _pending[query]!.complete(results);
+  }
+}
+
+class _PhotoCatalogRepository extends CatalogRepository {
+  _PhotoCatalogRepository()
+    : super(
+        ApiClient(baseUrl: 'https://medicalbox.example/api'),
+        accessTokenProvider: () async => 'access',
+        refreshAccessTokenProvider: () async => null,
+      );
+
+  final List<String> queries = [];
+
+  @override
+  Future<List<DrugSummary>> search(String query) async {
+    queries.add(query);
+    if (query == '타이레놀정') {
+      return const [
+        DrugSummary(
+          itemSeq: '200000001',
+          itemName: '타이레놀정500밀리그람',
+          manufacturer: '한국얀센',
+          status: '정상',
+        ),
+      ];
+    }
+    return const [];
+  }
+}
+
+class _FakeMedicineScanner implements MedicineScanner {
+  const _FakeMedicineScanner();
+
+  @override
+  Future<MedicineScanResult?> scan() async {
+    return const MedicineScanResult(
+      lines: [
+        MedicineOcrLine(text: '일반의약품'),
+        MedicineOcrLine(text: '타이레놀정 500밀리그람', confidence: 0.96),
+        MedicineOcrLine(text: '한국얀센', confidence: 0.9),
+      ],
+    );
   }
 }

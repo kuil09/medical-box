@@ -42,7 +42,7 @@ def create_account(
         f"/api/v1/auth/exchange/{provider}",
         json={
             "providerToken": f"valid-{provider}-token",
-            "termsVersion": "2026-07-25",
+            "termsVersion": "2026-07-29",
             "termsAccepted": True,
             "deviceLabel": "iPhone",
         },
@@ -142,7 +142,7 @@ def test_web_health_and_security_headers(client: TestClient) -> None:
     assert ready.json() == {"status": "ready"}
     assert live.headers["x-content-type-options"] == "nosniff"
     assert "max-age=31536000" in live.headers["strict-transport-security"]
-    assert "시행일: 2026-07-25" in client.get("/terms").text
+    assert "시행일: 2026-07-29" in client.get("/terms").text
 
 
 def test_support_and_external_deletion_contact_are_configuration_gated(
@@ -180,11 +180,11 @@ def test_support_email_rejects_header_injection() -> None:
     [
         {
             "providerToken": "valid-google-token",
-            "termsVersion": "2026-07-25",
+            "termsVersion": "2026-07-29",
         },
         {
             "providerToken": "valid-google-token",
-            "termsVersion": "2026-07-25",
+            "termsVersion": "2026-07-29",
             "termsAccepted": False,
         },
     ],
@@ -228,7 +228,7 @@ def test_valid_auth_exchange_records_current_terms_acceptance(
     with SessionLocal() as db:
         acceptance = db.scalar(select(TermsAcceptance))
         assert acceptance is not None
-        assert acceptance.version == "2026-07-25"
+        assert acceptance.version == "2026-07-29"
 
 
 @pytest.mark.parametrize(
@@ -267,7 +267,7 @@ def test_apple_exchange_requires_explicit_lifecycle_activation(
             "/api/v1/auth/exchange/apple",
             json={
                 "providerToken": "valid-apple-token",
-                "termsVersion": "2026-07-25",
+                "termsVersion": "2026-07-29",
                 "termsAccepted": True,
             },
         )
@@ -296,7 +296,7 @@ def test_apple_exchange_requires_complete_account_revocation_configuration(
             "/api/v1/auth/exchange/apple",
             json={
                 "providerToken": "valid-apple-token",
-                "termsVersion": "2026-07-25",
+                "termsVersion": "2026-07-29",
                 "termsAccepted": True,
             },
         )
@@ -325,7 +325,7 @@ def test_apple_exchange_rejects_invalid_revocation_key_before_account_creation(
             "/api/v1/auth/exchange/apple",
             json={
                 "providerToken": "valid-apple-token",
-                "termsVersion": "2026-07-25",
+                "termsVersion": "2026-07-29",
                 "termsAccepted": True,
             },
         )

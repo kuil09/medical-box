@@ -10,7 +10,7 @@ import 'social_auth_gateway.dart';
 
 export 'login_provider.dart';
 
-const currentTermsVersion = '2026-07-25';
+const currentTermsVersion = '2026-07-29';
 
 class AccountProfile {
   const AccountProfile({
@@ -56,7 +56,7 @@ class AccountDeletionResult {
       !localSessionCleanupCompleted;
 }
 
-class AuthRepository {
+class AuthRepository extends ChangeNotifier {
   AuthRepository(
     this._api,
     this._keyStore, {
@@ -80,6 +80,12 @@ class AuthRepository {
   int _sessionEpoch = 0;
 
   AccountProfile? get account => _account;
+
+  void _setAccount(AccountProfile? account) {
+    if (identical(_account, account)) return;
+    _account = account;
+    notifyListeners();
+  }
 
   bool supportsProvider(LoginProvider provider) {
     return _socialAuthGateway.supportsProvider(provider);
@@ -227,7 +233,7 @@ class AuthRepository {
       await _clearSessionIfCurrent(epoch);
     } catch (_) {
       localSessionCleanupCompleted = false;
-      _account = null;
+      _setAccount(null);
     }
 
     var providerCleanupCompleted = true;
@@ -301,10 +307,10 @@ class AuthRepository {
         }
       } catch (_) {
         await _keyStore.clearTokens();
-        if (epoch == _sessionEpoch) _account = null;
+        if (epoch == _sessionEpoch) _setAccount(null);
         rethrow;
       }
-      _account = account;
+      _setAccount(account);
       return true;
     });
   }
@@ -312,7 +318,7 @@ class AuthRepository {
   Future<bool> _setAccountIfCurrent(int epoch, AccountProfile account) {
     return _serializeSessionMutation(() async {
       if (epoch != _sessionEpoch) return false;
-      _account = account;
+      _setAccount(account);
       return true;
     });
   }
@@ -321,7 +327,7 @@ class AuthRepository {
     return _serializeSessionMutation(() async {
       if (epoch != _sessionEpoch) return false;
       await _keyStore.clearTokens();
-      if (epoch == _sessionEpoch) _account = null;
+      if (epoch == _sessionEpoch) _setAccount(null);
       return true;
     });
   }
