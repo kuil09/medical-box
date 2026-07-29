@@ -22,6 +22,11 @@ on:
         required: true
         type: string
         default: "1"
+      upload_testflight:
+        description: Upload the verified iOS IPA directly to TestFlight
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -63,6 +68,8 @@ jobs:
         env:
           BUILD_NAME: ${{ inputs.build_name }}
           BUILD_NUMBER: ${{ inputs.build_number }}
+          REQUESTED_PLATFORM: ${{ inputs.platform }}
+          UPLOAD_TESTFLIGHT: ${{ inputs.upload_testflight }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -74,6 +81,11 @@ jobs:
           set -euo pipefail
           [[ "${BUILD_NAME}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           [[ "${BUILD_NUMBER}" =~ ^[1-9][0-9]*$ ]]
+          if [[ "${UPLOAD_TESTFLIGHT}" == "true" &&
+            "${REQUESTED_PLATFORM}" == "android" ]]; then
+            echo "::error title=Invalid release request::TestFlight upload requires the ios or both platform."
+            exit 1
+          fi
           required=(
             ANDROID_KEYSTORE_BASE64
             ANDROID_STORE_PASSWORD
@@ -81,7 +93,6 @@ jobs:
             ANDROID_KEY_PASSWORD
             ANDROID_UPLOAD_CERT_SHA256
             GOOGLE_SERVER_CLIENT_ID
-            KAKAO_NATIVE_APP_KEY
           )
           for name in "${required[@]}"; do
             if [[ -z "${!name:-}" ]]; then
@@ -200,8 +211,12 @@ jobs:
           GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
           GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
           KAKAO_NATIVE_APP_KEY: ${{ secrets.KAKAO_NATIVE_APP_KEY }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64 }}
           REQUESTED_APPLE_SIGN_IN: ${{ vars.APPLE_SIGN_IN_ENABLED }}
           APPLE_ACCOUNT_REVOCATION_READY: ${{ vars.APPLE_ACCOUNT_REVOCATION_READY }}
+          UPLOAD_TESTFLIGHT: ${{ inputs.upload_testflight }}
         run: |
           set -euo pipefail
           [[ "${BUILD_NAME}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
@@ -221,7 +236,6 @@ jobs:
             APPLE_KEYCHAIN_PASSWORD
             GOOGLE_SERVER_CLIENT_ID
             GOOGLE_IOS_CLIENT_ID
-            KAKAO_NATIVE_APP_KEY
           )
           for name in "${required[@]}"; do
             if [[ -z "${!name:-}" ]]; then
@@ -229,6 +243,27 @@ jobs:
               exit 1
             fi
           done
+          if [[ "${UPLOAD_TESTFLIGHT}" == "true" ]]; then
+            upload_required=(
+              APP_STORE_CONNECT_API_KEY_ID
+              APP_STORE_CONNECT_API_ISSUER_ID
+              APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64
+            )
+            for name in "${upload_required[@]}"; do
+              if [[ -z "${!name:-}" ]]; then
+                echo "::error title=Missing TestFlight secret::${name} is required for upload."
+                exit 1
+              fi
+            done
+            if [[ ! "${APP_STORE_CONNECT_API_KEY_ID}" =~ ^[A-Z0-9]{10}$ ]]; then
+              echo "::error title=Invalid App Store Connect key ID::Expected a 10-character key ID."
+              exit 1
+            fi
+            if [[ ! "${APP_STORE_CONNECT_API_ISSUER_ID}" =~ ^[A-Fa-f0-9-]{36}$ ]]; then
+              echo "::error title=Invalid App Store Connect issuer ID::Expected a UUID."
+              exit 1
+            fi
+          fi
       - name: Install Apple signing material
         env:
           APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 }}
@@ -282,8 +317,9 @@ jobs:
           fi
           google_client_prefix="${GOOGLE_IOS_CLIENT_ID%"${google_suffix}"}"
           google_reversed_client_id="com.googleusercontent.apps.${google_client_prefix}"
+          kakao_url_key="${KAKAO_NATIVE_APP_KEY:-unconfigured}"
           {
-            printf 'KAKAO_NATIVE_APP_KEY = %s\n' "${KAKAO_NATIVE_APP_KEY}"
+            printf 'KAKAO_NATIVE_APP_KEY = %s\n' "${kakao_url_key}"
             printf 'GOOGLE_REVERSED_CLIENT_ID = %s\n' "${google_reversed_client_id}"
           } > ios/Flutter/ReleaseSecrets.xcconfig
       - run: flutter pub get
@@ -325,6 +361,51 @@ jobs:
             echo "::error title=Unexpected Google callback scheme::The archived app does not match GOOGLE_IOS_CLIENT_ID."
             exit 1
           fi
+      - name: Install App Store Connect upload key
+        if: inputs.upload_testflight
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          private_keys="${RUNNER_TEMP}/app-store-connect/private_keys"
+          key_file="${private_keys}/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+          mkdir -p "${private_keys}"
+          printf '%s' "${APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64}" \
+            | base64 -D > "${key_file}"
+          if ! grep -q --fixed-strings 'BEGIN PRIVATE KEY' "${key_file}"; then
+            echo "::error title=Invalid App Store Connect key::Decoded secret is not a PKCS#8 private key."
+            exit 1
+          fi
+      - name: Validate and upload iOS build to TestFlight
+        if: inputs.upload_testflight
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          ipas=(build/ios/ipa/*.ipa)
+          if [[ "${#ipas[@]}" -ne 1 ]]; then
+            echo "::error title=Unexpected IPA output::Expected exactly one IPA, found ${#ipas[@]}."
+            exit 1
+          fi
+          export API_PRIVATE_KEYS_DIR="${RUNNER_TEMP}/app-store-connect/private_keys"
+          xcrun altool \
+            --validate-app \
+            -f "${ipas[0]}" \
+            -t ios \
+            --apiKey "${APP_STORE_CONNECT_API_KEY_ID}" \
+            --apiIssuer "${APP_STORE_CONNECT_API_ISSUER_ID}" \
+            --output-format json
+          xcrun altool \
+            --upload-app \
+            -f "${ipas[0]}" \
+            -t ios \
+            --apiKey "${APP_STORE_CONNECT_API_KEY_ID}" \
+            --apiIssuer "${APP_STORE_CONNECT_API_ISSUER_ID}" \
+            --output-format json
       - name: Remove iOS signed output and signing material
         if: always()
         run: ../../.github/scripts/cleanup-mobile-signing-material.sh ios

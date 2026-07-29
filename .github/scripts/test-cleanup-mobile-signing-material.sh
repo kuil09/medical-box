@@ -17,6 +17,7 @@ test_workspace="${temporary_root}/workspace"
 mkdir -p \
   "${test_home}/Library/MobileDevice/Provisioning Profiles" \
   "${test_runner_temp}" \
+  "${test_runner_temp}/app-store-connect/private_keys" \
   "${test_workspace}/build/ios" \
   "${test_workspace}/ios/Flutter"
 
@@ -27,6 +28,7 @@ touch \
   "${test_runner_temp}/distribution.p12" \
   "${test_runner_temp}/profile.mobileprovision" \
   "${test_runner_temp}/ExportOptions.plist" \
+  "${test_runner_temp}/app-store-connect/private_keys/AuthKey_TESTKEY123.p8" \
   "${test_runner_temp}/medical-box.keychain-db" \
   "${test_workspace}/build/ios/signed.ipa" \
   "${test_workspace}/ios/Flutter/ReleaseSecrets.xcconfig"
@@ -72,6 +74,7 @@ touch \
     "${test_runner_temp}/distribution.p12"
     "${test_runner_temp}/profile.mobileprovision"
     "${test_runner_temp}/ExportOptions.plist"
+    "${test_runner_temp}/app-store-connect"
     "${test_runner_temp}/profile-uuid"
     "ios/Flutter/ReleaseSecrets.xcconfig"
   )
@@ -86,6 +89,7 @@ touch \
   test ! -e "build/ios"
   test ! -e "${test_runner_temp}/profile.mobileprovision"
   test ! -e "${test_runner_temp}/ExportOptions.plist"
+  test ! -e "${test_runner_temp}/app-store-connect"
   test ! -e "${test_runner_temp}/profile-uuid"
   test ! -e "${test_runner_temp}/medical-box.keychain-db"
   test ! -e "ios/Flutter/ReleaseSecrets.xcconfig"

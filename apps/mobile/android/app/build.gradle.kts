@@ -73,6 +73,7 @@ android {
         manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] =
             providers.gradleProperty("KAKAO_NATIVE_APP_KEY")
                 .orElse(providers.environmentVariable("KAKAO_NATIVE_APP_KEY"))
+                .map { value -> value.ifBlank { "unconfigured" } }
                 .orElse("unconfigured")
                 .get()
         targetSdk = flutter.targetSdkVersion
