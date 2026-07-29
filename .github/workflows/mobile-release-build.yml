@@ -302,8 +302,13 @@ jobs:
             "${keychain}"
           security list-keychains -d user -s "${keychain}"
           profile_uuid="$(security cms -D -i "${profile}" | plutil -extract UUID raw -)"
+          profile_name="$(security cms -D -i "${profile}" | plutil -extract Name raw -)"
           if [[ ! "${profile_uuid}" =~ ^[A-Fa-f0-9-]{36}$ ]]; then
             echo "::error title=Invalid provisioning profile::The profile UUID is malformed."
+            exit 1
+          fi
+          if [[ -z "${profile_name}" ]]; then
+            echo "::error title=Invalid provisioning profile::The profile name is missing."
             exit 1
           fi
           profile_dir="${HOME}/Library/MobileDevice/Provisioning Profiles"
@@ -321,6 +326,7 @@ jobs:
           {
             printf 'KAKAO_NATIVE_APP_KEY = %s\n' "${kakao_url_key}"
             printf 'GOOGLE_REVERSED_CLIENT_ID = %s\n' "${google_reversed_client_id}"
+            printf 'MEDICALBOX_PROVISIONING_PROFILE_SPECIFIER = %s\n' "${profile_name}"
           } > ios/Flutter/ReleaseSecrets.xcconfig
       - run: flutter pub get
       - name: Build signed iOS archive
