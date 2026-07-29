@@ -474,8 +474,6 @@ class _EditInventoryItemScreenState
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
           children: [
-            const _PrivacyNote(),
-            const SizedBox(height: 12),
             _PhotoRecognitionCard(
               scanning: _scanning,
               onPressed: _scanMedicine,
@@ -581,33 +579,6 @@ class _EditInventoryItemScreenState
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _PrivacyNote extends StatelessWidget {
-  const _PrivacyNote();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: MedicalBoxColors.sky.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          Icon(PhosphorIconsFill.lockKey, color: MedicalBoxColors.skyDeep),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Text(
-              '로그인 후 검색어만 공식 카탈로그 조회에 사용하고, 사진·사용기한·메모는 서버로 보내지 않아요.',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
       ),
     );
   }
