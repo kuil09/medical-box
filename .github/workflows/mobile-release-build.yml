@@ -356,6 +356,12 @@ jobs:
           codesign --verify --deep --strict "${app}"
           codesign -d --entitlements :- "${app}" \
             > build/ios/archive/Runner.xcarchive/medical-box-entitlements.plist
+          if ! photo_library_usage="$(
+            plutil -extract NSPhotoLibraryUsageDescription raw "${app}/Info.plist"
+          )" || [[ -z "${photo_library_usage}" ]]; then
+            echo "::error title=Missing photo library purpose::NSPhotoLibraryUsageDescription is required by the packaged iOS dependencies."
+            exit 1
+          fi
           google_suffix=".apps.googleusercontent.com"
           expected_google_scheme="com.googleusercontent.apps.${GOOGLE_IOS_CLIENT_ID%"${google_suffix}"}"
           actual_google_scheme="$(
