@@ -18,8 +18,8 @@ class MedicalBoxExportService {
        _temporaryDirectory = temporaryDirectory ?? getTemporaryDirectory;
 
   static const format = 'com.medicalbox.export';
-  static const version = 2;
-  static const _aad = 'medicalbox:v2';
+  static const version = 3;
+  static const _legacyVersion = 2;
   static const _argonMemoryKiB = 19456;
   static const _argonIterations = 2;
   static const _argonParallelism = 1;
@@ -73,7 +73,7 @@ class MedicalBoxExportService {
       payload,
       secretKey: key,
       nonce: nonce,
-      aad: utf8.encode(_aad),
+      aad: utf8.encode(_aadFor(version)),
     );
     final envelope = {
       'format': format,
@@ -100,7 +100,9 @@ class MedicalBoxExportService {
     final decoded = jsonDecode(utf8.decode(bytes));
     if (decoded is! Map) throw const FormatException('Invalid export file.');
     final envelope = decoded.cast<String, dynamic>();
-    if (envelope['format'] != format || envelope['version'] != version) {
+    final envelopeVersion = envelope['version'];
+    if (envelope['format'] != format ||
+        (envelopeVersion != version && envelopeVersion != _legacyVersion)) {
       throw const FormatException('Unsupported export format or version.');
     }
     final kdf = (envelope['kdf'] as Map).cast<String, dynamic>();
@@ -124,12 +126,12 @@ class MedicalBoxExportService {
     final clearText = await AesGcm.with256bits().decrypt(
       SecretBox(cipherText, nonce: nonce, mac: mac),
       secretKey: key,
-      aad: utf8.encode(_aad),
+      aad: utf8.encode(_aadFor(envelopeVersion as int)),
     );
     final payload = jsonDecode(utf8.decode(clearText));
     if (payload is! Map ||
         payload['format'] != format ||
-        payload['version'] != version ||
+        payload['version'] != envelopeVersion ||
         payload['data'] is! Map) {
       throw const FormatException('Invalid decrypted payload.');
     }
@@ -152,6 +154,8 @@ class MedicalBoxExportService {
       List<int>.generate(count, (_) => _random.nextInt(256)),
     );
   }
+
+  String _aadFor(int exportVersion) => 'medicalbox:v$exportVersion';
 
   void _validatePassword(String password) {
     if (password.length < 10) {

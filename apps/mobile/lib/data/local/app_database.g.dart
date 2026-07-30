@@ -1358,6 +1358,17 @@ class $InventoryItemsTable extends InventoryItems
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _capturedImageBytesMeta =
+      const VerificationMeta('capturedImageBytes');
+  @override
+  late final GeneratedColumn<Uint8List> capturedImageBytes =
+      GeneratedColumn<Uint8List>(
+        'captured_image_bytes',
+        aliasedName,
+        true,
+        type: DriftSqlType.blob,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _appearanceSummaryMeta = const VerificationMeta(
     'appearanceSummary',
   );
@@ -1370,6 +1381,41 @@ class $InventoryItemsTable extends InventoryItems
         type: DriftSqlType.string,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _itemKindMeta = const VerificationMeta(
+    'itemKind',
+  );
+  @override
+  late final GeneratedColumn<String> itemKind = GeneratedColumn<String>(
+    'item_kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('medicine'),
+  );
+  static const VerificationMeta _officialCategoryMeta = const VerificationMeta(
+    'officialCategory',
+  );
+  @override
+  late final GeneratedColumn<String> officialCategory = GeneratedColumn<String>(
+    'official_category',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _cabinetSectionMeta = const VerificationMeta(
+    'cabinetSection',
+  );
+  @override
+  late final GeneratedColumn<String> cabinetSection = GeneratedColumn<String>(
+    'cabinet_section',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('other'),
+  );
   static const VerificationMeta _quantityMeta = const VerificationMeta(
     'quantity',
   );
@@ -1473,7 +1519,11 @@ class $InventoryItemsTable extends InventoryItems
     ingredientSummary,
     identificationVariantKey,
     officialImageUrl,
+    capturedImageBytes,
     appearanceSummary,
+    itemKind,
+    officialCategory,
+    cabinetSection,
     quantity,
     unit,
     expiresOn,
@@ -1564,12 +1614,45 @@ class $InventoryItemsTable extends InventoryItems
         ),
       );
     }
+    if (data.containsKey('captured_image_bytes')) {
+      context.handle(
+        _capturedImageBytesMeta,
+        capturedImageBytes.isAcceptableOrUnknown(
+          data['captured_image_bytes']!,
+          _capturedImageBytesMeta,
+        ),
+      );
+    }
     if (data.containsKey('appearance_summary')) {
       context.handle(
         _appearanceSummaryMeta,
         appearanceSummary.isAcceptableOrUnknown(
           data['appearance_summary']!,
           _appearanceSummaryMeta,
+        ),
+      );
+    }
+    if (data.containsKey('item_kind')) {
+      context.handle(
+        _itemKindMeta,
+        itemKind.isAcceptableOrUnknown(data['item_kind']!, _itemKindMeta),
+      );
+    }
+    if (data.containsKey('official_category')) {
+      context.handle(
+        _officialCategoryMeta,
+        officialCategory.isAcceptableOrUnknown(
+          data['official_category']!,
+          _officialCategoryMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cabinet_section')) {
+      context.handle(
+        _cabinetSectionMeta,
+        cabinetSection.isAcceptableOrUnknown(
+          data['cabinet_section']!,
+          _cabinetSectionMeta,
         ),
       );
     }
@@ -1671,10 +1754,26 @@ class $InventoryItemsTable extends InventoryItems
         DriftSqlType.string,
         data['${effectivePrefix}official_image_url'],
       ),
+      capturedImageBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}captured_image_bytes'],
+      ),
       appearanceSummary: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}appearance_summary'],
       ),
+      itemKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}item_kind'],
+      )!,
+      officialCategory: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}official_category'],
+      ),
+      cabinetSection: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cabinet_section'],
+      )!,
       quantity: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}quantity'],
@@ -1725,7 +1824,11 @@ class InventoryItem extends DataClass implements Insertable<InventoryItem> {
   final String? ingredientSummary;
   final String? identificationVariantKey;
   final String? officialImageUrl;
+  final Uint8List? capturedImageBytes;
   final String? appearanceSummary;
+  final String itemKind;
+  final String? officialCategory;
+  final String cabinetSection;
   final int quantity;
   final String unit;
   final DateTime? expiresOn;
@@ -1743,7 +1846,11 @@ class InventoryItem extends DataClass implements Insertable<InventoryItem> {
     this.ingredientSummary,
     this.identificationVariantKey,
     this.officialImageUrl,
+    this.capturedImageBytes,
     this.appearanceSummary,
+    required this.itemKind,
+    this.officialCategory,
+    required this.cabinetSection,
     required this.quantity,
     required this.unit,
     this.expiresOn,
@@ -1776,9 +1883,17 @@ class InventoryItem extends DataClass implements Insertable<InventoryItem> {
     if (!nullToAbsent || officialImageUrl != null) {
       map['official_image_url'] = Variable<String>(officialImageUrl);
     }
+    if (!nullToAbsent || capturedImageBytes != null) {
+      map['captured_image_bytes'] = Variable<Uint8List>(capturedImageBytes);
+    }
     if (!nullToAbsent || appearanceSummary != null) {
       map['appearance_summary'] = Variable<String>(appearanceSummary);
     }
+    map['item_kind'] = Variable<String>(itemKind);
+    if (!nullToAbsent || officialCategory != null) {
+      map['official_category'] = Variable<String>(officialCategory);
+    }
+    map['cabinet_section'] = Variable<String>(cabinetSection);
     map['quantity'] = Variable<int>(quantity);
     map['unit'] = Variable<String>(unit);
     if (!nullToAbsent || expiresOn != null) {
@@ -1818,9 +1933,17 @@ class InventoryItem extends DataClass implements Insertable<InventoryItem> {
       officialImageUrl: officialImageUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(officialImageUrl),
+      capturedImageBytes: capturedImageBytes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(capturedImageBytes),
       appearanceSummary: appearanceSummary == null && nullToAbsent
           ? const Value.absent()
           : Value(appearanceSummary),
+      itemKind: Value(itemKind),
+      officialCategory: officialCategory == null && nullToAbsent
+          ? const Value.absent()
+          : Value(officialCategory),
+      cabinetSection: Value(cabinetSection),
       quantity: Value(quantity),
       unit: Value(unit),
       expiresOn: expiresOn == null && nullToAbsent
@@ -1858,9 +1981,15 @@ class InventoryItem extends DataClass implements Insertable<InventoryItem> {
         json['identificationVariantKey'],
       ),
       officialImageUrl: serializer.fromJson<String?>(json['officialImageUrl']),
+      capturedImageBytes: serializer.fromJson<Uint8List?>(
+        json['capturedImageBytes'],
+      ),
       appearanceSummary: serializer.fromJson<String?>(
         json['appearanceSummary'],
       ),
+      itemKind: serializer.fromJson<String>(json['itemKind']),
+      officialCategory: serializer.fromJson<String?>(json['officialCategory']),
+      cabinetSection: serializer.fromJson<String>(json['cabinetSection']),
       quantity: serializer.fromJson<int>(json['quantity']),
       unit: serializer.fromJson<String>(json['unit']),
       expiresOn: serializer.fromJson<DateTime?>(json['expiresOn']),
@@ -1885,7 +2014,11 @@ class InventoryItem extends DataClass implements Insertable<InventoryItem> {
         identificationVariantKey,
       ),
       'officialImageUrl': serializer.toJson<String?>(officialImageUrl),
+      'capturedImageBytes': serializer.toJson<Uint8List?>(capturedImageBytes),
       'appearanceSummary': serializer.toJson<String?>(appearanceSummary),
+      'itemKind': serializer.toJson<String>(itemKind),
+      'officialCategory': serializer.toJson<String?>(officialCategory),
+      'cabinetSection': serializer.toJson<String>(cabinetSection),
       'quantity': serializer.toJson<int>(quantity),
       'unit': serializer.toJson<String>(unit),
       'expiresOn': serializer.toJson<DateTime?>(expiresOn),
@@ -1906,7 +2039,11 @@ class InventoryItem extends DataClass implements Insertable<InventoryItem> {
     Value<String?> ingredientSummary = const Value.absent(),
     Value<String?> identificationVariantKey = const Value.absent(),
     Value<String?> officialImageUrl = const Value.absent(),
+    Value<Uint8List?> capturedImageBytes = const Value.absent(),
     Value<String?> appearanceSummary = const Value.absent(),
+    String? itemKind,
+    Value<String?> officialCategory = const Value.absent(),
+    String? cabinetSection,
     int? quantity,
     String? unit,
     Value<DateTime?> expiresOn = const Value.absent(),
@@ -1930,9 +2067,17 @@ class InventoryItem extends DataClass implements Insertable<InventoryItem> {
     officialImageUrl: officialImageUrl.present
         ? officialImageUrl.value
         : this.officialImageUrl,
+    capturedImageBytes: capturedImageBytes.present
+        ? capturedImageBytes.value
+        : this.capturedImageBytes,
     appearanceSummary: appearanceSummary.present
         ? appearanceSummary.value
         : this.appearanceSummary,
+    itemKind: itemKind ?? this.itemKind,
+    officialCategory: officialCategory.present
+        ? officialCategory.value
+        : this.officialCategory,
+    cabinetSection: cabinetSection ?? this.cabinetSection,
     quantity: quantity ?? this.quantity,
     unit: unit ?? this.unit,
     expiresOn: expiresOn.present ? expiresOn.value : this.expiresOn,
@@ -1966,9 +2111,19 @@ class InventoryItem extends DataClass implements Insertable<InventoryItem> {
       officialImageUrl: data.officialImageUrl.present
           ? data.officialImageUrl.value
           : this.officialImageUrl,
+      capturedImageBytes: data.capturedImageBytes.present
+          ? data.capturedImageBytes.value
+          : this.capturedImageBytes,
       appearanceSummary: data.appearanceSummary.present
           ? data.appearanceSummary.value
           : this.appearanceSummary,
+      itemKind: data.itemKind.present ? data.itemKind.value : this.itemKind,
+      officialCategory: data.officialCategory.present
+          ? data.officialCategory.value
+          : this.officialCategory,
+      cabinetSection: data.cabinetSection.present
+          ? data.cabinetSection.value
+          : this.cabinetSection,
       quantity: data.quantity.present ? data.quantity.value : this.quantity,
       unit: data.unit.present ? data.unit.value : this.unit,
       expiresOn: data.expiresOn.present ? data.expiresOn.value : this.expiresOn,
@@ -1997,7 +2152,11 @@ class InventoryItem extends DataClass implements Insertable<InventoryItem> {
           ..write('ingredientSummary: $ingredientSummary, ')
           ..write('identificationVariantKey: $identificationVariantKey, ')
           ..write('officialImageUrl: $officialImageUrl, ')
+          ..write('capturedImageBytes: $capturedImageBytes, ')
           ..write('appearanceSummary: $appearanceSummary, ')
+          ..write('itemKind: $itemKind, ')
+          ..write('officialCategory: $officialCategory, ')
+          ..write('cabinetSection: $cabinetSection, ')
           ..write('quantity: $quantity, ')
           ..write('unit: $unit, ')
           ..write('expiresOn: $expiresOn, ')
@@ -2011,7 +2170,7 @@ class InventoryItem extends DataClass implements Insertable<InventoryItem> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     containerId,
     itemSeq,
@@ -2020,7 +2179,11 @@ class InventoryItem extends DataClass implements Insertable<InventoryItem> {
     ingredientSummary,
     identificationVariantKey,
     officialImageUrl,
+    $driftBlobEquality.hash(capturedImageBytes),
     appearanceSummary,
+    itemKind,
+    officialCategory,
+    cabinetSection,
     quantity,
     unit,
     expiresOn,
@@ -2029,7 +2192,7 @@ class InventoryItem extends DataClass implements Insertable<InventoryItem> {
     assignedMemberId,
     createdAt,
     updatedAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2042,7 +2205,14 @@ class InventoryItem extends DataClass implements Insertable<InventoryItem> {
           other.ingredientSummary == this.ingredientSummary &&
           other.identificationVariantKey == this.identificationVariantKey &&
           other.officialImageUrl == this.officialImageUrl &&
+          $driftBlobEquality.equals(
+            other.capturedImageBytes,
+            this.capturedImageBytes,
+          ) &&
           other.appearanceSummary == this.appearanceSummary &&
+          other.itemKind == this.itemKind &&
+          other.officialCategory == this.officialCategory &&
+          other.cabinetSection == this.cabinetSection &&
           other.quantity == this.quantity &&
           other.unit == this.unit &&
           other.expiresOn == this.expiresOn &&
@@ -2062,7 +2232,11 @@ class InventoryItemsCompanion extends UpdateCompanion<InventoryItem> {
   final Value<String?> ingredientSummary;
   final Value<String?> identificationVariantKey;
   final Value<String?> officialImageUrl;
+  final Value<Uint8List?> capturedImageBytes;
   final Value<String?> appearanceSummary;
+  final Value<String> itemKind;
+  final Value<String?> officialCategory;
+  final Value<String> cabinetSection;
   final Value<int> quantity;
   final Value<String> unit;
   final Value<DateTime?> expiresOn;
@@ -2081,7 +2255,11 @@ class InventoryItemsCompanion extends UpdateCompanion<InventoryItem> {
     this.ingredientSummary = const Value.absent(),
     this.identificationVariantKey = const Value.absent(),
     this.officialImageUrl = const Value.absent(),
+    this.capturedImageBytes = const Value.absent(),
     this.appearanceSummary = const Value.absent(),
+    this.itemKind = const Value.absent(),
+    this.officialCategory = const Value.absent(),
+    this.cabinetSection = const Value.absent(),
     this.quantity = const Value.absent(),
     this.unit = const Value.absent(),
     this.expiresOn = const Value.absent(),
@@ -2101,7 +2279,11 @@ class InventoryItemsCompanion extends UpdateCompanion<InventoryItem> {
     this.ingredientSummary = const Value.absent(),
     this.identificationVariantKey = const Value.absent(),
     this.officialImageUrl = const Value.absent(),
+    this.capturedImageBytes = const Value.absent(),
     this.appearanceSummary = const Value.absent(),
+    this.itemKind = const Value.absent(),
+    this.officialCategory = const Value.absent(),
+    this.cabinetSection = const Value.absent(),
     this.quantity = const Value.absent(),
     this.unit = const Value.absent(),
     this.expiresOn = const Value.absent(),
@@ -2123,7 +2305,11 @@ class InventoryItemsCompanion extends UpdateCompanion<InventoryItem> {
     Expression<String>? ingredientSummary,
     Expression<String>? identificationVariantKey,
     Expression<String>? officialImageUrl,
+    Expression<Uint8List>? capturedImageBytes,
     Expression<String>? appearanceSummary,
+    Expression<String>? itemKind,
+    Expression<String>? officialCategory,
+    Expression<String>? cabinetSection,
     Expression<int>? quantity,
     Expression<String>? unit,
     Expression<DateTime>? expiresOn,
@@ -2144,7 +2330,12 @@ class InventoryItemsCompanion extends UpdateCompanion<InventoryItem> {
       if (identificationVariantKey != null)
         'identification_variant_key': identificationVariantKey,
       if (officialImageUrl != null) 'official_image_url': officialImageUrl,
+      if (capturedImageBytes != null)
+        'captured_image_bytes': capturedImageBytes,
       if (appearanceSummary != null) 'appearance_summary': appearanceSummary,
+      if (itemKind != null) 'item_kind': itemKind,
+      if (officialCategory != null) 'official_category': officialCategory,
+      if (cabinetSection != null) 'cabinet_section': cabinetSection,
       if (quantity != null) 'quantity': quantity,
       if (unit != null) 'unit': unit,
       if (expiresOn != null) 'expires_on': expiresOn,
@@ -2166,7 +2357,11 @@ class InventoryItemsCompanion extends UpdateCompanion<InventoryItem> {
     Value<String?>? ingredientSummary,
     Value<String?>? identificationVariantKey,
     Value<String?>? officialImageUrl,
+    Value<Uint8List?>? capturedImageBytes,
     Value<String?>? appearanceSummary,
+    Value<String>? itemKind,
+    Value<String?>? officialCategory,
+    Value<String>? cabinetSection,
     Value<int>? quantity,
     Value<String>? unit,
     Value<DateTime?>? expiresOn,
@@ -2187,7 +2382,11 @@ class InventoryItemsCompanion extends UpdateCompanion<InventoryItem> {
       identificationVariantKey:
           identificationVariantKey ?? this.identificationVariantKey,
       officialImageUrl: officialImageUrl ?? this.officialImageUrl,
+      capturedImageBytes: capturedImageBytes ?? this.capturedImageBytes,
       appearanceSummary: appearanceSummary ?? this.appearanceSummary,
+      itemKind: itemKind ?? this.itemKind,
+      officialCategory: officialCategory ?? this.officialCategory,
+      cabinetSection: cabinetSection ?? this.cabinetSection,
       quantity: quantity ?? this.quantity,
       unit: unit ?? this.unit,
       expiresOn: expiresOn ?? this.expiresOn,
@@ -2229,8 +2428,22 @@ class InventoryItemsCompanion extends UpdateCompanion<InventoryItem> {
     if (officialImageUrl.present) {
       map['official_image_url'] = Variable<String>(officialImageUrl.value);
     }
+    if (capturedImageBytes.present) {
+      map['captured_image_bytes'] = Variable<Uint8List>(
+        capturedImageBytes.value,
+      );
+    }
     if (appearanceSummary.present) {
       map['appearance_summary'] = Variable<String>(appearanceSummary.value);
+    }
+    if (itemKind.present) {
+      map['item_kind'] = Variable<String>(itemKind.value);
+    }
+    if (officialCategory.present) {
+      map['official_category'] = Variable<String>(officialCategory.value);
+    }
+    if (cabinetSection.present) {
+      map['cabinet_section'] = Variable<String>(cabinetSection.value);
     }
     if (quantity.present) {
       map['quantity'] = Variable<int>(quantity.value);
@@ -2273,7 +2486,11 @@ class InventoryItemsCompanion extends UpdateCompanion<InventoryItem> {
           ..write('ingredientSummary: $ingredientSummary, ')
           ..write('identificationVariantKey: $identificationVariantKey, ')
           ..write('officialImageUrl: $officialImageUrl, ')
+          ..write('capturedImageBytes: $capturedImageBytes, ')
           ..write('appearanceSummary: $appearanceSummary, ')
+          ..write('itemKind: $itemKind, ')
+          ..write('officialCategory: $officialCategory, ')
+          ..write('cabinetSection: $cabinetSection, ')
           ..write('quantity: $quantity, ')
           ..write('unit: $unit, ')
           ..write('expiresOn: $expiresOn, ')
@@ -5474,7 +5691,11 @@ typedef $$InventoryItemsTableCreateCompanionBuilder =
       Value<String?> ingredientSummary,
       Value<String?> identificationVariantKey,
       Value<String?> officialImageUrl,
+      Value<Uint8List?> capturedImageBytes,
       Value<String?> appearanceSummary,
+      Value<String> itemKind,
+      Value<String?> officialCategory,
+      Value<String> cabinetSection,
       Value<int> quantity,
       Value<String> unit,
       Value<DateTime?> expiresOn,
@@ -5495,7 +5716,11 @@ typedef $$InventoryItemsTableUpdateCompanionBuilder =
       Value<String?> ingredientSummary,
       Value<String?> identificationVariantKey,
       Value<String?> officialImageUrl,
+      Value<Uint8List?> capturedImageBytes,
       Value<String?> appearanceSummary,
+      Value<String> itemKind,
+      Value<String?> officialCategory,
+      Value<String> cabinetSection,
       Value<int> quantity,
       Value<String> unit,
       Value<DateTime?> expiresOn,
@@ -5633,8 +5858,28 @@ class $$InventoryItemsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<Uint8List> get capturedImageBytes => $composableBuilder(
+    column: $table.capturedImageBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get appearanceSummary => $composableBuilder(
     column: $table.appearanceSummary,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get itemKind => $composableBuilder(
+    column: $table.itemKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get officialCategory => $composableBuilder(
+    column: $table.officialCategory,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cabinetSection => $composableBuilder(
+    column: $table.cabinetSection,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5814,8 +6059,28 @@ class $$InventoryItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<Uint8List> get capturedImageBytes => $composableBuilder(
+    column: $table.capturedImageBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get appearanceSummary => $composableBuilder(
     column: $table.appearanceSummary,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get itemKind => $composableBuilder(
+    column: $table.itemKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get officialCategory => $composableBuilder(
+    column: $table.officialCategory,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cabinetSection => $composableBuilder(
+    column: $table.cabinetSection,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -5942,8 +6207,26 @@ class $$InventoryItemsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<Uint8List> get capturedImageBytes => $composableBuilder(
+    column: $table.capturedImageBytes,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get appearanceSummary => $composableBuilder(
     column: $table.appearanceSummary,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get itemKind =>
+      $composableBuilder(column: $table.itemKind, builder: (column) => column);
+
+  GeneratedColumn<String> get officialCategory => $composableBuilder(
+    column: $table.officialCategory,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get cabinetSection => $composableBuilder(
+    column: $table.cabinetSection,
     builder: (column) => column,
   );
 
@@ -6113,7 +6396,11 @@ class $$InventoryItemsTableTableManager
                 Value<String?> ingredientSummary = const Value.absent(),
                 Value<String?> identificationVariantKey = const Value.absent(),
                 Value<String?> officialImageUrl = const Value.absent(),
+                Value<Uint8List?> capturedImageBytes = const Value.absent(),
                 Value<String?> appearanceSummary = const Value.absent(),
+                Value<String> itemKind = const Value.absent(),
+                Value<String?> officialCategory = const Value.absent(),
+                Value<String> cabinetSection = const Value.absent(),
                 Value<int> quantity = const Value.absent(),
                 Value<String> unit = const Value.absent(),
                 Value<DateTime?> expiresOn = const Value.absent(),
@@ -6132,7 +6419,11 @@ class $$InventoryItemsTableTableManager
                 ingredientSummary: ingredientSummary,
                 identificationVariantKey: identificationVariantKey,
                 officialImageUrl: officialImageUrl,
+                capturedImageBytes: capturedImageBytes,
                 appearanceSummary: appearanceSummary,
+                itemKind: itemKind,
+                officialCategory: officialCategory,
+                cabinetSection: cabinetSection,
                 quantity: quantity,
                 unit: unit,
                 expiresOn: expiresOn,
@@ -6153,7 +6444,11 @@ class $$InventoryItemsTableTableManager
                 Value<String?> ingredientSummary = const Value.absent(),
                 Value<String?> identificationVariantKey = const Value.absent(),
                 Value<String?> officialImageUrl = const Value.absent(),
+                Value<Uint8List?> capturedImageBytes = const Value.absent(),
                 Value<String?> appearanceSummary = const Value.absent(),
+                Value<String> itemKind = const Value.absent(),
+                Value<String?> officialCategory = const Value.absent(),
+                Value<String> cabinetSection = const Value.absent(),
                 Value<int> quantity = const Value.absent(),
                 Value<String> unit = const Value.absent(),
                 Value<DateTime?> expiresOn = const Value.absent(),
@@ -6172,7 +6467,11 @@ class $$InventoryItemsTableTableManager
                 ingredientSummary: ingredientSummary,
                 identificationVariantKey: identificationVariantKey,
                 officialImageUrl: officialImageUrl,
+                capturedImageBytes: capturedImageBytes,
                 appearanceSummary: appearanceSummary,
+                itemKind: itemKind,
+                officialCategory: officialCategory,
+                cabinetSection: cabinetSection,
                 quantity: quantity,
                 unit: unit,
                 expiresOn: expiresOn,

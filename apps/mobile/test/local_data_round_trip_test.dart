@@ -2,11 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cryptography/cryptography.dart';
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:medical_box/data/local/app_database.dart';
 import 'package:medical_box/services/medical_box_export_service.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -167,7 +168,11 @@ void main() {
         itemSeq: const Value('200000001'),
         identificationVariantKey: const Value('variant-a'),
         officialImageUrl: const Value('https://example.test/pill.png'),
+        capturedImageBytes: Value(Uint8List.fromList([1, 2, 3, 4])),
         appearanceSummary: const Value('Round · White · Front A1'),
+        itemKind: const Value('first_aid_supply'),
+        officialCategory: const Value('일반의약품'),
+        cabinetSection: const Value('wound_care'),
         privateNote: const Value('Device-only note'),
       ),
     );
@@ -181,7 +186,7 @@ void main() {
     final envelope = jsonDecode(utf8.decode(encrypted)) as Map<String, dynamic>;
     final kdf = envelope['kdf'] as Map<String, dynamic>;
     final cipher = envelope['cipher'] as Map<String, dynamic>;
-    expect(envelope['version'], 2);
+    expect(envelope['version'], 3);
     expect(kdf['name'], 'argon2id');
     expect(cipher['name'], 'aes-256-gcm');
     expect(base64Url.decode(cipher['nonce'] as String), hasLength(12));
@@ -222,7 +227,61 @@ void main() {
     expect(restored.single.privateNote, 'Device-only note');
     expect(restored.single.identificationVariantKey, 'variant-a');
     expect(restored.single.appearanceSummary, 'Round · White · Front A1');
+    expect(restored.single.itemKind, 'first_aid_supply');
+    expect(restored.single.officialCategory, '일반의약품');
+    expect(restored.single.cabinetSection, 'wound_care');
+    expect(restored.single.capturedImageBytes, [1, 2, 3, 4]);
   });
+
+  test(
+    'schema v2 migrates classification fields without dropping items',
+    () async {
+      final temp = await Directory.systemTemp.createTemp('medical-box-v2-');
+      addTearDown(() => temp.delete(recursive: true));
+      final file = File('${temp.path}/legacy.sqlite');
+      final legacy = sqlite.sqlite3.open(file.path);
+      legacy.execute('''
+      CREATE TABLE inventory_items (
+        id TEXT NOT NULL PRIMARY KEY,
+        container_id TEXT NOT NULL,
+        item_seq TEXT,
+        product_name TEXT NOT NULL,
+        manufacturer TEXT,
+        ingredient_summary TEXT,
+        identification_variant_key TEXT,
+        official_image_url TEXT,
+        appearance_summary TEXT,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        unit TEXT NOT NULL DEFAULT '개',
+        expires_on INTEGER,
+        storage_note TEXT,
+        private_note TEXT,
+        assigned_member_id TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    ''');
+      legacy.execute(
+        '''
+        INSERT INTO inventory_items (
+          id, container_id, product_name, quantity, unit, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ''',
+        ['legacy-band', 'shared', '방수 밴드', 1, '개', 0, 0],
+      );
+      legacy.execute('PRAGMA user_version = 2');
+    legacy.close();
+
+      final migrated = AppDatabase(NativeDatabase(file));
+      addTearDown(migrated.close);
+      final item = await migrated.select(migrated.inventoryItems).getSingle();
+
+      expect(item.id, 'legacy-band');
+      expect(item.itemKind, 'medicine');
+      expect(item.cabinetSection, 'wound_care');
+      expect(item.capturedImageBytes, isNull);
+    },
+  );
 
   test('SQLite3MultipleCiphers survives a keyed restart', () async {
     final directory = await Directory.systemTemp.createTemp(

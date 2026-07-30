@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/local/app_database.dart';
+import '../features/inventory/inventory_item_taxonomy.dart';
 import '../theme.dart';
 import 'official_medicine_thumbnail.dart';
 
@@ -318,7 +319,9 @@ class _CabinetInterior extends StatelessWidget {
 
     final groups = <String, List<InventoryItem>>{};
     for (final item in items) {
-      groups.putIfAbsent(_categoryFor(item), () => []).add(item);
+      groups
+          .putIfAbsent(CabinetSections.label(item.cabinetSection), () => [])
+          .add(item);
     }
 
     return Container(
@@ -467,7 +470,11 @@ class _CabinetMedicineTile extends StatelessWidget {
                 children: [
                   OfficialMedicineThumbnail(
                     imageUrl: item.officialImageUrl,
-                    fallbackIcon: PhosphorIconsRegular.pill,
+                    imageBytes: item.capturedImageBytes,
+                    fallbackIcon:
+                        item.itemKind == InventoryItemKinds.firstAidSupply
+                        ? PhosphorIconsRegular.firstAidKit
+                        : PhosphorIconsRegular.pill,
                     size: 36,
                     borderRadius: MedicalBoxRadius.marker,
                     backgroundColor: MedicalBoxColors.surface,
@@ -520,33 +527,4 @@ class _CabinetMedicineTile extends StatelessWidget {
       ),
     );
   }
-}
-
-String _categoryFor(InventoryItem item) {
-  final source = [
-    item.productName,
-    item.storageNote ?? '',
-    item.privateNote ?? '',
-  ].join(' ').toLowerCase();
-  if (source.contains('밴드') ||
-      source.contains('거즈') ||
-      source.contains('소독') ||
-      source.contains('상처') ||
-      source.contains('연고')) {
-    return '상처';
-  }
-  if (source.contains('소화') ||
-      source.contains('위장') ||
-      source.contains('제산') ||
-      source.contains('정장')) {
-    return '소화';
-  }
-  if (source.contains('해열') ||
-      source.contains('진통') ||
-      source.contains('타이레놀') ||
-      source.contains('아세트아미노펜') ||
-      source.contains('이부프로펜')) {
-    return '해열·진통';
-  }
-  return '기타';
 }

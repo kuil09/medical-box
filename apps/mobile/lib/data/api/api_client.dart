@@ -104,6 +104,7 @@ class DrugSummary {
     required this.itemName,
     this.manufacturer,
     this.status,
+    this.professionalCategory,
   });
 
   factory DrugSummary.fromJson(Map<String, dynamic> json) {
@@ -112,6 +113,7 @@ class DrugSummary {
       itemName: json['itemName'] as String,
       manufacturer: json['manufacturer'] as String?,
       status: json['status'] as String?,
+      professionalCategory: json['professionalCategory'] as String?,
     );
   }
 
@@ -119,6 +121,7 @@ class DrugSummary {
   final String itemName;
   final String? manufacturer;
   final String? status;
+  final String? professionalCategory;
 }
 
 class DrugSourceAttribution {
@@ -386,6 +389,7 @@ class DrugDetail extends DrugSummary {
     required this.sources,
     super.manufacturer,
     super.status,
+    super.professionalCategory,
     this.storageMethod,
     this.appearance,
     this.imageUrl,
@@ -410,6 +414,7 @@ class DrugDetail extends DrugSummary {
       itemName: json['itemName'] as String,
       manufacturer: json['manufacturer'] as String?,
       status: json['status'] as String?,
+      professionalCategory: json['professionalCategory'] as String?,
       storageMethod: json['storageMethod'] as String?,
       appearance: json['appearance'] as String?,
       imageUrl: json['imageUrl'] as String?,

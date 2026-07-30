@@ -11,6 +11,7 @@ import '../../theme.dart';
 import '../../widgets/cabinet_index_components.dart';
 import '../../widgets/official_medicine_thumbnail.dart';
 import '../../widgets/privacy_safe_banner_slot.dart';
+import 'inventory_item_taxonomy.dart';
 
 class InventoryScreen extends ConsumerWidget {
   const InventoryScreen({super.key});
@@ -98,7 +99,10 @@ class _InventoryRow extends StatelessWidget {
             children: [
               OfficialMedicineThumbnail(
                 imageUrl: item.officialImageUrl,
-                fallbackIcon: PhosphorIconsRegular.pill,
+                imageBytes: item.capturedImageBytes,
+                fallbackIcon: item.itemKind == InventoryItemKinds.firstAidSupply
+                    ? PhosphorIconsRegular.firstAidKit
+                    : PhosphorIconsRegular.pill,
                 size: 48,
                 backgroundColor: MedicalBoxColors.surfaceRaised,
                 borderRadius: MedicalBoxRadius.control,

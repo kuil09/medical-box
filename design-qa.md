@@ -160,4 +160,104 @@ Post-fix evidence:
   product images after TestFlight processing to document the data-backed image
   state.
 
+## Registration and direct-photo extension
+
+### Comparison target
+
+- Source visual truth: `design/stitch/references/medicine-create.jpg`.
+- Rendered Flutter implementation:
+  `design/stitch/qa-inventory-supply-registration.png`.
+- Combined comparison evidence:
+  `design/stitch/qa-inventory-registration-comparison.png`.
+- Browser comparison:
+  `design/stitch/qa-inventory-registration-comparison.html`.
+- Browser verification: both source and implementation images loaded at their
+  native dimensions, the comparison DOM exposed the expected two figures, and
+  the browser console reported zero errors or warnings.
+- Source pixels: 780 × 1768 at 2× density.
+- Implementation pixels and CSS viewport: 390 × 844 at 1× density.
+- Density normalization: the source was cropped to the first 1688 physical
+  pixels and downsampled to 390 × 844 before the side-by-side comparison.
+- Theme: light.
+- State: first-aid supply selected, product named, captured local image
+  present, child pouch selected, and wound-care cabinet section selected.
+
+### Findings
+
+No actionable P0, P1, or P2 findings remain.
+
+The changed hierarchy is intentional:
+
+- The source combines medicine identity and physical location into a single
+  form. The implementation first distinguishes official medicine from a
+  first-aid supply, then separates household container from physical cabinet
+  section.
+- Direct photo capture is independent from official catalog OCR. This prevents
+  a bandage photo from being presented as an official drug-identification
+  result.
+- The cabinet section remains visible and editable even when the app suggests
+  wound care for a first-aid supply.
+
+### Required fidelity surfaces
+
+- Fonts and typography: the captured implementation loads the bundled Noto Sans
+  KR variable font and preserves the source's bold page title, section
+  hierarchy, compact labels, and readable supporting copy without clipping at
+  390 pixels.
+- Spacing and layout rhythm: 20-pixel screen margins, grouped controls, 48-pixel
+  minimum touch targets, and consistent section spacing preserve the Cabinet
+  Index rhythm while accommodating the additional product decisions.
+- Colors and visual tokens: canvas, ink, surface, rail, focus blue, and selected
+  black states come from the existing Flutter theme. No new palette or
+  decorative gradient was introduced.
+- Image quality and asset fidelity: the direct-photo preview renders real image
+  bytes with a cover crop and rounded clipping. Official HTTPS imagery remains
+  available separately, and no fake medicine illustration or handcrafted icon
+  was added.
+- Copy and content: labels explicitly distinguish `보관 대상` from `약장 칸`;
+  the direct-photo card states the on-device encrypted-storage behavior once,
+  next to the relevant action.
+- Icons and accessibility: visible controls use Phosphor icons, including an
+  explicit back arrow, medicine and first-aid type icons, camera, pouch,
+  calendar, and selected-state check. Form fields and section choices remain
+  reachable through standard Flutter semantics.
+
+### Interaction evidence
+
+- Automated widget coverage verifies medicine/first-aid switching, child-pouch
+  preservation, wound-care section selection, direct capture, encrypted blob
+  persistence, and save behavior.
+- Export coverage verifies that captured image bytes, product type, official
+  category, and cabinet section survive encrypted `.medicalbox` export and
+  import.
+- Cabinet coverage verifies that the persisted cabinet section, rather than
+  product-name or private-note keywords, controls the opened cabinet grouping.
+- The full Flutter suite passes with 90 tests and static analysis reports no
+  issues.
+
+### Focused-region evidence
+
+The type selector, photo card, container selector, and all four cabinet-section
+choices are legible in the 390 × 844 full-view capture, so a separate crop was
+not required.
+
+### Comparison history
+
+#### Iteration 1 — blocked
+
+- P2: the initial capture used the test harness's missing Material back-icon
+  glyph, producing a square placeholder instead of the source's directional
+  back affordance.
+
+Fix:
+
+- Replaced the implicit platform glyph with the product's existing Phosphor
+  arrow and captured the same 390 × 844 state again.
+
+#### Iteration 2 — passed
+
+- The back affordance, type selection, photo action, container selection,
+  cabinet-section hierarchy, typography, spacing, and token use are intact.
+- No actionable P0, P1, or P2 visual differences remain.
+
 final result: passed
