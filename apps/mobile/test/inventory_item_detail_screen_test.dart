@@ -17,6 +17,8 @@ void main() {
         containerId: 'container-1',
         productName: '타이레놀정500밀리그람',
         manufacturer: '한국얀센',
+        itemKind: 'medicine',
+        cabinetSection: 'pain_and_fever',
         quantity: 1,
         unit: '개',
         expiresOn: DateTime(2027, 8, 31),
@@ -45,6 +47,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            containersProvider.overrideWith((ref) => Stream.value(const [])),
             inventoryItemProvider.overrideWith(
               (ref, id) => Stream.value(id == item.id ? item : null),
             ),
@@ -82,6 +85,8 @@ void main() {
       itemSeq: '200000001',
       productName: '타이레놀정500밀리그람',
       manufacturer: '한국얀센',
+      itemKind: 'medicine',
+      cabinetSection: 'pain_and_fever',
       quantity: 1,
       unit: '개',
       createdAt: now,
@@ -93,6 +98,8 @@ void main() {
       itemSeq: '200000002',
       productName: '병용 확인 약',
       manufacturer: '테스트제약',
+      itemKind: 'medicine',
+      cabinetSection: 'other',
       quantity: 1,
       unit: '개',
       storageNote: '공용 트레이 왼쪽 칸',
@@ -112,6 +119,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          containersProvider.overrideWith((ref) => Stream.value(const [])),
           inventoryItemProvider.overrideWith(
             (ref, id) => Stream.value(id == item.id ? item : null),
           ),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -11,9 +12,12 @@ import 'package:uuid/uuid.dart';
 import '../../data/api/api_client.dart';
 import '../../data/local/app_database.dart';
 import '../../providers.dart';
+import '../../services/inventory_photo_service.dart';
 import '../../services/medicine_ocr_service.dart';
 import '../../theme.dart';
+import '../../widgets/official_medicine_thumbnail.dart';
 import 'drug_catalog_projection_sections.dart';
+import 'inventory_item_taxonomy.dart';
 import 'local_contraindication_section.dart';
 
 class EditInventoryItemScreen extends ConsumerStatefulWidget {
@@ -40,7 +44,12 @@ class _EditInventoryItemScreenState
   String? _ingredientSummary;
   String? _identificationVariantKey;
   String? _officialImageUrl;
+  Uint8List? _capturedImageBytes;
   String? _appearanceSummary;
+  String _itemKind = InventoryItemKinds.medicine;
+  String? _officialCategory;
+  String _cabinetSection = CabinetSections.other;
+  bool _cabinetSectionSelectedByUser = false;
   DateTime? _expiresOn;
   String? _containerId;
   bool _searching = false;
@@ -73,10 +82,42 @@ class _EditInventoryItemScreenState
       _ingredientSummary = item.ingredientSummary;
       _identificationVariantKey = item.identificationVariantKey;
       _officialImageUrl = item.officialImageUrl;
+      _capturedImageBytes = item.capturedImageBytes;
       _appearanceSummary = item.appearanceSummary;
+      _itemKind = item.itemKind;
+      _officialCategory = item.officialCategory;
+      _cabinetSection = item.cabinetSection;
+      _cabinetSectionSelectedByUser = true;
       _expiresOn = item.expiresOn;
       _containerId = item.containerId;
       _preservedQuantity = item.quantity;
+    });
+  }
+
+  void _clearOfficialCatalogBinding() {
+    _itemSeq = null;
+    _ingredientSummary = null;
+    _identificationVariantKey = null;
+    _officialImageUrl = null;
+    _appearanceSummary = null;
+    _officialCategory = null;
+  }
+
+  void _selectItemKind(String itemKind) {
+    if (_itemKind == itemKind) return;
+    _searchTimer?.cancel();
+    ++_searchGeneration;
+    setState(() {
+      _itemKind = itemKind;
+      _clearOfficialCatalogBinding();
+      _results = const [];
+      _searching = false;
+      if (!_cabinetSectionSelectedByUser) {
+        _cabinetSection = suggestCabinetSection(
+          itemKind: itemKind,
+          officialText: const [],
+        );
+      }
     });
   }
 
@@ -85,14 +126,11 @@ class _EditInventoryItemScreenState
     final generation = ++_searchGeneration;
     final normalizedQuery = query.trim();
     setState(() {
-      _itemSeq = null;
-      _ingredientSummary = null;
-      _identificationVariantKey = null;
-      _officialImageUrl = null;
-      _appearanceSummary = null;
+      _clearOfficialCatalogBinding();
       _results = const [];
       _searching = false;
     });
+    if (_itemKind != InventoryItemKinds.medicine) return;
     if (normalizedQuery.length < 2) return;
 
     _searchTimer = Timer(const Duration(milliseconds: 350), () async {
@@ -222,6 +260,23 @@ class _EditInventoryItemScreenState
     }
   }
 
+  Future<void> _captureInventoryPhoto() async {
+    try {
+      final bytes = await ref.read(inventoryPhotoCaptureProvider).capture();
+      if (bytes == null || !mounted) return;
+      setState(() => _capturedImageBytes = bytes);
+    } on InventoryPhotoException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_inventoryPhotoErrorMessage(error.failure))),
+      );
+    }
+  }
+
+  void _removeInventoryPhoto() {
+    setState(() => _capturedImageBytes = null);
+  }
+
   String _loginLocation() {
     final returnLocation = widget.itemId == null
         ? Uri(
@@ -313,6 +368,18 @@ class _EditInventoryItemScreenState
             variant ?? detail.identification,
             fallback: detail.appearance,
           );
+          _itemKind = InventoryItemKinds.medicine;
+          _officialCategory = detail.professionalCategory;
+          if (!_cabinetSectionSelectedByUser) {
+            _cabinetSection = suggestCabinetSection(
+              itemKind: InventoryItemKinds.medicine,
+              officialText: [
+                detail.efficacy,
+                detail.itemName,
+                ...detail.ingredients,
+              ],
+            );
+          }
           _results = const [];
         });
       }
@@ -338,6 +405,8 @@ class _EditInventoryItemScreenState
         _identificationVariantKey = null;
         _officialImageUrl = null;
         _appearanceSummary = null;
+        _itemKind = InventoryItemKinds.medicine;
+        _officialCategory = summary.professionalCategory;
         _results = const [];
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -358,24 +427,23 @@ class _EditInventoryItemScreenState
         manufacturer: _makerController.text.trim().isEmpty
             ? null
             : _makerController.text.trim(),
+        professionalCategory: _officialCategory,
       ),
     );
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    _formKey.currentState!.save();
+    final containerId = _containerId;
+    if (containerId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('보관 대상을 선택해 주세요.')));
+      return;
+    }
     setState(() => _saving = true);
     final database = ref.read(databaseProvider);
-    var containerId = _containerId;
-    if (containerId == null) {
-      final containers = await database
-          .select(database.inventoryContainers)
-          .get();
-      if (containers.isEmpty) {
-        throw StateError('No local inventory container exists.');
-      }
-      containerId = containers.first.id;
-    }
     final now = DateTime.now();
     await database.upsertInventoryItem(
       InventoryItemsCompanion.insert(
@@ -391,7 +459,11 @@ class _EditInventoryItemScreenState
         ingredientSummary: Value(_ingredientSummary),
         identificationVariantKey: Value(_identificationVariantKey),
         officialImageUrl: Value(_officialImageUrl),
+        capturedImageBytes: Value(_capturedImageBytes),
         appearanceSummary: Value(_appearanceSummary),
+        itemKind: Value(_itemKind),
+        officialCategory: Value(_officialCategory),
+        cabinetSection: Value(_cabinetSection),
         // Keep the legacy field for encrypted database and export compatibility.
         quantity: Value(_preservedQuantity),
         expiresOn: Value(_expiresOn),
@@ -415,7 +487,7 @@ class _EditInventoryItemScreenState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('보유약을 삭제할까요?'),
+        title: const Text('보관품을 삭제할까요?'),
         content: const Text('이 기기의 보관함에서만 삭제되며 되돌릴 수 없어요.'),
         actions: [
           TextButton(
@@ -459,8 +531,19 @@ class _EditInventoryItemScreenState
 
   @override
   Widget build(BuildContext context) {
+    final containers = ref.watch(containersProvider).valueOrNull ?? const [];
+    final selectedContainerId = _selectedContainerId(containers, _containerId);
     return Scaffold(
-      appBar: AppBar(title: Text(widget.itemId == null ? '의약품 등록' : '의약품 수정')),
+      appBar: AppBar(
+        leading: Navigator.of(context).canPop()
+            ? IconButton(
+                onPressed: () => context.pop(),
+                icon: Icon(PhosphorIconsRegular.arrowLeft),
+                tooltip: '뒤로',
+              )
+            : null,
+        title: Text(widget.itemId == null ? '보관품 등록' : '보관품 수정'),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -471,20 +554,31 @@ class _EditInventoryItemScreenState
             MedicalBoxSpacing.x8,
           ),
           children: [
-            if (widget.itemId == null) ...[
+            Text('무엇을 보관하나요?', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 10),
+            _ItemKindSelector(value: _itemKind, onChanged: _selectItemKind),
+            if (widget.itemId == null &&
+                _itemKind == InventoryItemKinds.medicine) ...[
+              const SizedBox(height: 18),
               _PhotoRecognitionCard(
                 scanning: _scanning,
                 onPressed: _scanMedicine,
               ),
-              const SizedBox(height: 18),
             ],
+            const SizedBox(height: 18),
             TextFormField(
               controller: _nameController,
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
                 labelText: '제품명',
-                hintText: '예: 타이레놀정',
-                prefixIcon: Icon(PhosphorIconsRegular.magnifyingGlass),
+                hintText: _itemKind == InventoryItemKinds.medicine
+                    ? '예: 타이레놀정'
+                    : '예: 방수 밴드',
+                prefixIcon: Icon(
+                  _itemKind == InventoryItemKinds.medicine
+                      ? PhosphorIconsRegular.magnifyingGlass
+                      : PhosphorIconsRegular.firstAidKit,
+                ),
                 suffixIcon: _searching
                     ? const Padding(
                         padding: EdgeInsets.all(14),
@@ -526,6 +620,11 @@ class _EditInventoryItemScreenState
                           subtitle: Text(
                             [
                               _results[index].manufacturer ?? '제조사 정보 없음',
+                              if (_results[index]
+                                      .professionalCategory
+                                      ?.isNotEmpty ??
+                                  false)
+                                _results[index].professionalCategory!,
                               if (_results[index].status?.isNotEmpty ?? false)
                                 _results[index].status!,
                             ].join(' · '),
@@ -547,13 +646,57 @@ class _EditInventoryItemScreenState
                 itemSeq: _itemSeq!,
                 appearanceSummary: _appearanceSummary,
                 imageUrl: _officialImageUrl,
+                officialCategory: _officialCategory,
                 onOpen: _openConnectedDrugDetail,
               ),
             ],
             const SizedBox(height: 14),
+            _InventoryPhotoCard(
+              imageBytes: _capturedImageBytes,
+              onCapture: _captureInventoryPhoto,
+              onRemove: _removeInventoryPhoto,
+            ),
+            const SizedBox(height: 24),
+            Text('어디에 둘까요?', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              key: ValueKey(selectedContainerId),
+              initialValue: selectedContainerId,
+              decoration: const InputDecoration(
+                labelText: '보관 대상',
+                prefixIcon: Icon(PhosphorIconsRegular.tray),
+              ),
+              items: [
+                for (final container in containers)
+                  DropdownMenuItem(
+                    value: container.id,
+                    child: Text(container.name),
+                  ),
+              ],
+              onChanged: containers.isEmpty
+                  ? null
+                  : (value) => setState(() => _containerId = value),
+              onSaved: (value) => _containerId = value,
+              validator: (value) =>
+                  value == null ? '공용 약장 또는 가족 파우치를 선택해 주세요.' : null,
+            ),
+            const SizedBox(height: 14),
+            _CabinetSectionPicker(
+              value: _cabinetSection,
+              onChanged: (value) {
+                setState(() {
+                  _cabinetSection = value;
+                  _cabinetSectionSelectedByUser = true;
+                });
+              },
+            ),
+            const SizedBox(height: 14),
             TextFormField(
               controller: _makerController,
-              decoration: const InputDecoration(labelText: '제조사 (선택)'),
+              decoration: InputDecoration(
+                labelText:
+                    '${_itemKind == InventoryItemKinds.medicine ? '제조사' : '브랜드'} (선택)',
+              ),
             ),
             const SizedBox(height: 14),
             InkWell(
@@ -575,8 +718,8 @@ class _EditInventoryItemScreenState
             TextFormField(
               controller: _storageController,
               decoration: const InputDecoration(
-                labelText: '보관 위치·방법 (선택)',
-                hintText: '예: 공용 트레이 오른쪽 칸',
+                labelText: '세부 보관 메모 (선택)',
+                hintText: '예: 문 안쪽 선반',
               ),
             ),
             const SizedBox(height: 14),
@@ -594,7 +737,7 @@ class _EditInventoryItemScreenState
                   _saving
                       ? '저장 중…'
                       : widget.itemId == null
-                      ? '보관함에 등록'
+                      ? '약장에 등록'
                       : '변경사항 저장',
                 ),
               ),
@@ -607,11 +750,174 @@ class _EditInventoryItemScreenState
                   foregroundColor: MedicalBoxColors.accent,
                 ),
                 icon: Icon(PhosphorIconsRegular.trash, size: 20),
-                label: const Text('이 의약품 삭제'),
+                label: const Text('이 보관품 삭제'),
               ),
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+String? _selectedContainerId(
+  List<InventoryContainer> containers,
+  String? requestedId,
+) {
+  if (requestedId != null &&
+      containers.any((container) => container.id == requestedId)) {
+    return requestedId;
+  }
+  for (final container in containers) {
+    if (container.kind == 'shared') return container.id;
+  }
+  return containers.isEmpty ? null : containers.first.id;
+}
+
+class _ItemKindSelector extends StatelessWidget {
+  const _ItemKindSelector({required this.value, required this.onChanged});
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<String>(
+        segments: [
+          ButtonSegment(
+            value: InventoryItemKinds.medicine,
+            icon: Icon(PhosphorIconsRegular.pill, size: 18),
+            label: const Text('의약품'),
+          ),
+          ButtonSegment(
+            value: InventoryItemKinds.firstAidSupply,
+            icon: Icon(PhosphorIconsRegular.firstAidKit, size: 18),
+            label: const Text('구급용품'),
+          ),
+        ],
+        selected: {value},
+        showSelectedIcon: false,
+        onSelectionChanged: (selection) => onChanged(selection.first),
+      ),
+    );
+  }
+}
+
+class _InventoryPhotoCard extends StatelessWidget {
+  const _InventoryPhotoCard({
+    required this.imageBytes,
+    required this.onCapture,
+    required this.onRemove,
+  });
+
+  final Uint8List? imageBytes;
+  final VoidCallback onCapture;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = imageBytes?.isNotEmpty == true;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: MedicalBoxColors.surface,
+        borderRadius: BorderRadius.circular(MedicalBoxRadius.group),
+        border: Border.all(color: MedicalBoxColors.rail),
+      ),
+      child: Row(
+        children: [
+          OfficialMedicineThumbnail(
+            imageUrl: null,
+            imageBytes: imageBytes,
+            fallbackIcon: PhosphorIconsRegular.camera,
+            size: 76,
+            borderRadius: MedicalBoxRadius.control,
+            backgroundColor: MedicalBoxColors.surfaceRaised,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  hasPhoto ? '내 보관 사진' : '사진 추가',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                const Text(
+                  '촬영한 사진은 암호화해 기기에만 저장해요.',
+                  style: TextStyle(
+                    color: MedicalBoxColors.muted,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: onCapture,
+                      icon: Icon(PhosphorIconsRegular.camera, size: 17),
+                      label: Text(hasPhoto ? '다시 촬영' : '직접 촬영'),
+                    ),
+                    if (hasPhoto)
+                      TextButton(
+                        onPressed: onRemove,
+                        child: const Text('사진 삭제'),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CabinetSectionPicker extends StatelessWidget {
+  const _CabinetSectionPicker({required this.value, required this.onChanged});
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return InputDecorator(
+      decoration: const InputDecoration(labelText: '약장 칸'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '의약품 분류와 별개로 실제로 둘 칸을 선택하세요.',
+            style: TextStyle(
+              color: MedicalBoxColors.muted,
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 9),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: [
+              for (final section in CabinetSections.values)
+                ChoiceChip(
+                  label: Text(CabinetSections.label(section)),
+                  selected: value == section,
+                  onSelected: (_) => onChanged(section),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -771,6 +1077,11 @@ class _PhotoCandidateSheet extends StatelessWidget {
                     subtitle: Text(
                       [
                         candidates[index].manufacturer ?? '제조사 정보 없음',
+                        if (candidates[index]
+                                .professionalCategory
+                                ?.isNotEmpty ??
+                            false)
+                          candidates[index].professionalCategory!,
                         if (candidates[index].status?.isNotEmpty ?? false)
                           candidates[index].status!,
                       ].join(' · '),
@@ -846,11 +1157,13 @@ class _ConnectedCatalogCard extends StatelessWidget {
     required this.onOpen,
     this.appearanceSummary,
     this.imageUrl,
+    this.officialCategory,
   });
 
   final String itemSeq;
   final String? appearanceSummary;
   final String? imageUrl;
+  final String? officialCategory;
   final VoidCallback onOpen;
 
   @override
@@ -909,9 +1222,15 @@ class _ConnectedCatalogCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      appearanceSummary?.isNotEmpty == true
-                          ? appearanceSummary!
-                          : '품목기준코드 $itemSeq · 외형·복용·안전·가격·코드 정보 보기',
+                      [
+                        if (officialCategory?.isNotEmpty == true)
+                          officialCategory!,
+                        if (appearanceSummary?.isNotEmpty == true)
+                          appearanceSummary!,
+                        if ((officialCategory?.isEmpty ?? true) &&
+                            (appearanceSummary?.isEmpty ?? true))
+                          '품목기준코드 $itemSeq',
+                      ].join(' · '),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -1539,6 +1858,18 @@ String _scanErrorMessage(MedicineScanFailure failure) {
       '이 기기에서는 한글 사진 인식을 사용할 수 없어요. 제품명을 직접 검색해 주세요.',
     MedicineScanFailure.recognitionFailed =>
       '사진의 글자를 읽지 못했어요. 밝은 곳에서 제품명을 크게 촬영해 주세요.',
+  };
+}
+
+String _inventoryPhotoErrorMessage(InventoryPhotoFailure failure) {
+  return switch (failure) {
+    InventoryPhotoFailure.cameraDenied =>
+      '사진을 촬영하려면 카메라 권한이 필요해요. 기기 설정에서 접근을 허용해 주세요.',
+    InventoryPhotoFailure.cameraUnavailable =>
+      '이 기기에서 카메라를 열 수 없어요. 잠시 후 다시 시도해 주세요.',
+    InventoryPhotoFailure.imageTooLarge =>
+      '사진 용량이 너무 커요. 제품이 화면에 들어오도록 조금 더 가까이 촬영해 주세요.',
+    InventoryPhotoFailure.captureFailed => '사진을 저장하지 못했어요. 다시 촬영해 주세요.',
   };
 }
 

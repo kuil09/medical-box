@@ -5,6 +5,7 @@ import 'data/auth/auth_repository.dart';
 import 'data/local/app_database.dart';
 import 'data/local/database_key_store.dart';
 import 'services/account_deletion_coordinator.dart';
+import 'services/inventory_photo_service.dart';
 import 'services/local_data_lifecycle.dart';
 import 'services/medical_box_export_service.dart';
 import 'services/medicine_ocr_service.dart';
@@ -27,6 +28,10 @@ final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 
 final medicineScannerProvider = Provider<MedicineScanner>(
   (ref) => DeviceMedicineScanner(),
+);
+
+final inventoryPhotoCaptureProvider = Provider<InventoryPhotoCapture>(
+  (ref) => DeviceInventoryPhotoCapture(),
 );
 
 final monetizationStateProvider = Provider<MonetizationState>(

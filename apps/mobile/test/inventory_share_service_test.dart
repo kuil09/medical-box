@@ -13,6 +13,8 @@ void main() {
     identificationVariantKey: 'variant-a',
     officialImageUrl: 'https://example.test/pill.png',
     appearanceSummary: '원형 · 흰색 · 앞 A1',
+    itemKind: 'medicine',
+    cabinetSection: 'other',
     quantity: 2,
     unit: '정',
     expiresOn: DateTime(2027, 3, 5),

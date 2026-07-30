@@ -30,6 +30,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final pouches = containers
         .where((container) => container.kind == 'personal')
         .toList();
+    InventoryContainer? sharedContainer;
+    for (final container in containers) {
+      if (container.kind == 'shared') {
+        sharedContainer = container;
+        break;
+      }
+    }
 
     InventoryContainer? selectedPouch;
     for (final pouch in pouches) {
@@ -92,9 +99,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 const SizedBox(height: 20),
                 FilledButton.icon(
                   onPressed: () {
-                    final containerQuery = selectedPouch == null
+                    final targetContainerId =
+                        selectedPouch?.id ?? sharedContainer?.id;
+                    final containerQuery = targetContainerId == null
                         ? ''
-                        : '?containerId=${Uri.encodeQueryComponent(selectedPouch.id)}';
+                        : '?containerId=${Uri.encodeQueryComponent(targetContainerId)}';
                     context.push('/inventory/new$containerQuery');
                   },
                   icon: const PhosphorIcon(PhosphorIconsRegular.plus, size: 20),

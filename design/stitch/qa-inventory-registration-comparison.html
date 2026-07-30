@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cabinet Index registration QA</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Noto Sans KR", system-ui, sans-serif;
+        background: #17191c;
+        color: #f4f4f0;
+      }
+
+      body {
+        margin: 0;
+        padding: 32px 20px 48px;
+      }
+
+      main {
+        width: min(100%, 940px);
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 24px;
+      }
+
+      p {
+        margin: 0 0 24px;
+        color: #b9bcc1;
+      }
+
+      .comparison {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 390px));
+        gap: 24px;
+        align-items: start;
+      }
+
+      figure {
+        margin: 0;
+      }
+
+      figcaption {
+        margin-bottom: 10px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+
+      img {
+        display: block;
+        width: 100%;
+        border: 1px solid #4a4d52;
+        border-radius: 14px;
+        background: #f4f4f0;
+      }
+
+      @media (max-width: 840px) {
+        .comparison {
+          grid-template-columns: minmax(0, 390px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>보관품 등록 흐름 비교</h1>
+      <p>390 × 844 · Cabinet Index V2 · 구급용품과 직접 촬영 상태</p>
+      <section class="comparison">
+        <figure>
+          <figcaption>Source · medicine registration</figcaption>
+          <img
+            src="./references/medicine-create.jpg"
+            alt="기존 의약품 등록 디자인 기준"
+          />
+        </figure>
+        <figure>
+          <figcaption>Implementation · first-aid supply</figcaption>
+          <img
+            src="./qa-inventory-supply-registration.png"
+            alt="구급용품 유형, 직접 촬영, 보관 대상과 약장 칸이 적용된 Flutter 화면"
+          />
+        </figure>
+      </section>
+    </main>
+  </body>
+</html>

@@ -12,6 +12,7 @@ import '../../services/inventory_share_service.dart';
 import '../../theme.dart';
 import '../../widgets/official_medicine_thumbnail.dart';
 import 'drug_catalog_projection_sections.dart';
+import 'inventory_item_taxonomy.dart';
 import 'local_contraindication_section.dart';
 
 class InventoryItemDetailScreen extends ConsumerWidget {
@@ -70,7 +71,11 @@ class InventoryItemDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('의약품 상세'),
+        title: Text(
+          item?.itemKind == InventoryItemKinds.firstAidSupply
+              ? '구급용품 상세'
+              : '의약품 상세',
+        ),
         actions: [
           if (item != null) ...[
             IconButton(
@@ -104,6 +109,14 @@ class _InventoryItemDetailBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final containers = ref.watch(containersProvider).valueOrNull ?? const [];
+    String? containerName;
+    for (final container in containers) {
+      if (container.id == item.containerId) {
+        containerName = container.name;
+        break;
+      }
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(
         MedicalBoxSpacing.screen,
@@ -118,7 +131,7 @@ class _InventoryItemDetailBody extends ConsumerWidget {
           const SizedBox(height: MedicalBoxSpacing.x7),
           Text('내 보관 정보', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: MedicalBoxSpacing.x3),
-          _LocalInventoryDetails(item: item),
+          _LocalInventoryDetails(item: item, containerName: containerName),
           if (item.itemSeq != null) ...[
             LocalContraindicationSection(
               selectedItemSeq: item.itemSeq!,
@@ -149,7 +162,7 @@ class _InventoryIdentitySection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       container: true,
-      label: '${item.productName} 보유약 상세',
+      label: '${item.productName} 보관품 상세',
       child: Container(
         padding: const EdgeInsets.symmetric(
           horizontal: MedicalBoxSpacing.x4,
@@ -165,7 +178,10 @@ class _InventoryIdentitySection extends StatelessWidget {
           children: [
             OfficialMedicineThumbnail(
               imageUrl: item.officialImageUrl,
-              fallbackIcon: PhosphorIconsRegular.pill,
+              imageBytes: item.capturedImageBytes,
+              fallbackIcon: item.itemKind == InventoryItemKinds.firstAidSupply
+                  ? PhosphorIconsRegular.firstAidKit
+                  : PhosphorIconsRegular.pill,
               size: 72,
               borderRadius: MedicalBoxRadius.control,
               backgroundColor: MedicalBoxColors.surfaceRaised,
@@ -192,7 +208,7 @@ class _InventoryIdentitySection extends StatelessWidget {
                   ],
                   if (item.itemSeq != null) ...[
                     const SizedBox(height: 10),
-                    const _OfficialSourceLabel(),
+                    _OfficialSourceLabel(category: item.officialCategory),
                   ],
                 ],
               ),
@@ -205,7 +221,9 @@ class _InventoryIdentitySection extends StatelessWidget {
 }
 
 class _OfficialSourceLabel extends StatelessWidget {
-  const _OfficialSourceLabel();
+  const _OfficialSourceLabel({this.category});
+
+  final String? category;
 
   @override
   Widget build(BuildContext context) {
@@ -225,9 +243,9 @@ class _OfficialSourceLabel extends StatelessWidget {
             color: MedicalBoxColors.official,
           ),
           const SizedBox(width: 5),
-          const Text(
-            '공식 정보',
-            style: TextStyle(
+          Text(
+            category?.isNotEmpty == true ? '공식 정보 · $category' : '공식 정보',
+            style: const TextStyle(
               color: MedicalBoxColors.official,
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -240,13 +258,35 @@ class _OfficialSourceLabel extends StatelessWidget {
 }
 
 class _LocalInventoryDetails extends StatelessWidget {
-  const _LocalInventoryDetails({required this.item});
+  const _LocalInventoryDetails({
+    required this.item,
+    required this.containerName,
+  });
 
   final InventoryItem item;
+  final String? containerName;
 
   @override
   Widget build(BuildContext context) {
     final details = <_LocalDetailValue>[
+      _LocalDetailValue(
+        icon: item.itemKind == InventoryItemKinds.firstAidSupply
+            ? PhosphorIconsRegular.firstAidKit
+            : PhosphorIconsRegular.pill,
+        label: '제품 유형',
+        value: InventoryItemKinds.label(item.itemKind),
+      ),
+      if (containerName != null)
+        _LocalDetailValue(
+          icon: PhosphorIconsRegular.users,
+          label: '보관 대상',
+          value: containerName!,
+        ),
+      _LocalDetailValue(
+        icon: PhosphorIconsRegular.squaresFour,
+        label: '약장 칸',
+        value: CabinetSections.label(item.cabinetSection),
+      ),
       if (item.expiresOn != null)
         _LocalDetailValue(
           icon: PhosphorIconsRegular.calendarBlank,

@@ -66,7 +66,12 @@ class InventoryItems extends Table {
   TextColumn get ingredientSummary => text().nullable()();
   TextColumn get identificationVariantKey => text().nullable()();
   TextColumn get officialImageUrl => text().nullable()();
+  BlobColumn get capturedImageBytes => blob().nullable()();
   TextColumn get appearanceSummary => text().nullable()();
+  TextColumn get itemKind => text().withDefault(const Constant('medicine'))();
+  TextColumn get officialCategory => text().nullable()();
+  TextColumn get cabinetSection =>
+      text().withDefault(const Constant('other'))();
   IntColumn get quantity => integer().withDefault(const Constant(1))();
   TextColumn get unit => text().withDefault(const Constant('개'))();
   DateTimeColumn get expiresOn => dateTime().nullable()();
@@ -152,7 +157,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -175,6 +180,41 @@ class AppDatabase extends _$AppDatabase {
           inventoryItems,
           inventoryItems.appearanceSummary,
         );
+      }
+      if (from < 3) {
+        await migrator.addColumn(
+          inventoryItems,
+          inventoryItems.capturedImageBytes,
+        );
+        await migrator.addColumn(inventoryItems, inventoryItems.itemKind);
+        await migrator.addColumn(
+          inventoryItems,
+          inventoryItems.officialCategory,
+        );
+        await migrator.addColumn(inventoryItems, inventoryItems.cabinetSection);
+        await customStatement('''
+          UPDATE inventory_items
+          SET cabinet_section = CASE
+            WHEN lower(product_name) LIKE '%밴드%'
+              OR lower(product_name) LIKE '%거즈%'
+              OR lower(product_name) LIKE '%소독%'
+              OR lower(product_name) LIKE '%상처%'
+              OR lower(product_name) LIKE '%연고%'
+              THEN 'wound_care'
+            WHEN lower(product_name) LIKE '%소화%'
+              OR lower(product_name) LIKE '%위장%'
+              OR lower(product_name) LIKE '%제산%'
+              OR lower(product_name) LIKE '%정장%'
+              THEN 'digestion'
+            WHEN lower(product_name) LIKE '%해열%'
+              OR lower(product_name) LIKE '%진통%'
+              OR lower(product_name) LIKE '%타이레놀%'
+              OR lower(product_name) LIKE '%아세트아미노펜%'
+              OR lower(product_name) LIKE '%이부프로펜%'
+              THEN 'pain_and_fever'
+            ELSE 'other'
+          END
+        ''');
       }
     },
     beforeOpen: (_) async {
@@ -280,6 +320,13 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<Map<String, Object?>> exportSnapshot() async {
+    final inventoryRows = (await select(inventoryItems).get()).map((row) {
+      final json = row.toJson();
+      json['capturedImageBytes'] = row.capturedImageBytes == null
+          ? null
+          : base64Encode(row.capturedImageBytes!);
+      return json;
+    }).toList();
     return {
       'households': (await select(
         households,
@@ -290,9 +337,7 @@ class AppDatabase extends _$AppDatabase {
       'inventoryContainers': (await select(
         inventoryContainers,
       ).get()).map((row) => row.toJson()).toList(),
-      'inventoryItems': (await select(
-        inventoryItems,
-      ).get()).map((row) => row.toJson()).toList(),
+      'inventoryItems': inventoryRows,
       'renewalReadiness': (await select(
         renewalReadiness,
       ).get()).map((row) => row.toJson()).toList(),
@@ -342,7 +387,17 @@ class AppDatabase extends _$AppDatabase {
         ).insert(InventoryContainer.fromJson(row));
       }
       for (final row in rows('inventoryItems')) {
-        await into(inventoryItems).insert(InventoryItem.fromJson(row));
+        final normalized = Map<String, dynamic>.of(row);
+        normalized.putIfAbsent('itemKind', () => 'medicine');
+        normalized.putIfAbsent('officialCategory', () => null);
+        normalized.putIfAbsent('cabinetSection', () => 'other');
+        final encodedImage = normalized['capturedImageBytes'];
+        normalized['capturedImageBytes'] = switch (encodedImage) {
+          String value => base64Decode(value),
+          List<int> value => Uint8List.fromList(value),
+          _ => null,
+        };
+        await into(inventoryItems).insert(InventoryItem.fromJson(normalized));
       }
       for (final row in rows('renewalReadiness')) {
         await into(renewalReadiness).insert(RenewalReadinessData.fromJson(row));

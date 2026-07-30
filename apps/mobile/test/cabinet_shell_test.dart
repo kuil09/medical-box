@@ -13,6 +13,8 @@ void main() {
       id: 'item-1',
       containerId: 'shared',
       productName: '타이레놀정500밀리그람',
+      itemKind: 'medicine',
+      cabinetSection: 'pain_and_fever',
       quantity: 1,
       unit: '개',
       expiresOn: DateTime(2026, 8, 10),
@@ -46,7 +48,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('타이레놀정500밀리그람'), findsOneWidget);
-    expect(find.text('해열·진통'), findsOneWidget);
+    expect(find.text('해열·통증'), findsOneWidget);
     expect(find.text('확인 필요'), findsOneWidget);
     expect(find.text('닫기'), findsOneWidget);
 

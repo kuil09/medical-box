@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
@@ -7,6 +9,7 @@ class OfficialMedicineThumbnail extends StatelessWidget {
   const OfficialMedicineThumbnail({
     required this.imageUrl,
     required this.fallbackIcon,
+    this.imageBytes,
     this.size = 46,
     this.backgroundColor = MedicalBoxColors.sky,
     this.borderRadius = 15,
@@ -14,6 +17,7 @@ class OfficialMedicineThumbnail extends StatelessWidget {
   });
 
   final String? imageUrl;
+  final Uint8List? imageBytes;
   final Object fallbackIcon;
   final double size;
   final Color backgroundColor;
@@ -34,7 +38,13 @@ class OfficialMedicineThumbnail extends StatelessWidget {
         borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(color: MedicalBoxColors.line),
       ),
-      child: canLoadImage
+      child: imageBytes?.isNotEmpty == true
+          ? Image.memory(
+              imageBytes!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => _fallback(),
+            )
+          : canLoadImage
           ? Image.network(
               uri.toString(),
               fit: BoxFit.contain,

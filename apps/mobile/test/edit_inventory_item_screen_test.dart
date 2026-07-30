@@ -12,6 +12,7 @@ import 'package:medical_box/data/local/app_database.dart';
 import 'package:medical_box/data/local/database_key_store.dart';
 import 'package:medical_box/features/inventory/edit_inventory_item_screen.dart';
 import 'package:medical_box/providers.dart';
+import 'package:medical_box/services/inventory_photo_service.dart';
 import 'package:medical_box/services/medicine_ocr_service.dart';
 
 void main() {
@@ -35,14 +36,17 @@ void main() {
       find.text('로그인 후 검색어만 공식 카탈로그 조회에 사용하고, 사진·사용기한·메모는 서버로 보내지 않아요.'),
       findsNothing,
     );
-    expect(find.text('의약품 등록'), findsOneWidget);
+    expect(find.text('보관품 등록'), findsOneWidget);
     expect(find.text('제품명 촬영'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('보관함에 등록'),
+      find.text('약장에 등록'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('보관함에 등록'), findsOneWidget);
+    expect(find.text('약장에 등록'), findsOneWidget);
+    expect(find.text('보관 대상'), findsOneWidget);
+    expect(find.text('약장 칸'), findsOneWidget);
+    await _disposeWidget(tester);
   });
 
   testWidgets('existing medicine editor has a distinct focused edit state', (
@@ -62,10 +66,103 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('의약품 수정'), findsOneWidget);
+    expect(find.text('보관품 수정'), findsOneWidget);
     expect(find.text('제품명 촬영'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('변경사항 저장'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('변경사항 저장'), findsOneWidget);
-    expect(find.text('보관함에 등록'), findsNothing);
+    expect(find.text('약장에 등록'), findsNothing);
+    await _disposeWidget(tester);
+  });
+
+  testWidgets('first-aid supply keeps its selected pouch, section, and photo', (
+    tester,
+  ) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    await database
+        .into(database.households)
+        .insert(HouseholdsCompanion.insert(id: 'household-1', name: 'Test'));
+    await database
+        .into(database.inventoryContainers)
+        .insert(
+          InventoryContainersCompanion.insert(
+            id: 'shared-1',
+            householdId: 'household-1',
+            name: '공용 약장',
+            kind: 'shared',
+          ),
+        );
+    await database
+        .into(database.inventoryContainers)
+        .insert(
+          InventoryContainersCompanion.insert(
+            id: 'pouch-1',
+            householdId: 'household-1',
+            name: '아이 파우치',
+            kind: 'personal',
+            sortOrder: const Value(10),
+          ),
+        );
+
+    final photoBytes = Uint8List.fromList([1, 2, 3, 4]);
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) =>
+              const Scaffold(body: Text('Inventory')),
+        ),
+        GoRoute(
+          path: '/new',
+          builder: (context, state) =>
+              const EditInventoryItemScreen(containerId: 'pouch-1'),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(database),
+          inventoryPhotoCaptureProvider.overrideWithValue(
+            _FakeInventoryPhotoCapture(photoBytes),
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    router.push('/new');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('구급용품'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextFormField, '제품명'), '방수 밴드');
+    await tester.tap(find.text('직접 촬영'));
+    await tester.pumpAndSettle();
+    expect(find.text('내 보관 사진'), findsOneWidget);
+    expect(find.text('아이 파우치'), findsOneWidget);
+    expect(find.text('상처 관리'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('약장에 등록'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('약장에 등록'));
+    await tester.pumpAndSettle();
+
+    final item = await database.select(database.inventoryItems).getSingle();
+    expect(item.containerId, 'pouch-1');
+    expect(item.itemKind, 'first_aid_supply');
+    expect(item.cabinetSection, 'wound_care');
+    expect(item.capturedImageBytes, photoBytes);
+    expect(item.itemSeq, isNull);
+    await _disposeWidget(tester);
   });
 
   testWidgets('a stale autocomplete response cannot replace current results', (
@@ -106,6 +203,7 @@ void main() {
     await tester.pump();
     expect(find.text('Current result'), findsOneWidget);
     expect(find.text('Stale result'), findsNothing);
+    await _disposeWidget(tester);
   });
 
   testWidgets('manual product edits clear every official catalog binding', (
@@ -163,6 +261,7 @@ void main() {
     expect(item.identificationVariantKey, isNull);
     expect(item.officialImageUrl, isNull);
     expect(item.appearanceSummary, isNull);
+    await _disposeWidget(tester);
   });
 
   testWidgets('on-device OCR opens official candidates without auto-saving', (
@@ -210,7 +309,13 @@ void main() {
       find.widgetWithText(TextFormField, '제품명'),
     );
     expect(productField.controller?.text, isEmpty);
+    await _disposeWidget(tester);
   });
+}
+
+Future<void> _disposeWidget(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump(const Duration(milliseconds: 1));
 }
 
 Future<void> _insertOfficialInventoryItem(AppDatabase database) async {
@@ -305,4 +410,13 @@ class _FakeMedicineScanner implements MedicineScanner {
       ],
     );
   }
+}
+
+class _FakeInventoryPhotoCapture implements InventoryPhotoCapture {
+  const _FakeInventoryPhotoCapture(this.bytes);
+
+  final Uint8List bytes;
+
+  @override
+  Future<Uint8List?> capture() async => bytes;
 }
