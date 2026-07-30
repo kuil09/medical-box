@@ -144,6 +144,20 @@ Evidence date: 2026-07-30
 - [ ] Real Kakao login, reauthentication, and disposable-account deletion E2E
 - [ ] Google Play developer-account verification and internal-test release
 - [x] App Store Connect sign-in and TestFlight build upload
+- [x] TestFlight build 5 export compliance, Korean test instructions, beta
+  description, support/privacy URLs, and internal-group assignment
+- [x] App Store subtitle, Medical/Lifestyle categories, `16+` age questionnaire,
+  and privacy-policy URL saved
+- [ ] App Store version metadata and build 5 selection saved. The fields are
+  prepared, but App Store Connect requires a valid App Review phone number.
+- [ ] Free starting price and intended App Store countries or regions selected
+- [ ] Current iPhone and iPad App Store screenshots captured from the release
+  build. Build 5 supports both device families.
+- [ ] App Store privacy questionnaire published after authentication-SDK and
+  Railway processor-log review
+- [ ] App Store content-rights, regulated-medical-device, export-classification,
+  and EU DSA declarations completed by the account owner after legal review
+- [ ] Disposable App Review account and valid review contact phone supplied
 - [x] Public support email configured in product and store metadata
 
 The internal TestFlight beta can continue while deferred catalog-refresh and

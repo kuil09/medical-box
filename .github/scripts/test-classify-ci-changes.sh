@@ -24,39 +24,44 @@ assert_classification() {
 
 assert_classification \
   "documentation only" \
-  $'infrastructure=false\nbackend=false\nprototype=false\nmobile=false' \
+  $'infrastructure=false\nbackend=false\nprototype=false\nmobile=false\nstore=false' \
   "README.md" \
   "docs/release-checklist.md" \
   "design/audit/prototype.png"
 
 assert_classification \
   "Railway only" \
-  $'infrastructure=true\nbackend=true\nprototype=false\nmobile=false' \
+  $'infrastructure=true\nbackend=true\nprototype=false\nmobile=false\nstore=false' \
   ".railway/railway.ts"
 
 assert_classification \
   "mobile only" \
-  $'infrastructure=false\nbackend=false\nprototype=false\nmobile=true' \
+  $'infrastructure=false\nbackend=false\nprototype=false\nmobile=true\nstore=false' \
   "apps/mobile/lib/main.dart"
 
 assert_classification \
+  "store metadata only" \
+  $'infrastructure=false\nbackend=false\nprototype=false\nmobile=false\nstore=true' \
+  "store/metadata/ko-KR/full_description.txt"
+
+assert_classification \
   "unknown path fails safe" \
-  $'infrastructure=true\nbackend=true\nprototype=true\nmobile=true' \
+  $'infrastructure=true\nbackend=true\nprototype=true\nmobile=true\nstore=true' \
   "Makefile"
 
 assert_classification \
   "CI configuration fails safe" \
-  $'infrastructure=true\nbackend=true\nprototype=true\nmobile=true' \
+  $'infrastructure=true\nbackend=true\nprototype=true\nmobile=true\nstore=true' \
   ".github/workflows/ci.yml"
 
 assert_classification \
   "production monitor uses backend checks only" \
-  $'infrastructure=false\nbackend=true\nprototype=false\nmobile=false' \
+  $'infrastructure=false\nbackend=true\nprototype=false\nmobile=false\nstore=false' \
   ".github/workflows/production-monitor.yml"
 
 assert_classification \
   "mobile release uses mobile and policy checks" \
-  $'infrastructure=false\nbackend=true\nprototype=false\nmobile=true' \
+  $'infrastructure=false\nbackend=true\nprototype=false\nmobile=true\nstore=false' \
   ".github/workflows/mobile-release-build.yml"
 
 if ! grep --fixed-strings --quiet \
@@ -115,7 +120,7 @@ fi
 
 split_classification="$(printf '%s\n' "${split_paths}" | "${classifier}")"
 if [[ "${split_classification}" != \
-  $'infrastructure=false\nbackend=false\nprototype=false\nmobile=true' ]]; then
+  $'infrastructure=false\nbackend=false\nprototype=false\nmobile=true\nstore=false' ]]; then
   echo "Cross-boundary rename did not trigger mobile CI." >&2
   exit 1
 fi

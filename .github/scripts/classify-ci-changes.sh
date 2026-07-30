@@ -6,12 +6,14 @@ infrastructure=false
 backend=false
 prototype=false
 mobile=false
+store=false
 
 enable_all() {
   infrastructure=true
   backend=true
   prototype=true
   mobile=true
+  store=true
 }
 
 while IFS= read -r path; do
@@ -45,6 +47,9 @@ while IFS= read -r path; do
     apps/mobile/* | .fvmrc)
       mobile=true
       ;;
+    store/*)
+      store=true
+      ;;
     docs/* | design/audit/* | README.md)
       ;;
     *)
@@ -57,3 +62,4 @@ printf 'infrastructure=%s\n' "${infrastructure}"
 printf 'backend=%s\n' "${backend}"
 printf 'prototype=%s\n' "${prototype}"
 printf 'mobile=%s\n' "${mobile}"
+printf 'store=%s\n' "${store}"
