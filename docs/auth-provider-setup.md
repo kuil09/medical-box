@@ -131,9 +131,9 @@ provider or session tokens.
 
 ## Closed-beta catalog access
 
-Authentication does not grant catalog access by itself. New accounts start
-without permissions. Add verified beta emails to the environment-specific
-`CATALOG_ACCESS_EMAIL_ALLOWLIST`, or grant one existing account by exact user
-ID with `medical-box-access grant <user-id>`. The API returns `401` without a
-valid access token and `403` when the authenticated account lacks
-`catalog:read`.
+Every registered account starts with `catalog:read` because official catalog
+search is a free member feature. Operators can revoke one exact account with
+`medical-box-access revoke <user-id>` and restore it with
+`medical-box-access grant <user-id>`. A later provider sign-in does not undo an
+explicit revocation. The API returns `401` without a valid access token and
+`403` for an explicitly revoked account.

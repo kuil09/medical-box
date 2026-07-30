@@ -22,7 +22,6 @@ class Settings(BaseSettings):
     jwt_secret: str = DEVELOPMENT_JWT_SECRET
     jwt_issuer: str = "medicalbox.outoftokens.ai"
     jwt_audience: str = "com.medicalbox.app"
-    catalog_access_email_allowlist: str = ""
     catalog_sync_source_allowlist: str = ""
     catalog_database_capacity_bytes: int = 0
     catalog_min_free_bytes: int = 1_200_000_000
@@ -141,14 +140,6 @@ class Settings(BaseSettings):
     @property
     def allowed_host_list(self) -> list[str]:
         return [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]
-
-    @property
-    def catalog_access_email_allowlist_set(self) -> frozenset[str]:
-        return frozenset(
-            email.strip().casefold()
-            for email in self.catalog_access_email_allowlist.split(",")
-            if email.strip()
-        )
 
     @property
     def catalog_sync_source_allowlist_set(self) -> frozenset[str]:

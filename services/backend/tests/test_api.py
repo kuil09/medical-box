@@ -349,7 +349,7 @@ def test_auth_refresh_profile_reauth_and_delete(client: TestClient) -> None:
     profile = client.get("/api/v1/me", headers=headers)
     assert profile.status_code == 200
     assert profile.json()["providers"] == ["google"]
-    assert profile.json()["permissions"] == []
+    assert profile.json()["permissions"] == ["catalog:read"]
 
     updated = client.patch(
         "/api/v1/me",
@@ -587,21 +587,14 @@ def test_apple_revocation_success_deletes_account(
     assert client.get("/api/v1/me", headers=headers).status_code == 401
 
 
-def test_verified_allowlisted_email_receives_catalog_access(client: TestClient) -> None:
-    settings = get_settings()
-    previous_allowlist = settings.catalog_access_email_allowlist
-    settings.catalog_access_email_allowlist = "GOOGLE@EXAMPLE.COM"
-    try:
-        session = create_account(client)
-    finally:
-        settings.catalog_access_email_allowlist = previous_allowlist
-
+def test_registered_account_receives_catalog_access(client: TestClient) -> None:
+    session = create_account(client)
     assert session["account"]["permissions"] == ["catalog:read"]
     headers = {"Authorization": f"Bearer {session['accessToken']}"}
     assert client.get("/api/v1/catalog/meta", headers=headers).status_code == 200
 
 
-def test_unverified_allowlisted_email_does_not_receive_catalog_access(
+def test_catalog_access_uses_account_status_not_provider_email_verification(
     client: TestClient,
 ) -> None:
     class UnverifiedProviderValidator:
@@ -619,19 +612,34 @@ def test_unverified_allowlisted_email_does_not_receive_catalog_access(
                 issued_at=datetime.now(UTC),
             )
 
-    settings = get_settings()
-    previous_allowlist = settings.catalog_access_email_allowlist
     previous_override = app.dependency_overrides[get_provider_validator]
-    settings.catalog_access_email_allowlist = "GOOGLE@EXAMPLE.COM"
     app.dependency_overrides[get_provider_validator] = UnverifiedProviderValidator
     try:
         session = create_account(client)
     finally:
         app.dependency_overrides[get_provider_validator] = previous_override
-        settings.catalog_access_email_allowlist = previous_allowlist
 
-    assert session["account"]["permissions"] == []
+    assert session["account"]["permissions"] == ["catalog:read"]
     headers = {"Authorization": f"Bearer {session['accessToken']}"}
+    assert client.get("/api/v1/catalog/meta", headers=headers).status_code == 200
+
+
+def test_explicit_catalog_revocation_survives_later_sign_in(
+    client: TestClient,
+) -> None:
+    first_session = create_account(client)
+    user_id = uuid.UUID(first_session["account"]["id"])
+    with SessionLocal() as db:
+        user = db.get(User, user_id)
+        assert user is not None
+        user.catalog_read_enabled = False
+        db.commit()
+
+    later_session = create_account(client)
+
+    assert later_session["account"]["id"] == str(user_id)
+    assert later_session["account"]["permissions"] == []
+    headers = {"Authorization": f"Bearer {later_session['accessToken']}"}
     assert client.get("/api/v1/catalog/meta", headers=headers).status_code == 403
 
 
@@ -673,11 +681,6 @@ def test_catalog_search_trims_and_escapes_like_wildcards(
 
     session = create_account(client)
     headers = {"Authorization": f"Bearer {session['accessToken']}"}
-    with SessionLocal() as db:
-        user = db.get(User, uuid.UUID(session["account"]["id"]))
-        assert user is not None
-        user.catalog_read_enabled = True
-        db.commit()
 
     whitespace = client.get(
         "/api/v1/drugs/search",
@@ -996,6 +999,14 @@ def test_catalog_search_and_detail(client: TestClient) -> None:
 
     session = create_account(client)
     headers = {"Authorization": f"Bearer {session['accessToken']}"}
+    assert (
+        client.get("/api/v1/drugs/search", params={"q": "효소"}, headers=headers).status_code == 200
+    )
+    with SessionLocal() as db:
+        user = db.get(User, uuid.UUID(session["account"]["id"]))
+        assert user is not None
+        user.catalog_read_enabled = False
+        db.commit()
     assert (
         client.get("/api/v1/drugs/search", params={"q": "효소"}, headers=headers).status_code == 403
     )
