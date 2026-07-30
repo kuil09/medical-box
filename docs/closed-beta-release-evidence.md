@@ -54,6 +54,29 @@ response included HSTS, `nosniff`, `no-referrer`, and a restrictive permissions
 policy. A request with an invalid Host header was rejected before it reached a
 valid application route.
 
+## Public support channel
+
+The public support address is `medicalbox@outoftokens.ai`. Namecheap free email
+forwarding routes the address to a private, monitored owner inbox; the private
+destination is intentionally excluded from source control and public release
+evidence. The domain already had Namecheap forwarding MX records and an SPF
+record for the forwarding service.
+
+The forwarding rule was visible in the authenticated domain control panel. A
+Gmail delivery test was accepted for sending to the public address without
+including account, household, medicine, or health information. Receipt in the
+private destination inbox remains account-owner evidence.
+
+Railway production now sets `SUPPORT_EMAIL` to the public address. The
+configuration-triggered API deployment reached `SUCCESS`, readiness returned
+HTTP 200, and both `/support` and `/account-deletion` returned HTTP 200 with
+clickable `mailto:` links for the public address. The Korean store metadata
+continues to use the public support URL, which now exposes this address.
+
+Namecheap free forwarding is inbound-only. Replies sent from the private inbox
+will expose that inbox address, so a dedicated mailbox must replace forwarding
+before support volume or operator count makes that disclosure unacceptable.
+
 ## Authentication and entitlement
 
 Automated backend coverage passed for:
@@ -257,8 +280,8 @@ Pull request 10 introduces fail-closed mobile release packaging:
   remained exposed when this boundary was hardened.
 - Korean Play Store and App Store metadata source files are committed under
   `store/metadata/ko-KR`. Medical claims are limited to organization,
-  reference, renewal-readiness, and sharing functions. A support URL is used
-  until a public support email is approved.
+  reference, renewal-readiness, and sharing functions. The support URL resolves
+  to a page with the approved public support address.
 
 The GitHub `closed-beta` environment exists, rejects administrator bypass, and
 permits deployment only from `main`. The repository is public. The environment

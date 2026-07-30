@@ -144,9 +144,9 @@ Evidence date: 2026-07-30
 - [ ] Real Kakao login, reauthentication, and disposable-account deletion E2E
 - [ ] Google Play developer-account verification and internal-test release
 - [x] App Store Connect sign-in and TestFlight build upload
-- [ ] Public support email configured in product and store metadata
+- [x] Public support email configured in product and store metadata
 
 The internal TestFlight beta can continue while deferred catalog-refresh and
 backup work remains last in the product sequence. Public promotion and paid
-distribution remain blocked by the unchecked legal, provider, support,
-store-account, metadata, and recovery gates.
+distribution remain blocked by the unchecked legal, provider, store-account,
+metadata, and recovery gates.

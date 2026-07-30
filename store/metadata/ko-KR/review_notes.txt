@@ -1,12 +1,15 @@
-The app is a device-local household medicine organizer. Core organizer features
-work without an account. Official catalog search requires a test account with
-the server-side catalog:read entitlement; credentials will be supplied through
-the store review channel.
+The app is a device-local household medicine organizer. Account creation and
+sign-in are required before app access. Every registered member receives
+official catalog search access by default; review credentials will be supplied
+through the store review channel.
 
-Household names, inventory, quantities, notes, visit dates, and reminder content
-remain in the encrypted device database and are not synchronized to the server.
-The app does not diagnose, calculate dosage, recommend substitutes, or recommend
-treatment.
+Household names, inventory items, photos, notes, visit dates, and reminder
+content remain in the encrypted device database and are not synchronized to the
+server. The product tracks presence and use-by dates rather than exact medicine
+quantities. The app does not diagnose, calculate dosage, recommend substitutes,
+or recommend treatment.
 
 Account deletion is available under Settings and requires provider
-reauthentication. Device-data deletion is a separate choice.
+reauthentication. Device-data deletion is a separate choice. Public support is
+available at https://medicalbox.outoftokens.ai/support through
+medicalbox@outoftokens.ai.
