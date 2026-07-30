@@ -82,7 +82,6 @@ export default defineRailway((ctx) => {
     JWT_ISSUER: "https://medicalbox.outoftokens.ai",
     JWT_AUDIENCE: "com.medicalbox.app",
     JWT_SECRET: preserve(),
-    CATALOG_ACCESS_EMAIL_ALLOWLIST: preserve(),
     GOOGLE_CLIENT_ID: preserve(),
     APPLE_CLIENT_ID: "com.medicalbox.app",
     APPLE_SIGN_IN_ENABLED: preserve(),

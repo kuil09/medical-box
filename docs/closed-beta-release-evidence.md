@@ -1,6 +1,6 @@
 # Closed-beta release evidence
 
-Evidence date: 2026-07-28
+Evidence date: 2026-07-30
 
 > Historical evidence notice: the anonymous mobile onboarding observations in
 > this record were superseded by the required-account product decision dated
@@ -62,11 +62,19 @@ Automated backend coverage passed for:
   validation;
 - forged, expired, and wrong-audience provider tokens;
 - provider exchange and account creation;
-- explicit `catalog:read` entitlement;
+- default `catalog:read` access for every registered account;
+- persistent explicit operator revocation across later provider sign-ins;
 - catalog HTTP 401, 403, and 200 boundaries;
 - rotating refresh tokens and refresh-token reuse detection;
 - logout and immediate entitlement revocation;
 - provider reauthentication and account deletion.
+
+The member policy no longer relies on an email allowlist. New database rows
+default to catalog access, the migration unlocks legacy default-denied rows,
+and later sign-ins do not overwrite an explicit operator revocation. A
+read-only production baseline taken before the migration found one registered
+account, already enabled, and no explicitly revoked accounts. This makes the
+one-time legacy backfill safe for the observed production state.
 
 `services/backend/scripts/verify_deployed_auth.py` provides a token-safe
 deployment probe for provider exchange, profile retrieval, catalog entitlement,
@@ -171,11 +179,12 @@ production API boundary.
 
 ## Build and test evidence
 
-- Flutter formatting check: 41 files, no changes required.
-- Flutter analysis: passed with no issues.
+- Flutter analysis on 2026-07-30: passed with no issues.
 - Flutter unit, widget, local-data, auth-race, app-link, catalog-projection,
   account-deletion, temporary-export cleanup, reminder compensation,
-  autocomplete ordering, and public-share-link tests: 68 passed.
+  autocomplete ordering, OCR-candidate confirmation, direct-photo persistence,
+  separate read-only detail/edit screens, and public-share-link tests: 90
+  passed.
 - Flutter golden tests: passed.
 - Android debug APK build: passed.
 - Android notification merged-manifest verification: passed for notification
@@ -183,10 +192,11 @@ production API boundary.
   package-replaced entries.
 - Android compile-only unsigned release AAB: passed, 69.7 MB.
 - iOS release no-codesign build: passed, 31.5 MB.
-- Backend Ruff: passed.
-- Backend MyPy strict mode: passed.
-- Backend Pytest: 217 passed.
-- Alembic upgrade to `20260728_0005 (head)`: passed on an isolated database.
+- Backend Ruff on 2026-07-30: passed.
+- Backend MyPy strict mode on 2026-07-30: passed.
+- Backend Pytest on 2026-07-30: 233 passed.
+- Alembic upgrade through `20260730_0010 (head)`: passed from an empty isolated
+  database.
 - OpenAPI regeneration and committed-spec comparison: passed twice; SHA-256
   `03933ae037207b72c1f15d10b2e207f17692ce69251a7bcd2ee40acae27ea8af`.
 - Local encrypted PostgreSQL backup/restore round trip: passed with one restored
@@ -209,6 +219,13 @@ The first local iOS no-codesign attempt was blocked by Finder metadata on the
 generated Flutter framework under the local Documents directory. Removing that
 metadata from the generated build artifact allowed the same build to pass. The
 source tree did not require an iOS code change.
+
+GitHub Actions run `30507374176` built and signed the current iOS source at
+commit `f608dbf3b6ae11e08ace0d5a6bfeec7585326c3b`, verified the archive signature,
+uploaded the IPA to TestFlight, and completed fail-closed removal of the signed
+output, upload key, and signing material. The member catalog-access correction
+is server-side, so this verified mobile build uses it immediately without
+another paid macOS build.
 
 ## Mobile release readiness
 

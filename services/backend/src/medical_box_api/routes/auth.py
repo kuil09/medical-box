@@ -168,13 +168,6 @@ def exchange_provider_token(
     else:
         user = identity.user
 
-    if (
-        verified.email is not None
-        and verified.email_verified
-        and verified.email.casefold() in settings.catalog_access_email_allowlist_set
-    ):
-        user.catalog_read_enabled = True
-
     accepted = db.scalar(
         select(TermsAcceptance).where(
             TermsAcceptance.user_id == user.id,

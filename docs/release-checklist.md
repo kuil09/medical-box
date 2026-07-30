@@ -1,6 +1,6 @@
 # Closed beta release checklist
 
-Evidence date: 2026-07-28
+Evidence date: 2026-07-30
 
 ## Automated gates
 
@@ -26,8 +26,9 @@ Evidence date: 2026-07-28
 - [x] Login requires an explicit current terms/privacy confirmation, and the
   API rejects missing, false, or stale terms acceptance before creating an
   account
-- [x] Catalog routes return `401` without a token, `403` without `catalog:read`,
-  and `200` only after an explicit entitlement grant
+- [x] Catalog routes return `401` without a token, `200` for every registered
+  account by default, and `403` after an explicit operator revocation that
+  persists across later provider sign-ins
 - [x] Catalog pagination, retry, duplicate, schema, partial-failure, and count-drop
   tests
 
@@ -36,9 +37,8 @@ Evidence date: 2026-07-28
 - [x] Reviewed Railway desired-state plan reports `0 add, 5 change, 0 destroy`;
   it creates no backup service, bucket, or Operations group and only removes
   the catalog cron/automatic watches plus sets three documented variables.
-- [ ] Apply that reviewed no-cost plan and verify production has no catalog
-  cron or ordinary-source watch. Until apply, the remote no-op cron still
-  exists.
+- [x] Applied the reviewed no-cost plan and verified production has no catalog
+  cron or ordinary-source watch
 - [x] API and PostgreSQL run in Railway Singapore
 - [ ] Railway-native or approved off-device daily, weekly, and monthly backups
   enabled. The encrypted bucket worker, signed manifests, retention logic, and
@@ -69,16 +69,16 @@ Evidence date: 2026-07-28
 
 ## Product and privacy gates
 
-- [ ] First-use onboarding requires account creation or sign-in before entering
+- [x] First-use onboarding requires account creation or sign-in before entering
   organizer routes; returning users see an explicit session-restoration gate
-- [ ] Signing out locks all organizer routes without deleting encrypted local
+- [x] Signing out locks all organizer routes without deleting encrypted local
   household data
-- [ ] Camera OCR is available only to an authenticated account with
+- [x] Camera OCR is available only to an authenticated account with
   `catalog:read`, keeps the image on-device, deletes the temporary capture, and
   requires explicit confirmation of an official candidate
 - [x] Account deletion offers an explicit account-only or account-and-device-data
   choice after provider reauthentication
-- [ ] Local deletion leaves the required account unless the user separately
+- [x] Local deletion leaves the required account unless the user separately
   deletes it
 - [x] Local deletion removes app-created temporary `.medicalbox` exports while
   preserving unrelated files and accurately warning that externally saved or
@@ -114,8 +114,10 @@ Evidence date: 2026-07-28
 - [x] Android upload key is stored outside the repository with credentials in
   macOS Keychain, and its signing secrets plus both Google client IDs are
   installed in the protected environment
+- [x] The protected environment contains and successfully validates all Apple
+  distribution-signing and App Store Connect upload inputs
 - [ ] The protected environment contains the expected Android upload-certificate
-  SHA-256 and all Apple distribution-signing and App Store Connect upload inputs
+  SHA-256
 - [ ] Kakao native key is installed before Kakao login is exposed in a store
   build; an omitted key keeps the provider hidden
 - [x] Korean Play Store and App Store metadata source files are versioned
@@ -124,9 +126,10 @@ Evidence date: 2026-07-28
   longer blocks validation
 - [ ] Signed Android AAB uploaded directly from an approved protected boundary
   using the upload key and production provider identifiers
-- [ ] Signed iOS IPA uploaded directly from an approved protected boundary using
+- [x] Signed iOS IPA uploaded directly from an approved protected boundary using
   the distribution certificate, provisioning profile, and production provider
-  identifiers
+  identifiers; workflow run `30507374176` completed archive-signature
+  verification, TestFlight upload, and fail-closed cleanup
 - [ ] Encrypted off-device recovery copy of the Android upload key retained
 - [x] The mobile provider lifecycle gateway uses Google disconnect, Kakao
   forced login and unlink, and Apple authorization-code forwarding; repository
@@ -140,8 +143,10 @@ Evidence date: 2026-07-28
   deletion E2E are complete
 - [ ] Real Kakao login, reauthentication, and disposable-account deletion E2E
 - [ ] Google Play developer-account verification and internal-test release
-- [ ] App Store Connect sign-in and TestFlight release
+- [x] App Store Connect sign-in and TestFlight build upload
 - [ ] Public support email configured in product and store metadata
 
-External beta promotion is blocked until every infrastructure, provider,
-catalog, backup-restore, privacy, and legal gate has evidence.
+The internal TestFlight beta can continue while deferred catalog-refresh and
+backup work remains last in the product sequence. Public promotion and paid
+distribution remain blocked by the unchecked legal, provider, support,
+store-account, metadata, and recovery gates.

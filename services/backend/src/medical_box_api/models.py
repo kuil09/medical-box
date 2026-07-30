@@ -35,7 +35,7 @@ class User(Base):
     display_name: Mapped[str | None] = mapped_column(String(80))
     email: Mapped[str | None] = mapped_column(String(320))
     catalog_read_enabled: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default="false"
+        Boolean, default=True, server_default="true"
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
