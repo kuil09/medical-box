@@ -6,7 +6,7 @@
     "check:railway": "tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 .railway/railway.ts"
   },
   "devDependencies": {
-    "railway": "3.6.0",
+    "railway": "3.7.0",
     "typescript": "7.0.2"
   }
 }
