@@ -6,7 +6,7 @@ void main() {
     expect(
       suggestCabinetSection(
         itemKind: InventoryItemKinds.medicine,
-        officialText: const ['감기로 인한 발열 및 통증 완화'],
+        officialText: const ['두통과 발열 및 통증 완화'],
       ),
       CabinetSections.painAndFever,
     );
@@ -31,4 +31,42 @@ void main() {
       );
     },
   );
+
+  test('common household categories remain distinct', () {
+    expect(
+      suggestCabinetSection(
+        itemKind: InventoryItemKinds.medicine,
+        officialText: const ['알레르기 비염 증상 완화'],
+      ),
+      CabinetSections.allergyCare,
+    );
+    expect(
+      suggestCabinetSection(
+        itemKind: InventoryItemKinds.medicine,
+        officialText: const ['설사로 인한 수분 보충'],
+      ),
+      CabinetSections.diarrheaAndHydration,
+    );
+    expect(
+      suggestCabinetSection(
+        itemKind: InventoryItemKinds.firstAidSupply,
+        officialText: const ['비접촉 체온계'],
+      ),
+      CabinetSections.temperatureAndColdCare,
+    );
+    expect(
+      suggestCabinetSection(
+        itemKind: InventoryItemKinds.medicine,
+        officialText: const ['멀미와 구토 증상 완화'],
+      ),
+      CabinetSections.nauseaAndMotion,
+    );
+    expect(
+      suggestCabinetSection(
+        itemKind: InventoryItemKinds.medicine,
+        officialText: const ['점안용 인공눈물'],
+      ),
+      CabinetSections.eyeAndNoseCare,
+    );
+  });
 }

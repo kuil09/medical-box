@@ -63,16 +63,19 @@ class AuthRepository extends ChangeNotifier {
     TargetPlatform? targetPlatform,
     SocialAuthGateway? socialAuthGateway,
     bool? appleSignInEnabled,
+    Future<void> Function(String accountId)? onAccountRemoved,
   }) : _socialAuthGateway =
            socialAuthGateway ??
            SdkSocialAuthGateway(
              targetPlatform: targetPlatform,
              appleSignInEnabled: appleSignInEnabled,
-           );
+           ),
+       _onAccountRemoved = onAccountRemoved;
 
   final ApiClient _api;
   final DatabaseKeyStore _keyStore;
   final SocialAuthGateway _socialAuthGateway;
+  final Future<void> Function(String accountId)? _onAccountRemoved;
   AccountProfile? _account;
   Future<String?>? _refreshInFlight;
   int? _refreshInFlightEpoch;
@@ -199,6 +202,7 @@ class AuthRepository extends ChangeNotifier {
   }
 
   Future<AccountDeletionResult> deleteAccount(LoginProvider provider) async {
+    final accountId = _account?.id;
     final accessToken = await _requiredAccessToken();
     final proof = await _socialAuthGateway.authenticate(
       provider,
@@ -231,6 +235,9 @@ class AuthRepository extends ChangeNotifier {
     var localSessionCleanupCompleted = true;
     try {
       await _clearSessionIfCurrent(epoch);
+      if (accountId != null) {
+        await _onAccountRemoved?.call(accountId);
+      }
     } catch (_) {
       localSessionCleanupCompleted = false;
       _setAccount(null);

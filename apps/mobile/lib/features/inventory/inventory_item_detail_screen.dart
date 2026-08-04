@@ -10,6 +10,7 @@ import '../../data/local/app_database.dart';
 import '../../providers.dart';
 import '../../services/inventory_share_service.dart';
 import '../../theme.dart';
+import '../../widgets/official_cached_image.dart';
 import '../../widgets/official_medicine_thumbnail.dart';
 import 'drug_catalog_projection_sections.dart';
 import 'inventory_item_taxonomy.dart';
@@ -284,7 +285,7 @@ class _LocalInventoryDetails extends StatelessWidget {
         ),
       _LocalDetailValue(
         icon: PhosphorIconsRegular.squaresFour,
-        label: '약장 칸',
+        label: '보관 칸',
         value: CabinetSections.label(item.cabinetSection),
       ),
       if (item.expiresOn != null)
@@ -586,10 +587,10 @@ class _OfficialAppearanceCard extends StatelessWidget {
                 aspectRatio: 16 / 7,
                 child: ColoredBox(
                   color: MedicalBoxColors.surfaceRaised,
-                  child: Image.network(
-                    imageUri.toString(),
+                  child: OfficialCachedImage(
+                    imageUrl: imageUri.toString(),
                     fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) => Center(
+                    placeholderBuilder: (_) => Center(
                       child: PhosphorIcon(
                         PhosphorIconsRegular.imageBroken,
                         color: MedicalBoxColors.muted,

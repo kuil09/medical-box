@@ -45,7 +45,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               InventoryContainersCompanion.insert(
                 id: uuid.v4(),
                 householdId: householdId,
-                name: '공용 약장',
+                name: '공용 구급상자',
                 kind: 'shared',
                 sortOrder: const Value(0),
               ),
@@ -73,7 +73,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               const _CabinetMark(),
               const SizedBox(height: MedicalBoxSpacing.x8),
               Text(
-                '우리집 약장을\n시작해요',
+                '우리집 구급상자를\n시작해요',
                 style: Theme.of(context).textTheme.displaySmall,
               ),
               const SizedBox(height: MedicalBoxSpacing.x3),
@@ -94,7 +94,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   ),
                   _OnboardingValue(
                     icon: PhosphorIconsRegular.users,
-                    title: '공용 약장과 가족별 파우치',
+                    title: '공용 구급상자와 가족별 파우치',
                   ),
                   _OnboardingValue(
                     icon: PhosphorIconsRegular.lockKey,
@@ -125,7 +125,7 @@ class _CabinetMark extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       image: true,
-      label: '우리집 약장',
+      label: '우리집 구급상자',
       child: Container(
         width: 64,
         height: 52,

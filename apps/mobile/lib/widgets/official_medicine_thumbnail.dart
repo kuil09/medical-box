@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../theme.dart';
+import 'official_cached_image.dart';
 
 class OfficialMedicineThumbnail extends StatelessWidget {
   const OfficialMedicineThumbnail({
@@ -25,10 +26,6 @@ class OfficialMedicineThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final uri = Uri.tryParse(imageUrl ?? '');
-    final canLoadImage =
-        uri != null && uri.scheme == 'https' && uri.host.isNotEmpty;
-
     return Container(
       width: size,
       height: size,
@@ -44,15 +41,11 @@ class OfficialMedicineThumbnail extends StatelessWidget {
               fit: BoxFit.cover,
               errorBuilder: (_, _, _) => _fallback(),
             )
-          : canLoadImage
-          ? Image.network(
-              uri.toString(),
+          : OfficialCachedImage(
+              imageUrl: imageUrl,
               fit: BoxFit.contain,
-              loadingBuilder: (context, child, progress) =>
-                  progress == null ? child : _fallback(),
-              errorBuilder: (_, _, _) => _fallback(),
-            )
-          : _fallback(),
+              placeholderBuilder: (_) => _fallback(),
+            ),
     );
   }
 

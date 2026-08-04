@@ -3654,6 +3654,1131 @@ class RemindersCompanion extends UpdateCompanion<Reminder> {
   }
 }
 
+class $CatalogCacheEntriesTable extends CatalogCacheEntries
+    with TableInfo<$CatalogCacheEntriesTable, CatalogCacheEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CatalogCacheEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cacheNamespaceMeta = const VerificationMeta(
+    'cacheNamespace',
+  );
+  @override
+  late final GeneratedColumn<String> cacheNamespace = GeneratedColumn<String>(
+    'cache_namespace',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cacheKeyMeta = const VerificationMeta(
+    'cacheKey',
+  );
+  @override
+  late final GeneratedColumn<String> cacheKey = GeneratedColumn<String>(
+    'cache_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _formatVersionMeta = const VerificationMeta(
+    'formatVersion',
+  );
+  @override
+  late final GeneratedColumn<int> formatVersion = GeneratedColumn<int>(
+    'format_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _byteSizeMeta = const VerificationMeta(
+    'byteSize',
+  );
+  @override
+  late final GeneratedColumn<int> byteSize = GeneratedColumn<int>(
+    'byte_size',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cachedAtMeta = const VerificationMeta(
+    'cachedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> cachedAt = GeneratedColumn<DateTime>(
+    'cached_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _expiresAtMeta = const VerificationMeta(
+    'expiresAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> expiresAt = GeneratedColumn<DateTime>(
+    'expires_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastAccessedAtMeta = const VerificationMeta(
+    'lastAccessedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastAccessedAt =
+      GeneratedColumn<DateTime>(
+        'last_accessed_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    accountId,
+    cacheNamespace,
+    cacheKey,
+    formatVersion,
+    payloadJson,
+    byteSize,
+    cachedAt,
+    expiresAt,
+    lastAccessedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'catalog_cache_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CatalogCacheEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_accountIdMeta);
+    }
+    if (data.containsKey('cache_namespace')) {
+      context.handle(
+        _cacheNamespaceMeta,
+        cacheNamespace.isAcceptableOrUnknown(
+          data['cache_namespace']!,
+          _cacheNamespaceMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_cacheNamespaceMeta);
+    }
+    if (data.containsKey('cache_key')) {
+      context.handle(
+        _cacheKeyMeta,
+        cacheKey.isAcceptableOrUnknown(data['cache_key']!, _cacheKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_cacheKeyMeta);
+    }
+    if (data.containsKey('format_version')) {
+      context.handle(
+        _formatVersionMeta,
+        formatVersion.isAcceptableOrUnknown(
+          data['format_version']!,
+          _formatVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_formatVersionMeta);
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadJsonMeta);
+    }
+    if (data.containsKey('byte_size')) {
+      context.handle(
+        _byteSizeMeta,
+        byteSize.isAcceptableOrUnknown(data['byte_size']!, _byteSizeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_byteSizeMeta);
+    }
+    if (data.containsKey('cached_at')) {
+      context.handle(
+        _cachedAtMeta,
+        cachedAt.isAcceptableOrUnknown(data['cached_at']!, _cachedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_cachedAtMeta);
+    }
+    if (data.containsKey('expires_at')) {
+      context.handle(
+        _expiresAtMeta,
+        expiresAt.isAcceptableOrUnknown(data['expires_at']!, _expiresAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_expiresAtMeta);
+    }
+    if (data.containsKey('last_accessed_at')) {
+      context.handle(
+        _lastAccessedAtMeta,
+        lastAccessedAt.isAcceptableOrUnknown(
+          data['last_accessed_at']!,
+          _lastAccessedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastAccessedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {accountId, cacheNamespace, cacheKey};
+  @override
+  CatalogCacheEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CatalogCacheEntry(
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      cacheNamespace: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cache_namespace'],
+      )!,
+      cacheKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cache_key'],
+      )!,
+      formatVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}format_version'],
+      )!,
+      payloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_json'],
+      )!,
+      byteSize: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}byte_size'],
+      )!,
+      cachedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}cached_at'],
+      )!,
+      expiresAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}expires_at'],
+      )!,
+      lastAccessedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_accessed_at'],
+      )!,
+    );
+  }
+
+  @override
+  $CatalogCacheEntriesTable createAlias(String alias) {
+    return $CatalogCacheEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class CatalogCacheEntry extends DataClass
+    implements Insertable<CatalogCacheEntry> {
+  final String accountId;
+  final String cacheNamespace;
+  final String cacheKey;
+  final int formatVersion;
+  final String payloadJson;
+  final int byteSize;
+  final DateTime cachedAt;
+  final DateTime expiresAt;
+  final DateTime lastAccessedAt;
+  const CatalogCacheEntry({
+    required this.accountId,
+    required this.cacheNamespace,
+    required this.cacheKey,
+    required this.formatVersion,
+    required this.payloadJson,
+    required this.byteSize,
+    required this.cachedAt,
+    required this.expiresAt,
+    required this.lastAccessedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['account_id'] = Variable<String>(accountId);
+    map['cache_namespace'] = Variable<String>(cacheNamespace);
+    map['cache_key'] = Variable<String>(cacheKey);
+    map['format_version'] = Variable<int>(formatVersion);
+    map['payload_json'] = Variable<String>(payloadJson);
+    map['byte_size'] = Variable<int>(byteSize);
+    map['cached_at'] = Variable<DateTime>(cachedAt);
+    map['expires_at'] = Variable<DateTime>(expiresAt);
+    map['last_accessed_at'] = Variable<DateTime>(lastAccessedAt);
+    return map;
+  }
+
+  CatalogCacheEntriesCompanion toCompanion(bool nullToAbsent) {
+    return CatalogCacheEntriesCompanion(
+      accountId: Value(accountId),
+      cacheNamespace: Value(cacheNamespace),
+      cacheKey: Value(cacheKey),
+      formatVersion: Value(formatVersion),
+      payloadJson: Value(payloadJson),
+      byteSize: Value(byteSize),
+      cachedAt: Value(cachedAt),
+      expiresAt: Value(expiresAt),
+      lastAccessedAt: Value(lastAccessedAt),
+    );
+  }
+
+  factory CatalogCacheEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CatalogCacheEntry(
+      accountId: serializer.fromJson<String>(json['accountId']),
+      cacheNamespace: serializer.fromJson<String>(json['cacheNamespace']),
+      cacheKey: serializer.fromJson<String>(json['cacheKey']),
+      formatVersion: serializer.fromJson<int>(json['formatVersion']),
+      payloadJson: serializer.fromJson<String>(json['payloadJson']),
+      byteSize: serializer.fromJson<int>(json['byteSize']),
+      cachedAt: serializer.fromJson<DateTime>(json['cachedAt']),
+      expiresAt: serializer.fromJson<DateTime>(json['expiresAt']),
+      lastAccessedAt: serializer.fromJson<DateTime>(json['lastAccessedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'accountId': serializer.toJson<String>(accountId),
+      'cacheNamespace': serializer.toJson<String>(cacheNamespace),
+      'cacheKey': serializer.toJson<String>(cacheKey),
+      'formatVersion': serializer.toJson<int>(formatVersion),
+      'payloadJson': serializer.toJson<String>(payloadJson),
+      'byteSize': serializer.toJson<int>(byteSize),
+      'cachedAt': serializer.toJson<DateTime>(cachedAt),
+      'expiresAt': serializer.toJson<DateTime>(expiresAt),
+      'lastAccessedAt': serializer.toJson<DateTime>(lastAccessedAt),
+    };
+  }
+
+  CatalogCacheEntry copyWith({
+    String? accountId,
+    String? cacheNamespace,
+    String? cacheKey,
+    int? formatVersion,
+    String? payloadJson,
+    int? byteSize,
+    DateTime? cachedAt,
+    DateTime? expiresAt,
+    DateTime? lastAccessedAt,
+  }) => CatalogCacheEntry(
+    accountId: accountId ?? this.accountId,
+    cacheNamespace: cacheNamespace ?? this.cacheNamespace,
+    cacheKey: cacheKey ?? this.cacheKey,
+    formatVersion: formatVersion ?? this.formatVersion,
+    payloadJson: payloadJson ?? this.payloadJson,
+    byteSize: byteSize ?? this.byteSize,
+    cachedAt: cachedAt ?? this.cachedAt,
+    expiresAt: expiresAt ?? this.expiresAt,
+    lastAccessedAt: lastAccessedAt ?? this.lastAccessedAt,
+  );
+  CatalogCacheEntry copyWithCompanion(CatalogCacheEntriesCompanion data) {
+    return CatalogCacheEntry(
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      cacheNamespace: data.cacheNamespace.present
+          ? data.cacheNamespace.value
+          : this.cacheNamespace,
+      cacheKey: data.cacheKey.present ? data.cacheKey.value : this.cacheKey,
+      formatVersion: data.formatVersion.present
+          ? data.formatVersion.value
+          : this.formatVersion,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
+      byteSize: data.byteSize.present ? data.byteSize.value : this.byteSize,
+      cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
+      expiresAt: data.expiresAt.present ? data.expiresAt.value : this.expiresAt,
+      lastAccessedAt: data.lastAccessedAt.present
+          ? data.lastAccessedAt.value
+          : this.lastAccessedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CatalogCacheEntry(')
+          ..write('accountId: $accountId, ')
+          ..write('cacheNamespace: $cacheNamespace, ')
+          ..write('cacheKey: $cacheKey, ')
+          ..write('formatVersion: $formatVersion, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('byteSize: $byteSize, ')
+          ..write('cachedAt: $cachedAt, ')
+          ..write('expiresAt: $expiresAt, ')
+          ..write('lastAccessedAt: $lastAccessedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    accountId,
+    cacheNamespace,
+    cacheKey,
+    formatVersion,
+    payloadJson,
+    byteSize,
+    cachedAt,
+    expiresAt,
+    lastAccessedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CatalogCacheEntry &&
+          other.accountId == this.accountId &&
+          other.cacheNamespace == this.cacheNamespace &&
+          other.cacheKey == this.cacheKey &&
+          other.formatVersion == this.formatVersion &&
+          other.payloadJson == this.payloadJson &&
+          other.byteSize == this.byteSize &&
+          other.cachedAt == this.cachedAt &&
+          other.expiresAt == this.expiresAt &&
+          other.lastAccessedAt == this.lastAccessedAt);
+}
+
+class CatalogCacheEntriesCompanion extends UpdateCompanion<CatalogCacheEntry> {
+  final Value<String> accountId;
+  final Value<String> cacheNamespace;
+  final Value<String> cacheKey;
+  final Value<int> formatVersion;
+  final Value<String> payloadJson;
+  final Value<int> byteSize;
+  final Value<DateTime> cachedAt;
+  final Value<DateTime> expiresAt;
+  final Value<DateTime> lastAccessedAt;
+  final Value<int> rowid;
+  const CatalogCacheEntriesCompanion({
+    this.accountId = const Value.absent(),
+    this.cacheNamespace = const Value.absent(),
+    this.cacheKey = const Value.absent(),
+    this.formatVersion = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.byteSize = const Value.absent(),
+    this.cachedAt = const Value.absent(),
+    this.expiresAt = const Value.absent(),
+    this.lastAccessedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CatalogCacheEntriesCompanion.insert({
+    required String accountId,
+    required String cacheNamespace,
+    required String cacheKey,
+    required int formatVersion,
+    required String payloadJson,
+    required int byteSize,
+    required DateTime cachedAt,
+    required DateTime expiresAt,
+    required DateTime lastAccessedAt,
+    this.rowid = const Value.absent(),
+  }) : accountId = Value(accountId),
+       cacheNamespace = Value(cacheNamespace),
+       cacheKey = Value(cacheKey),
+       formatVersion = Value(formatVersion),
+       payloadJson = Value(payloadJson),
+       byteSize = Value(byteSize),
+       cachedAt = Value(cachedAt),
+       expiresAt = Value(expiresAt),
+       lastAccessedAt = Value(lastAccessedAt);
+  static Insertable<CatalogCacheEntry> custom({
+    Expression<String>? accountId,
+    Expression<String>? cacheNamespace,
+    Expression<String>? cacheKey,
+    Expression<int>? formatVersion,
+    Expression<String>? payloadJson,
+    Expression<int>? byteSize,
+    Expression<DateTime>? cachedAt,
+    Expression<DateTime>? expiresAt,
+    Expression<DateTime>? lastAccessedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (accountId != null) 'account_id': accountId,
+      if (cacheNamespace != null) 'cache_namespace': cacheNamespace,
+      if (cacheKey != null) 'cache_key': cacheKey,
+      if (formatVersion != null) 'format_version': formatVersion,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (byteSize != null) 'byte_size': byteSize,
+      if (cachedAt != null) 'cached_at': cachedAt,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      if (lastAccessedAt != null) 'last_accessed_at': lastAccessedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CatalogCacheEntriesCompanion copyWith({
+    Value<String>? accountId,
+    Value<String>? cacheNamespace,
+    Value<String>? cacheKey,
+    Value<int>? formatVersion,
+    Value<String>? payloadJson,
+    Value<int>? byteSize,
+    Value<DateTime>? cachedAt,
+    Value<DateTime>? expiresAt,
+    Value<DateTime>? lastAccessedAt,
+    Value<int>? rowid,
+  }) {
+    return CatalogCacheEntriesCompanion(
+      accountId: accountId ?? this.accountId,
+      cacheNamespace: cacheNamespace ?? this.cacheNamespace,
+      cacheKey: cacheKey ?? this.cacheKey,
+      formatVersion: formatVersion ?? this.formatVersion,
+      payloadJson: payloadJson ?? this.payloadJson,
+      byteSize: byteSize ?? this.byteSize,
+      cachedAt: cachedAt ?? this.cachedAt,
+      expiresAt: expiresAt ?? this.expiresAt,
+      lastAccessedAt: lastAccessedAt ?? this.lastAccessedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (cacheNamespace.present) {
+      map['cache_namespace'] = Variable<String>(cacheNamespace.value);
+    }
+    if (cacheKey.present) {
+      map['cache_key'] = Variable<String>(cacheKey.value);
+    }
+    if (formatVersion.present) {
+      map['format_version'] = Variable<int>(formatVersion.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (byteSize.present) {
+      map['byte_size'] = Variable<int>(byteSize.value);
+    }
+    if (cachedAt.present) {
+      map['cached_at'] = Variable<DateTime>(cachedAt.value);
+    }
+    if (expiresAt.present) {
+      map['expires_at'] = Variable<DateTime>(expiresAt.value);
+    }
+    if (lastAccessedAt.present) {
+      map['last_accessed_at'] = Variable<DateTime>(lastAccessedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CatalogCacheEntriesCompanion(')
+          ..write('accountId: $accountId, ')
+          ..write('cacheNamespace: $cacheNamespace, ')
+          ..write('cacheKey: $cacheKey, ')
+          ..write('formatVersion: $formatVersion, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('byteSize: $byteSize, ')
+          ..write('cachedAt: $cachedAt, ')
+          ..write('expiresAt: $expiresAt, ')
+          ..write('lastAccessedAt: $lastAccessedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $OfficialImageCacheEntriesTable extends OfficialImageCacheEntries
+    with TableInfo<$OfficialImageCacheEntriesTable, OfficialImageCacheEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OfficialImageCacheEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _accountIdMeta = const VerificationMeta(
+    'accountId',
+  );
+  @override
+  late final GeneratedColumn<String> accountId = GeneratedColumn<String>(
+    'account_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _imageUrlMeta = const VerificationMeta(
+    'imageUrl',
+  );
+  @override
+  late final GeneratedColumn<String> imageUrl = GeneratedColumn<String>(
+    'image_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _imageBytesMeta = const VerificationMeta(
+    'imageBytes',
+  );
+  @override
+  late final GeneratedColumn<Uint8List> imageBytes = GeneratedColumn<Uint8List>(
+    'image_bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.blob,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentTypeMeta = const VerificationMeta(
+    'contentType',
+  );
+  @override
+  late final GeneratedColumn<String> contentType = GeneratedColumn<String>(
+    'content_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _byteSizeMeta = const VerificationMeta(
+    'byteSize',
+  );
+  @override
+  late final GeneratedColumn<int> byteSize = GeneratedColumn<int>(
+    'byte_size',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cachedAtMeta = const VerificationMeta(
+    'cachedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> cachedAt = GeneratedColumn<DateTime>(
+    'cached_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _expiresAtMeta = const VerificationMeta(
+    'expiresAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> expiresAt = GeneratedColumn<DateTime>(
+    'expires_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastAccessedAtMeta = const VerificationMeta(
+    'lastAccessedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastAccessedAt =
+      GeneratedColumn<DateTime>(
+        'last_accessed_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    accountId,
+    imageUrl,
+    imageBytes,
+    contentType,
+    byteSize,
+    cachedAt,
+    expiresAt,
+    lastAccessedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'official_image_cache_entries';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<OfficialImageCacheEntry> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('account_id')) {
+      context.handle(
+        _accountIdMeta,
+        accountId.isAcceptableOrUnknown(data['account_id']!, _accountIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_accountIdMeta);
+    }
+    if (data.containsKey('image_url')) {
+      context.handle(
+        _imageUrlMeta,
+        imageUrl.isAcceptableOrUnknown(data['image_url']!, _imageUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_imageUrlMeta);
+    }
+    if (data.containsKey('image_bytes')) {
+      context.handle(
+        _imageBytesMeta,
+        imageBytes.isAcceptableOrUnknown(data['image_bytes']!, _imageBytesMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_imageBytesMeta);
+    }
+    if (data.containsKey('content_type')) {
+      context.handle(
+        _contentTypeMeta,
+        contentType.isAcceptableOrUnknown(
+          data['content_type']!,
+          _contentTypeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('byte_size')) {
+      context.handle(
+        _byteSizeMeta,
+        byteSize.isAcceptableOrUnknown(data['byte_size']!, _byteSizeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_byteSizeMeta);
+    }
+    if (data.containsKey('cached_at')) {
+      context.handle(
+        _cachedAtMeta,
+        cachedAt.isAcceptableOrUnknown(data['cached_at']!, _cachedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_cachedAtMeta);
+    }
+    if (data.containsKey('expires_at')) {
+      context.handle(
+        _expiresAtMeta,
+        expiresAt.isAcceptableOrUnknown(data['expires_at']!, _expiresAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_expiresAtMeta);
+    }
+    if (data.containsKey('last_accessed_at')) {
+      context.handle(
+        _lastAccessedAtMeta,
+        lastAccessedAt.isAcceptableOrUnknown(
+          data['last_accessed_at']!,
+          _lastAccessedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastAccessedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {accountId, imageUrl};
+  @override
+  OfficialImageCacheEntry map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return OfficialImageCacheEntry(
+      accountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}account_id'],
+      )!,
+      imageUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}image_url'],
+      )!,
+      imageBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}image_bytes'],
+      )!,
+      contentType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_type'],
+      ),
+      byteSize: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}byte_size'],
+      )!,
+      cachedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}cached_at'],
+      )!,
+      expiresAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}expires_at'],
+      )!,
+      lastAccessedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_accessed_at'],
+      )!,
+    );
+  }
+
+  @override
+  $OfficialImageCacheEntriesTable createAlias(String alias) {
+    return $OfficialImageCacheEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class OfficialImageCacheEntry extends DataClass
+    implements Insertable<OfficialImageCacheEntry> {
+  final String accountId;
+  final String imageUrl;
+  final Uint8List imageBytes;
+  final String? contentType;
+  final int byteSize;
+  final DateTime cachedAt;
+  final DateTime expiresAt;
+  final DateTime lastAccessedAt;
+  const OfficialImageCacheEntry({
+    required this.accountId,
+    required this.imageUrl,
+    required this.imageBytes,
+    this.contentType,
+    required this.byteSize,
+    required this.cachedAt,
+    required this.expiresAt,
+    required this.lastAccessedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['account_id'] = Variable<String>(accountId);
+    map['image_url'] = Variable<String>(imageUrl);
+    map['image_bytes'] = Variable<Uint8List>(imageBytes);
+    if (!nullToAbsent || contentType != null) {
+      map['content_type'] = Variable<String>(contentType);
+    }
+    map['byte_size'] = Variable<int>(byteSize);
+    map['cached_at'] = Variable<DateTime>(cachedAt);
+    map['expires_at'] = Variable<DateTime>(expiresAt);
+    map['last_accessed_at'] = Variable<DateTime>(lastAccessedAt);
+    return map;
+  }
+
+  OfficialImageCacheEntriesCompanion toCompanion(bool nullToAbsent) {
+    return OfficialImageCacheEntriesCompanion(
+      accountId: Value(accountId),
+      imageUrl: Value(imageUrl),
+      imageBytes: Value(imageBytes),
+      contentType: contentType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contentType),
+      byteSize: Value(byteSize),
+      cachedAt: Value(cachedAt),
+      expiresAt: Value(expiresAt),
+      lastAccessedAt: Value(lastAccessedAt),
+    );
+  }
+
+  factory OfficialImageCacheEntry.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return OfficialImageCacheEntry(
+      accountId: serializer.fromJson<String>(json['accountId']),
+      imageUrl: serializer.fromJson<String>(json['imageUrl']),
+      imageBytes: serializer.fromJson<Uint8List>(json['imageBytes']),
+      contentType: serializer.fromJson<String?>(json['contentType']),
+      byteSize: serializer.fromJson<int>(json['byteSize']),
+      cachedAt: serializer.fromJson<DateTime>(json['cachedAt']),
+      expiresAt: serializer.fromJson<DateTime>(json['expiresAt']),
+      lastAccessedAt: serializer.fromJson<DateTime>(json['lastAccessedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'accountId': serializer.toJson<String>(accountId),
+      'imageUrl': serializer.toJson<String>(imageUrl),
+      'imageBytes': serializer.toJson<Uint8List>(imageBytes),
+      'contentType': serializer.toJson<String?>(contentType),
+      'byteSize': serializer.toJson<int>(byteSize),
+      'cachedAt': serializer.toJson<DateTime>(cachedAt),
+      'expiresAt': serializer.toJson<DateTime>(expiresAt),
+      'lastAccessedAt': serializer.toJson<DateTime>(lastAccessedAt),
+    };
+  }
+
+  OfficialImageCacheEntry copyWith({
+    String? accountId,
+    String? imageUrl,
+    Uint8List? imageBytes,
+    Value<String?> contentType = const Value.absent(),
+    int? byteSize,
+    DateTime? cachedAt,
+    DateTime? expiresAt,
+    DateTime? lastAccessedAt,
+  }) => OfficialImageCacheEntry(
+    accountId: accountId ?? this.accountId,
+    imageUrl: imageUrl ?? this.imageUrl,
+    imageBytes: imageBytes ?? this.imageBytes,
+    contentType: contentType.present ? contentType.value : this.contentType,
+    byteSize: byteSize ?? this.byteSize,
+    cachedAt: cachedAt ?? this.cachedAt,
+    expiresAt: expiresAt ?? this.expiresAt,
+    lastAccessedAt: lastAccessedAt ?? this.lastAccessedAt,
+  );
+  OfficialImageCacheEntry copyWithCompanion(
+    OfficialImageCacheEntriesCompanion data,
+  ) {
+    return OfficialImageCacheEntry(
+      accountId: data.accountId.present ? data.accountId.value : this.accountId,
+      imageUrl: data.imageUrl.present ? data.imageUrl.value : this.imageUrl,
+      imageBytes: data.imageBytes.present
+          ? data.imageBytes.value
+          : this.imageBytes,
+      contentType: data.contentType.present
+          ? data.contentType.value
+          : this.contentType,
+      byteSize: data.byteSize.present ? data.byteSize.value : this.byteSize,
+      cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
+      expiresAt: data.expiresAt.present ? data.expiresAt.value : this.expiresAt,
+      lastAccessedAt: data.lastAccessedAt.present
+          ? data.lastAccessedAt.value
+          : this.lastAccessedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OfficialImageCacheEntry(')
+          ..write('accountId: $accountId, ')
+          ..write('imageUrl: $imageUrl, ')
+          ..write('imageBytes: $imageBytes, ')
+          ..write('contentType: $contentType, ')
+          ..write('byteSize: $byteSize, ')
+          ..write('cachedAt: $cachedAt, ')
+          ..write('expiresAt: $expiresAt, ')
+          ..write('lastAccessedAt: $lastAccessedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    accountId,
+    imageUrl,
+    $driftBlobEquality.hash(imageBytes),
+    contentType,
+    byteSize,
+    cachedAt,
+    expiresAt,
+    lastAccessedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is OfficialImageCacheEntry &&
+          other.accountId == this.accountId &&
+          other.imageUrl == this.imageUrl &&
+          $driftBlobEquality.equals(other.imageBytes, this.imageBytes) &&
+          other.contentType == this.contentType &&
+          other.byteSize == this.byteSize &&
+          other.cachedAt == this.cachedAt &&
+          other.expiresAt == this.expiresAt &&
+          other.lastAccessedAt == this.lastAccessedAt);
+}
+
+class OfficialImageCacheEntriesCompanion
+    extends UpdateCompanion<OfficialImageCacheEntry> {
+  final Value<String> accountId;
+  final Value<String> imageUrl;
+  final Value<Uint8List> imageBytes;
+  final Value<String?> contentType;
+  final Value<int> byteSize;
+  final Value<DateTime> cachedAt;
+  final Value<DateTime> expiresAt;
+  final Value<DateTime> lastAccessedAt;
+  final Value<int> rowid;
+  const OfficialImageCacheEntriesCompanion({
+    this.accountId = const Value.absent(),
+    this.imageUrl = const Value.absent(),
+    this.imageBytes = const Value.absent(),
+    this.contentType = const Value.absent(),
+    this.byteSize = const Value.absent(),
+    this.cachedAt = const Value.absent(),
+    this.expiresAt = const Value.absent(),
+    this.lastAccessedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  OfficialImageCacheEntriesCompanion.insert({
+    required String accountId,
+    required String imageUrl,
+    required Uint8List imageBytes,
+    this.contentType = const Value.absent(),
+    required int byteSize,
+    required DateTime cachedAt,
+    required DateTime expiresAt,
+    required DateTime lastAccessedAt,
+    this.rowid = const Value.absent(),
+  }) : accountId = Value(accountId),
+       imageUrl = Value(imageUrl),
+       imageBytes = Value(imageBytes),
+       byteSize = Value(byteSize),
+       cachedAt = Value(cachedAt),
+       expiresAt = Value(expiresAt),
+       lastAccessedAt = Value(lastAccessedAt);
+  static Insertable<OfficialImageCacheEntry> custom({
+    Expression<String>? accountId,
+    Expression<String>? imageUrl,
+    Expression<Uint8List>? imageBytes,
+    Expression<String>? contentType,
+    Expression<int>? byteSize,
+    Expression<DateTime>? cachedAt,
+    Expression<DateTime>? expiresAt,
+    Expression<DateTime>? lastAccessedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (accountId != null) 'account_id': accountId,
+      if (imageUrl != null) 'image_url': imageUrl,
+      if (imageBytes != null) 'image_bytes': imageBytes,
+      if (contentType != null) 'content_type': contentType,
+      if (byteSize != null) 'byte_size': byteSize,
+      if (cachedAt != null) 'cached_at': cachedAt,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      if (lastAccessedAt != null) 'last_accessed_at': lastAccessedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  OfficialImageCacheEntriesCompanion copyWith({
+    Value<String>? accountId,
+    Value<String>? imageUrl,
+    Value<Uint8List>? imageBytes,
+    Value<String?>? contentType,
+    Value<int>? byteSize,
+    Value<DateTime>? cachedAt,
+    Value<DateTime>? expiresAt,
+    Value<DateTime>? lastAccessedAt,
+    Value<int>? rowid,
+  }) {
+    return OfficialImageCacheEntriesCompanion(
+      accountId: accountId ?? this.accountId,
+      imageUrl: imageUrl ?? this.imageUrl,
+      imageBytes: imageBytes ?? this.imageBytes,
+      contentType: contentType ?? this.contentType,
+      byteSize: byteSize ?? this.byteSize,
+      cachedAt: cachedAt ?? this.cachedAt,
+      expiresAt: expiresAt ?? this.expiresAt,
+      lastAccessedAt: lastAccessedAt ?? this.lastAccessedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (accountId.present) {
+      map['account_id'] = Variable<String>(accountId.value);
+    }
+    if (imageUrl.present) {
+      map['image_url'] = Variable<String>(imageUrl.value);
+    }
+    if (imageBytes.present) {
+      map['image_bytes'] = Variable<Uint8List>(imageBytes.value);
+    }
+    if (contentType.present) {
+      map['content_type'] = Variable<String>(contentType.value);
+    }
+    if (byteSize.present) {
+      map['byte_size'] = Variable<int>(byteSize.value);
+    }
+    if (cachedAt.present) {
+      map['cached_at'] = Variable<DateTime>(cachedAt.value);
+    }
+    if (expiresAt.present) {
+      map['expires_at'] = Variable<DateTime>(expiresAt.value);
+    }
+    if (lastAccessedAt.present) {
+      map['last_accessed_at'] = Variable<DateTime>(lastAccessedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OfficialImageCacheEntriesCompanion(')
+          ..write('accountId: $accountId, ')
+          ..write('imageUrl: $imageUrl, ')
+          ..write('imageBytes: $imageBytes, ')
+          ..write('contentType: $contentType, ')
+          ..write('byteSize: $byteSize, ')
+          ..write('cachedAt: $cachedAt, ')
+          ..write('expiresAt: $expiresAt, ')
+          ..write('lastAccessedAt: $lastAccessedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $AppSettingsTable extends AppSettings
     with TableInfo<$AppSettingsTable, AppSetting> {
   @override
@@ -4087,6 +5212,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this,
   );
   late final $RemindersTable reminders = $RemindersTable(this);
+  late final $CatalogCacheEntriesTable catalogCacheEntries =
+      $CatalogCacheEntriesTable(this);
+  late final $OfficialImageCacheEntriesTable officialImageCacheEntries =
+      $OfficialImageCacheEntriesTable(this);
   late final $AppSettingsTable appSettings = $AppSettingsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -4099,6 +5228,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     inventoryItems,
     renewalReadiness,
     reminders,
+    catalogCacheEntries,
+    officialImageCacheEntries,
     appSettings,
   ];
   @override
@@ -7419,6 +8550,588 @@ typedef $$RemindersTableProcessedTableManager =
       Reminder,
       PrefetchHooks Function({bool inventoryItemId})
     >;
+typedef $$CatalogCacheEntriesTableCreateCompanionBuilder =
+    CatalogCacheEntriesCompanion Function({
+      required String accountId,
+      required String cacheNamespace,
+      required String cacheKey,
+      required int formatVersion,
+      required String payloadJson,
+      required int byteSize,
+      required DateTime cachedAt,
+      required DateTime expiresAt,
+      required DateTime lastAccessedAt,
+      Value<int> rowid,
+    });
+typedef $$CatalogCacheEntriesTableUpdateCompanionBuilder =
+    CatalogCacheEntriesCompanion Function({
+      Value<String> accountId,
+      Value<String> cacheNamespace,
+      Value<String> cacheKey,
+      Value<int> formatVersion,
+      Value<String> payloadJson,
+      Value<int> byteSize,
+      Value<DateTime> cachedAt,
+      Value<DateTime> expiresAt,
+      Value<DateTime> lastAccessedAt,
+      Value<int> rowid,
+    });
+
+class $$CatalogCacheEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $CatalogCacheEntriesTable> {
+  $$CatalogCacheEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get accountId => $composableBuilder(
+    column: $table.accountId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cacheNamespace => $composableBuilder(
+    column: $table.cacheNamespace,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cacheKey => $composableBuilder(
+    column: $table.cacheKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get formatVersion => $composableBuilder(
+    column: $table.formatVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get byteSize => $composableBuilder(
+    column: $table.byteSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get cachedAt => $composableBuilder(
+    column: $table.cachedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get expiresAt => $composableBuilder(
+    column: $table.expiresAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastAccessedAt => $composableBuilder(
+    column: $table.lastAccessedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CatalogCacheEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $CatalogCacheEntriesTable> {
+  $$CatalogCacheEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get accountId => $composableBuilder(
+    column: $table.accountId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cacheNamespace => $composableBuilder(
+    column: $table.cacheNamespace,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cacheKey => $composableBuilder(
+    column: $table.cacheKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get formatVersion => $composableBuilder(
+    column: $table.formatVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get byteSize => $composableBuilder(
+    column: $table.byteSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get cachedAt => $composableBuilder(
+    column: $table.cachedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get expiresAt => $composableBuilder(
+    column: $table.expiresAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastAccessedAt => $composableBuilder(
+    column: $table.lastAccessedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CatalogCacheEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CatalogCacheEntriesTable> {
+  $$CatalogCacheEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get accountId =>
+      $composableBuilder(column: $table.accountId, builder: (column) => column);
+
+  GeneratedColumn<String> get cacheNamespace => $composableBuilder(
+    column: $table.cacheNamespace,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get cacheKey =>
+      $composableBuilder(column: $table.cacheKey, builder: (column) => column);
+
+  GeneratedColumn<int> get formatVersion => $composableBuilder(
+    column: $table.formatVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get byteSize =>
+      $composableBuilder(column: $table.byteSize, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get cachedAt =>
+      $composableBuilder(column: $table.cachedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get expiresAt =>
+      $composableBuilder(column: $table.expiresAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastAccessedAt => $composableBuilder(
+    column: $table.lastAccessedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$CatalogCacheEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CatalogCacheEntriesTable,
+          CatalogCacheEntry,
+          $$CatalogCacheEntriesTableFilterComposer,
+          $$CatalogCacheEntriesTableOrderingComposer,
+          $$CatalogCacheEntriesTableAnnotationComposer,
+          $$CatalogCacheEntriesTableCreateCompanionBuilder,
+          $$CatalogCacheEntriesTableUpdateCompanionBuilder,
+          (
+            CatalogCacheEntry,
+            BaseReferences<
+              _$AppDatabase,
+              $CatalogCacheEntriesTable,
+              CatalogCacheEntry
+            >,
+          ),
+          CatalogCacheEntry,
+          PrefetchHooks Function()
+        > {
+  $$CatalogCacheEntriesTableTableManager(
+    _$AppDatabase db,
+    $CatalogCacheEntriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CatalogCacheEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CatalogCacheEntriesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$CatalogCacheEntriesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> accountId = const Value.absent(),
+                Value<String> cacheNamespace = const Value.absent(),
+                Value<String> cacheKey = const Value.absent(),
+                Value<int> formatVersion = const Value.absent(),
+                Value<String> payloadJson = const Value.absent(),
+                Value<int> byteSize = const Value.absent(),
+                Value<DateTime> cachedAt = const Value.absent(),
+                Value<DateTime> expiresAt = const Value.absent(),
+                Value<DateTime> lastAccessedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CatalogCacheEntriesCompanion(
+                accountId: accountId,
+                cacheNamespace: cacheNamespace,
+                cacheKey: cacheKey,
+                formatVersion: formatVersion,
+                payloadJson: payloadJson,
+                byteSize: byteSize,
+                cachedAt: cachedAt,
+                expiresAt: expiresAt,
+                lastAccessedAt: lastAccessedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String accountId,
+                required String cacheNamespace,
+                required String cacheKey,
+                required int formatVersion,
+                required String payloadJson,
+                required int byteSize,
+                required DateTime cachedAt,
+                required DateTime expiresAt,
+                required DateTime lastAccessedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => CatalogCacheEntriesCompanion.insert(
+                accountId: accountId,
+                cacheNamespace: cacheNamespace,
+                cacheKey: cacheKey,
+                formatVersion: formatVersion,
+                payloadJson: payloadJson,
+                byteSize: byteSize,
+                cachedAt: cachedAt,
+                expiresAt: expiresAt,
+                lastAccessedAt: lastAccessedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CatalogCacheEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CatalogCacheEntriesTable,
+      CatalogCacheEntry,
+      $$CatalogCacheEntriesTableFilterComposer,
+      $$CatalogCacheEntriesTableOrderingComposer,
+      $$CatalogCacheEntriesTableAnnotationComposer,
+      $$CatalogCacheEntriesTableCreateCompanionBuilder,
+      $$CatalogCacheEntriesTableUpdateCompanionBuilder,
+      (
+        CatalogCacheEntry,
+        BaseReferences<
+          _$AppDatabase,
+          $CatalogCacheEntriesTable,
+          CatalogCacheEntry
+        >,
+      ),
+      CatalogCacheEntry,
+      PrefetchHooks Function()
+    >;
+typedef $$OfficialImageCacheEntriesTableCreateCompanionBuilder =
+    OfficialImageCacheEntriesCompanion Function({
+      required String accountId,
+      required String imageUrl,
+      required Uint8List imageBytes,
+      Value<String?> contentType,
+      required int byteSize,
+      required DateTime cachedAt,
+      required DateTime expiresAt,
+      required DateTime lastAccessedAt,
+      Value<int> rowid,
+    });
+typedef $$OfficialImageCacheEntriesTableUpdateCompanionBuilder =
+    OfficialImageCacheEntriesCompanion Function({
+      Value<String> accountId,
+      Value<String> imageUrl,
+      Value<Uint8List> imageBytes,
+      Value<String?> contentType,
+      Value<int> byteSize,
+      Value<DateTime> cachedAt,
+      Value<DateTime> expiresAt,
+      Value<DateTime> lastAccessedAt,
+      Value<int> rowid,
+    });
+
+class $$OfficialImageCacheEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $OfficialImageCacheEntriesTable> {
+  $$OfficialImageCacheEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get accountId => $composableBuilder(
+    column: $table.accountId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get imageUrl => $composableBuilder(
+    column: $table.imageUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get imageBytes => $composableBuilder(
+    column: $table.imageBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentType => $composableBuilder(
+    column: $table.contentType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get byteSize => $composableBuilder(
+    column: $table.byteSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get cachedAt => $composableBuilder(
+    column: $table.cachedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get expiresAt => $composableBuilder(
+    column: $table.expiresAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastAccessedAt => $composableBuilder(
+    column: $table.lastAccessedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$OfficialImageCacheEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $OfficialImageCacheEntriesTable> {
+  $$OfficialImageCacheEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get accountId => $composableBuilder(
+    column: $table.accountId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get imageUrl => $composableBuilder(
+    column: $table.imageUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<Uint8List> get imageBytes => $composableBuilder(
+    column: $table.imageBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contentType => $composableBuilder(
+    column: $table.contentType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get byteSize => $composableBuilder(
+    column: $table.byteSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get cachedAt => $composableBuilder(
+    column: $table.cachedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get expiresAt => $composableBuilder(
+    column: $table.expiresAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastAccessedAt => $composableBuilder(
+    column: $table.lastAccessedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$OfficialImageCacheEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $OfficialImageCacheEntriesTable> {
+  $$OfficialImageCacheEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get accountId =>
+      $composableBuilder(column: $table.accountId, builder: (column) => column);
+
+  GeneratedColumn<String> get imageUrl =>
+      $composableBuilder(column: $table.imageUrl, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get imageBytes => $composableBuilder(
+    column: $table.imageBytes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get contentType => $composableBuilder(
+    column: $table.contentType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get byteSize =>
+      $composableBuilder(column: $table.byteSize, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get cachedAt =>
+      $composableBuilder(column: $table.cachedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get expiresAt =>
+      $composableBuilder(column: $table.expiresAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastAccessedAt => $composableBuilder(
+    column: $table.lastAccessedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$OfficialImageCacheEntriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $OfficialImageCacheEntriesTable,
+          OfficialImageCacheEntry,
+          $$OfficialImageCacheEntriesTableFilterComposer,
+          $$OfficialImageCacheEntriesTableOrderingComposer,
+          $$OfficialImageCacheEntriesTableAnnotationComposer,
+          $$OfficialImageCacheEntriesTableCreateCompanionBuilder,
+          $$OfficialImageCacheEntriesTableUpdateCompanionBuilder,
+          (
+            OfficialImageCacheEntry,
+            BaseReferences<
+              _$AppDatabase,
+              $OfficialImageCacheEntriesTable,
+              OfficialImageCacheEntry
+            >,
+          ),
+          OfficialImageCacheEntry,
+          PrefetchHooks Function()
+        > {
+  $$OfficialImageCacheEntriesTableTableManager(
+    _$AppDatabase db,
+    $OfficialImageCacheEntriesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$OfficialImageCacheEntriesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$OfficialImageCacheEntriesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$OfficialImageCacheEntriesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> accountId = const Value.absent(),
+                Value<String> imageUrl = const Value.absent(),
+                Value<Uint8List> imageBytes = const Value.absent(),
+                Value<String?> contentType = const Value.absent(),
+                Value<int> byteSize = const Value.absent(),
+                Value<DateTime> cachedAt = const Value.absent(),
+                Value<DateTime> expiresAt = const Value.absent(),
+                Value<DateTime> lastAccessedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => OfficialImageCacheEntriesCompanion(
+                accountId: accountId,
+                imageUrl: imageUrl,
+                imageBytes: imageBytes,
+                contentType: contentType,
+                byteSize: byteSize,
+                cachedAt: cachedAt,
+                expiresAt: expiresAt,
+                lastAccessedAt: lastAccessedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String accountId,
+                required String imageUrl,
+                required Uint8List imageBytes,
+                Value<String?> contentType = const Value.absent(),
+                required int byteSize,
+                required DateTime cachedAt,
+                required DateTime expiresAt,
+                required DateTime lastAccessedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => OfficialImageCacheEntriesCompanion.insert(
+                accountId: accountId,
+                imageUrl: imageUrl,
+                imageBytes: imageBytes,
+                contentType: contentType,
+                byteSize: byteSize,
+                cachedAt: cachedAt,
+                expiresAt: expiresAt,
+                lastAccessedAt: lastAccessedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$OfficialImageCacheEntriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $OfficialImageCacheEntriesTable,
+      OfficialImageCacheEntry,
+      $$OfficialImageCacheEntriesTableFilterComposer,
+      $$OfficialImageCacheEntriesTableOrderingComposer,
+      $$OfficialImageCacheEntriesTableAnnotationComposer,
+      $$OfficialImageCacheEntriesTableCreateCompanionBuilder,
+      $$OfficialImageCacheEntriesTableUpdateCompanionBuilder,
+      (
+        OfficialImageCacheEntry,
+        BaseReferences<
+          _$AppDatabase,
+          $OfficialImageCacheEntriesTable,
+          OfficialImageCacheEntry
+        >,
+      ),
+      OfficialImageCacheEntry,
+      PrefetchHooks Function()
+    >;
 typedef $$AppSettingsTableCreateCompanionBuilder =
     AppSettingsCompanion Function({
       Value<int> id,
@@ -7656,6 +9369,13 @@ class $AppDatabaseManager {
       $$RenewalReadinessTableTableManager(_db, _db.renewalReadiness);
   $$RemindersTableTableManager get reminders =>
       $$RemindersTableTableManager(_db, _db.reminders);
+  $$CatalogCacheEntriesTableTableManager get catalogCacheEntries =>
+      $$CatalogCacheEntriesTableTableManager(_db, _db.catalogCacheEntries);
+  $$OfficialImageCacheEntriesTableTableManager get officialImageCacheEntries =>
+      $$OfficialImageCacheEntriesTableTableManager(
+        _db,
+        _db.officialImageCacheEntries,
+      );
   $$AppSettingsTableTableManager get appSettings =>
       $$AppSettingsTableTableManager(_db, _db.appSettings);
 }

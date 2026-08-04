@@ -270,7 +270,7 @@ void main() {
         ['legacy-band', 'shared', '방수 밴드', 1, '개', 0, 0],
       );
       legacy.execute('PRAGMA user_version = 2');
-    legacy.close();
+      legacy.close();
 
       final migrated = AppDatabase(NativeDatabase(file));
       addTearDown(migrated.close);

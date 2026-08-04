@@ -21,6 +21,7 @@ jobs:
       backend: ${{ steps.paths.outputs.backend }}
       prototype: ${{ steps.paths.outputs.prototype }}
       mobile: ${{ steps.paths.outputs.mobile }}
+      store: ${{ steps.paths.outputs.store }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,6 +46,7 @@ jobs:
               echo "backend=true"
               echo "prototype=true"
               echo "mobile=true"
+              echo "store=true"
             } >> "${GITHUB_OUTPUT}"
           else
             git diff --no-renames --name-only "${BASE_SHA}" "${HEAD_SHA}" |
@@ -110,6 +112,15 @@ jobs:
       - run: npm ci
       - run: npm run check:runtime
       - run: npm run build
+
+  store-metadata:
+    needs: changes
+    if: ${{ needs.changes.outputs.store == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: .github/scripts/validate-store-metadata.sh
 
   flutter:
     needs: changes

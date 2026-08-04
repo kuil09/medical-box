@@ -8,6 +8,11 @@
 - The database is marked as excluded from iOS backup.
 - Android Auto Backup and device-transfer extraction are disabled.
 - Foreign keys and secure delete are enabled.
+- Official catalog detail, DUR responses, and remote medicine images use
+  account-scoped cache tables inside the encrypted database. Search queries are
+  not cache keys and are not persisted.
+- Catalog documents are capped at 8 MiB and remote images at 24 MiB. Expired
+  and least-recently-used entries are removed automatically.
 - Local notification content is generic by default and does not expose medicine
   names on the lock screen.
 
@@ -39,8 +44,9 @@ the app's control and must be deleted separately by the user.
   minutes.
 - Catalog search, detail, metadata, and DUR endpoints require both a valid
   access token and the database-backed `catalog:read` entitlement.
-- Entitlements are checked from the user row on every request, so revocation
-  takes effect immediately even when an access token has not expired.
+- Search always reaches the server. Before local detail or DUR cache reads, the
+  client validates catalog metadata and the entitlement at least once every ten
+  minutes; sign-out locks all organizer routes immediately.
 - Production is the only persistent Railway environment. Local and CI tests do
   not receive production database credentials or signing keys.
 

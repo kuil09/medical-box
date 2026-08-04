@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'data/api/api_client.dart';
@@ -5,6 +7,7 @@ import 'data/auth/auth_repository.dart';
 import 'data/local/app_database.dart';
 import 'data/local/database_key_store.dart';
 import 'services/account_deletion_coordinator.dart';
+import 'services/catalog_cache_service.dart';
 import 'services/inventory_photo_service.dart';
 import 'services/local_data_lifecycle.dart';
 import 'services/medical_box_export_service.dart';
@@ -46,8 +49,34 @@ final authRepositoryProvider = Provider<AuthRepository>(
   (ref) => AuthRepository(
     ref.watch(apiClientProvider),
     ref.watch(databaseKeyStoreProvider),
+    onAccountRemoved: ref.watch(databaseProvider).deleteCachedCatalogForAccount,
   ),
 );
+
+final catalogCacheServiceProvider = Provider<CatalogCacheService>(
+  (ref) => CatalogCacheService(ref.watch(databaseProvider)),
+);
+
+final officialImageCacheServiceProvider = Provider<OfficialImageCacheService>((
+  ref,
+) {
+  final auth = ref.watch(authRepositoryProvider);
+  final service = OfficialImageCacheService(
+    ref.watch(databaseProvider),
+    accountIdProvider: () {
+      final account = auth.account;
+      return account?.canReadCatalog == true ? account?.id : null;
+    },
+  );
+  ref.onDispose(service.close);
+  return service;
+});
+
+final officialImageBytesProvider = FutureProvider.autoDispose
+    .family<Uint8List?, String>(
+      (ref, imageUrl) =>
+          ref.watch(officialImageCacheServiceProvider).load(imageUrl),
+    );
 
 final authSessionProvider = FutureProvider<AccountProfile?>((ref) async {
   final repository = ref.watch(authRepositoryProvider);
@@ -61,6 +90,15 @@ final catalogRepositoryProvider = Provider<CatalogRepository>((ref) {
     ref.watch(apiClientProvider),
     accessTokenProvider: auth.accessToken,
     refreshAccessTokenProvider: auth.refreshAccessToken,
+    cache: ref.watch(catalogCacheServiceProvider),
+    accessScopeProvider: () {
+      final account = auth.account;
+      if (account == null) return null;
+      return CatalogAccessScope(
+        accountId: account.id,
+        canReadCatalog: account.canReadCatalog,
+      );
+    },
   );
 });
 

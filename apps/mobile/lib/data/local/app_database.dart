@@ -127,6 +127,35 @@ class Reminders extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+class CatalogCacheEntries extends Table {
+  TextColumn get accountId => text()();
+  TextColumn get cacheNamespace => text()();
+  TextColumn get cacheKey => text()();
+  IntColumn get formatVersion => integer()();
+  TextColumn get payloadJson => text()();
+  IntColumn get byteSize => integer()();
+  DateTimeColumn get cachedAt => dateTime()();
+  DateTimeColumn get expiresAt => dateTime()();
+  DateTimeColumn get lastAccessedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {accountId, cacheNamespace, cacheKey};
+}
+
+class OfficialImageCacheEntries extends Table {
+  TextColumn get accountId => text()();
+  TextColumn get imageUrl => text()();
+  BlobColumn get imageBytes => blob()();
+  TextColumn get contentType => text().nullable()();
+  IntColumn get byteSize => integer()();
+  DateTimeColumn get cachedAt => dateTime()();
+  DateTimeColumn get expiresAt => dateTime()();
+  DateTimeColumn get lastAccessedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {accountId, imageUrl};
+}
+
 class AppSettings extends Table {
   IntColumn get id => integer().withDefault(const Constant(1))();
   BoolColumn get onboardingCompleted =>
@@ -150,6 +179,8 @@ class AppSettings extends Table {
     InventoryItems,
     RenewalReadiness,
     Reminders,
+    CatalogCacheEntries,
+    OfficialImageCacheEntries,
     AppSettings,
   ],
 )
@@ -157,7 +188,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -215,6 +246,23 @@ class AppDatabase extends _$AppDatabase {
             ELSE 'other'
           END
         ''');
+      }
+      if (from < 4) {
+        await migrator.createTable(catalogCacheEntries);
+        await migrator.createTable(officialImageCacheEntries);
+      }
+      if (from < 5) {
+        final hasInventoryContainers = await customSelect(
+          "SELECT 1 FROM sqlite_master "
+          "WHERE type = 'table' AND name = 'inventory_containers'",
+        ).get();
+        if (hasInventoryContainers.isNotEmpty) {
+          await customStatement('''
+            UPDATE inventory_containers
+            SET name = '공용 구급상자'
+            WHERE kind = 'shared' AND name = '공용 약장'
+          ''');
+        }
       }
     },
     beforeOpen: (_) async {
@@ -319,6 +367,17 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  Future<void> deleteCachedCatalogForAccount(String accountId) async {
+    await transaction(() async {
+      await (delete(
+        catalogCacheEntries,
+      )..where((row) => row.accountId.equals(accountId))).go();
+      await (delete(
+        officialImageCacheEntries,
+      )..where((row) => row.accountId.equals(accountId))).go();
+    });
+  }
+
   Future<Map<String, Object?>> exportSnapshot() async {
     final inventoryRows = (await select(inventoryItems).get()).map((row) {
       final json = row.toJson();
@@ -372,6 +431,8 @@ class AppDatabase extends _$AppDatabase {
         batch.deleteAll(inventoryContainers);
         batch.deleteAll(memberProfiles);
         batch.deleteAll(households);
+        batch.deleteAll(catalogCacheEntries);
+        batch.deleteAll(officialImageCacheEntries);
         batch.deleteAll(appSettings);
       });
 
@@ -420,6 +481,8 @@ class AppDatabase extends _$AppDatabase {
         batch.deleteAll(inventoryContainers);
         batch.deleteAll(memberProfiles);
         batch.deleteAll(households);
+        batch.deleteAll(catalogCacheEntries);
+        batch.deleteAll(officialImageCacheEntries);
         batch.deleteAll(appSettings);
       });
       await into(appSettings).insert(const AppSettingsCompanion());

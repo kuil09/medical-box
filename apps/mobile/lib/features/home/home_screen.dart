@@ -5,11 +5,8 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../../data/local/app_database.dart';
 import '../../providers.dart';
-import '../../services/monetization_service.dart';
 import '../../theme.dart';
-import '../../widgets/cabinet_index_components.dart';
 import '../../widgets/cabinet_shell.dart';
-import '../../widgets/privacy_safe_banner_slot.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -20,6 +17,24 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _selectedContainerId = 'shared';
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _keepCabinetHeaderVisible(bool open) {
+    if (!open) return;
+    void resetScroll() {
+      if (!mounted || !_scrollController.hasClients) return;
+      _scrollController.jumpTo(0);
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => resetScroll());
+    Future<void>.delayed(const Duration(milliseconds: 320), resetScroll);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,15 +66,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         : allItems
               .where((item) => item.containerId == selectedPouch!.id)
               .toList();
-    final activeName = selectedPouch == null ? '공용 약장' : selectedPouch.name;
+    final activeName = selectedPouch == null ? '공용 구급상자' : selectedPouch.name;
     final reviewCount = _reviewCount(activeItems);
 
     return SafeArea(
       child: Column(
         children: [
-          _HomeHeader(onSettings: () => context.go('/settings')),
+          const _HomeHeader(),
           Expanded(
             child: ListView(
+              controller: _scrollController,
               padding: const EdgeInsets.fromLTRB(
                 MedicalBoxSpacing.screen,
                 0,
@@ -67,58 +83,48 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 28,
               ),
               children: [
-                FamilyScopeRail(
-                  pouches: pouches,
-                  selectedId: activeId,
-                  onSelected: (id) {
-                    setState(() => _selectedContainerId = id);
-                  },
-                  onManage: () => context.push('/pouch'),
-                ),
-                const SizedBox(height: 16),
-                if (reviewCount > 0) ...[
-                  CabinetReviewRow(
-                    title: '확인이 필요한 약 $reviewCount개',
-                    subtitle: '사용기한이 가깝거나 지났어요',
-                    onTap: () => context.go('/reminders'),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                const PrivacySafeBannerSlot(
-                  placement: BannerAdPlacement.homeAfterSummary,
-                ),
-                if (reviewCount > 0) const SizedBox(height: 16),
                 CabinetShell(
                   name: activeName,
                   items: activeItems,
                   reviewCount: reviewCount,
+                  showReadinessGuide: selectedPouch == null,
+                  onOpenChanged: _keepCabinetHeaderVisible,
+                  scopeSelector: FamilyScopeRail(
+                    pouches: pouches,
+                    selectedId: activeId,
+                    onSelected: (id) {
+                      setState(() => _selectedContainerId = id);
+                    },
+                    onManage: () => context.push('/pouch'),
+                  ),
                   onItemTap: (item) => context.push(
                     '/inventory/${Uri.encodeComponent(item.id)}',
                   ),
-                ),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: () {
+                  onAdd: () {
                     final targetContainerId =
                         selectedPouch?.id ?? sharedContainer?.id;
-                    final containerQuery = targetContainerId == null
-                        ? ''
-                        : '?containerId=${Uri.encodeQueryComponent(targetContainerId)}';
-                    context.push('/inventory/new$containerQuery');
+                    context.push(
+                      Uri(
+                        path: '/inventory/new',
+                        queryParameters: targetContainerId == null
+                            ? null
+                            : {'containerId': targetContainerId},
+                      ).toString(),
+                    );
                   },
-                  icon: const PhosphorIcon(PhosphorIconsRegular.plus, size: 20),
-                  label: const Text('약 추가'),
-                ),
-                const SizedBox(height: 8),
-                _FullListAction(
-                  onTap: () {
-                    if (selectedPouch == null) {
-                      context.go('/inventory');
-                    } else {
-                      context.push(
-                        '/pouch/${Uri.encodeComponent(selectedPouch.id)}',
-                      );
-                    }
+                  onAddToSection: (target) {
+                    final targetContainerId =
+                        selectedPouch?.id ?? sharedContainer?.id;
+                    context.push(
+                      Uri(
+                        path: '/inventory/new',
+                        queryParameters: {
+                          'containerId': ?targetContainerId,
+                          'section': target.section,
+                          'kind': target.itemKind,
+                        },
+                      ).toString(),
+                    );
                   },
                 ),
               ],
@@ -131,32 +137,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 }
 
 class _HomeHeader extends StatelessWidget {
-  const _HomeHeader({required this.onSettings});
-
-  final VoidCallback onSettings;
+  const _HomeHeader();
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 56,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          children: [
-            const SizedBox(width: 48),
-            Expanded(
-              child: Text(
-                '우리집 약장',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ),
-            IconButton(
-              onPressed: onSettings,
-              icon: const PhosphorIcon(PhosphorIconsRegular.gear),
-              tooltip: '설정',
-            ),
-          ],
+      height: 62,
+      child: Center(
+        child: Text(
+          '우리집 구급상자',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge,
         ),
       ),
     );
@@ -179,8 +170,9 @@ class FamilyScopeRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 48,
+    return Semantics(
+      container: true,
+      label: '보관함 선택',
       child: Row(
         children: [
           Expanded(
@@ -201,7 +193,6 @@ class FamilyScopeRail extends StatelessWidget {
               ],
             ),
           ),
-          const VerticalDivider(indent: 10, endIndent: 10),
           IconButton(
             onPressed: onManage,
             icon: const PhosphorIcon(PhosphorIconsRegular.userPlus, size: 20),
@@ -229,13 +220,13 @@ class _ScopeTab extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: '$label 약장',
+      label: '$label 보관함',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
           child: Container(
-            constraints: const BoxConstraints(minWidth: 56),
+            constraints: const BoxConstraints(minWidth: 60, minHeight: 48),
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
@@ -256,40 +247,6 @@ class _ScopeTab extends StatelessWidget {
                 color: selected ? MedicalBoxColors.ink : MedicalBoxColors.muted,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FullListAction extends StatelessWidget {
-  const _FullListAction({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(MedicalBoxRadius.control),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 52),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '전체 목록',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                PhosphorIcon(PhosphorIconsRegular.caretRight, size: 18),
-              ],
             ),
           ),
         ),

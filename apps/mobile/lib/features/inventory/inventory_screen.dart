@@ -37,7 +37,7 @@ class InventoryScreen extends ConsumerWidget {
               MedicalBoxSpacing.x6,
             ),
             children: [
-              const CabinetSectionLabel('공용 약장'),
+              const CabinetSectionLabel('공용 구급상자'),
               CabinetSectionList(
                 children: [
                   for (final item in items)
@@ -172,7 +172,7 @@ class _EmptyInventory extends StatelessWidget {
         MedicalBoxSpacing.x6,
       ),
       children: [
-        const CabinetSectionLabel('공용 약장'),
+        const CabinetSectionLabel('공용 구급상자'),
         CabinetSectionList(
           showDividers: false,
           children: [

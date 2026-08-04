@@ -314,7 +314,9 @@ spending limit. After the repository became public, pull request 10 CI run
 `30319463102` completed successfully across backend, Flutter, iOS, prototype,
 and infrastructure jobs. CodeQL runs `30319461144` and `30319461448` also
 completed successfully. The former billing constraint no longer blocks pull
-request validation.
+request validation. The latest `main` CI run `30514891672` also completed
+successfully for commit `e96283e5d4058fef107f941e1c9215379fa9da72` before
+this release-preparation change.
 
 ## Legal review
 
@@ -345,9 +347,26 @@ primary Sign in with Apple, and created active App Store profile
 required entitlements, disallows debugger attachment, and has no device scope.
 The existing Apple Distribution certificate resource `4S272BFVSV` and matching
 private key remain valid through 2027-07-15. The team API key also has verified
-recent TestFlight upload capability. App Store Connect still has no app record
-for `com.medicalbox.app`; creating that record requires an authenticated web
-session before the first build can be accepted.
+recent TestFlight upload capability.
+
+The authenticated App Store Connect session now contains app record
+`6795895720` for `com.medicalbox.app`. Signed workflow run `30507374176`
+uploaded build 5. Its export-compliance questionnaire, Korean test
+instructions, TestFlight description, support/privacy URLs, review notes, and
+internal testing assignment are complete. Builds 3, 4, and 5 are assigned to
+the Internal Testers group. Build 5 uses standard encryption in addition to
+Apple operating-system encryption and excludes France from its current export
+declaration.
+
+The App Store record has the Korean subtitle, Medical primary category,
+Lifestyle secondary category, calculated `16+` rating, and privacy-policy URL.
+The version 1.0 copy and build 5 selection are prepared but cannot be saved
+until a valid App Review contact phone number is supplied. Screenshots, review
+credentials, privacy publication, content rights, the regulated-medical-device
+declaration, export classification, and EU DSA status remain release gates.
+Exact console evidence and the privacy data map are recorded in
+`docs/app-store-connect-status-2026-07-30.md` and
+`docs/app-store-privacy-inventory.md`.
 
 The Kakao Developers console is signed out. Railway production also lacks
 `KAKAO_APP_ID`, `APPLE_TEAM_ID`, and the Play App Signing
