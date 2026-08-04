@@ -87,6 +87,8 @@ class _MedicalBoxAppState extends ConsumerState<MedicalBoxApp>
           path: '/inventory/new',
           builder: (context, state) => EditInventoryItemScreen(
             containerId: state.uri.queryParameters['containerId'],
+            initialCabinetSection: state.uri.queryParameters['section'],
+            initialItemKind: state.uri.queryParameters['kind'],
           ),
         ),
         GoRoute(

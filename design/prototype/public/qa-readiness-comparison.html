@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Household readiness map comparison</title>
+    <style>
+      :root {
+        color: #17191c;
+        background: #e9e9e4;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 28px;
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+        max-width: 1500px;
+        margin: 0 auto;
+      }
+
+      figure {
+        margin: 0;
+        padding: 18px;
+        border: 1px solid #cdceca;
+        border-radius: 18px;
+        background: #f8f8f4;
+        box-shadow: 0 12px 28px rgba(23, 25, 28, 0.11);
+      }
+
+      figcaption {
+        display: grid;
+        gap: 4px;
+        margin-bottom: 14px;
+      }
+
+      strong {
+        font-size: 16px;
+      }
+
+      small {
+        color: #686d72;
+        font-size: 12px;
+      }
+
+      img {
+        width: 100%;
+        height: 900px;
+        display: block;
+        object-fit: contain;
+        object-position: top center;
+        border-radius: 12px;
+        background: white;
+      }
+
+      .implementation-crop {
+        width: 393px;
+        height: 852px;
+        overflow: hidden;
+        margin: 24px auto;
+        border-radius: 48px;
+        background: white;
+      }
+
+      .implementation-crop img {
+        width: 1572px;
+        max-width: none;
+        height: auto;
+        transform: translate(-643px, -68px);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <figure>
+        <figcaption>
+          <strong>Selected storage-surface direction</strong>
+          <small>Physical lid, hinge, rim, and readable compartment rows.</small>
+        </figcaption>
+        <img
+          src="/assets/prototype/selected-storage-surface.png"
+          alt="Selected storage-surface reference"
+        />
+      </figure>
+      <figure>
+        <figcaption>
+          <strong>Scoped readiness-map refinement</strong>
+          <small>
+            Broad medicine and first-aid categories appear as registered or
+            empty spaces before stored-item rows.
+          </small>
+        </figcaption>
+        <div class="implementation-crop">
+          <img
+            src="/qa/readiness-map-implementation.png"
+            alt="Implemented household readiness map"
+          />
+        </div>
+      </figure>
+    </main>
+  </body>
+</html>

@@ -33,11 +33,35 @@ import { MedicineChestUI } from "./MedicineChestUI";
 
 type PouchTone = "mint" | "blush" | "blue";
 type ContainerId = "shared" | string;
+type InventoryKind = "medicine" | "firstAid";
+
+const medicineReadinessAreas = [
+  "열·통증",
+  "감기·기침",
+  "알레르기",
+  "소화·제산",
+  "설사·수분",
+  "멀미·구토",
+  "눈·코 관리",
+  "구강·인후",
+  "피부·벌레",
+  "근육·관절",
+  "기타",
+];
+
+const firstAidReadinessAreas = [
+  "상처 관리",
+  "소독·세정",
+  "체온·냉찜질",
+  "보호·도구",
+  "기타",
+];
 
 type InventoryItem = {
   id: string;
   name: string;
   category: string;
+  kind?: InventoryKind;
   meta: string;
   state: "ok" | "soon" | "low";
   note: string;
@@ -79,12 +103,12 @@ const pouchTones: PouchTone[] = ["mint", "blush", "blue"];
 
 const initialSharedItems: InventoryItem[] = [
   {
-    id: "shared-enzyme",
-    name: "공식 데이터 연결 예시 의약품",
-    category: "소화",
-    meta: "2026.09까지",
+    id: "shared-pain",
+    name: "타이레놀정500밀리그램",
+    category: "열·통증",
+    meta: "2026.08까지",
     state: "soon",
-    note: "식탁 옆 트레이",
+    note: "",
     official: {
       itemSeq: "200000001",
       appearance: "제품 허가정보의 성상·외형 설명이 여기에 표시됩니다.",
@@ -95,26 +119,26 @@ const initialSharedItems: InventoryItem[] = [
     },
   },
   {
-    id: "shared-bandage",
-    name: "혼합형 밴드",
-    category: "상처 관리",
-    meta: "2027.05까지",
+    id: "shared-pain-2",
+    name: "이지엔6 이브",
+    category: "열·통증",
+    meta: "2026.08까지",
+    state: "soon",
+    note: "",
+  },
+  {
+    id: "shared-enzyme",
+    name: "베아제정",
+    category: "소화·제산",
+    meta: "상태 양호",
     state: "ok",
     note: "",
   },
   {
-    id: "shared-gauze",
-    name: "멸균거즈 5×5cm",
-    category: "상처 관리",
-    meta: "포장 상태 확인됨",
-    state: "low",
-    note: "",
-  },
-  {
-    id: "shared-wipe",
-    name: "소독 티슈",
-    category: "상처 관리",
-    meta: "2027.11까지",
+    id: "shared-ointment",
+    name: "후시딘연고",
+    category: "피부·벌레",
+    meta: "상태 양호",
     state: "ok",
     note: "",
   },
@@ -123,7 +147,7 @@ const initialSharedItems: InventoryItem[] = [
 const initialMembers: FamilyMember[] = [
   {
     id: "hajun",
-    name: "하준",
+    name: "나",
     tone: "mint",
     items: [
       {
@@ -146,7 +170,7 @@ const initialMembers: FamilyMember[] = [
   },
   {
     id: "minseo",
-    name: "민서",
+    name: "엄마",
     tone: "blush",
     items: [
       {
@@ -161,7 +185,7 @@ const initialMembers: FamilyMember[] = [
   },
   {
     id: "youngsoo",
-    name: "영수",
+    name: "아이",
     tone: "blue",
     items: [
       {
@@ -296,6 +320,8 @@ function createLoginScreen(): FlowScreen {
 function createHomeScreen(): FlowScreen {
   return {
     id: "home",
+    footerHeight: 72,
+    footer: (flow) => <HomeBottomNavigation flow={flow} />,
     render: (flow) => <HomeScreen flow={flow} />,
   };
 }
@@ -389,12 +415,36 @@ function createInventoryScreen(): FlowScreen {
   };
 }
 
-function createItemEditorScreen(containerId: ContainerId, itemId?: string): FlowScreen {
+function createItemEditorScreen(
+  containerId: ContainerId,
+  itemId?: string,
+  initialCategory?: string,
+  initialKind?: InventoryKind,
+): FlowScreen {
   return {
-    id: `item-editor-${containerId}-${itemId ?? "new"}`,
+    id: `item-editor-${containerId}-${itemId ?? "new"}-${initialCategory ?? "default"}-${
+      initialKind ?? "medicine"
+    }`,
     headerHeight: 58,
-    header: (flow) => <ScreenHeader title={itemId ? "의약품 편집" : "의약품 추가"} flow={flow} />,
-    render: (flow) => <ItemEditorScreen flow={flow} containerId={containerId} itemId={itemId} />,
+    header: (flow) => <ScreenHeader title={itemId ? "물품 편집" : "물품 추가"} flow={flow} />,
+    render: (flow) => (
+      <ItemEditorScreen
+        flow={flow}
+        containerId={containerId}
+        itemId={itemId}
+        initialCategory={initialCategory}
+        initialKind={initialKind}
+      />
+    ),
+  };
+}
+
+function createItemDetailScreen(containerId: ContainerId, itemId: string): FlowScreen {
+  return {
+    id: `item-detail-${containerId}-${itemId}`,
+    headerHeight: 58,
+    header: (flow) => <ScreenHeader title="의약품 상세" flow={flow} />,
+    render: (flow) => <ItemDetailScreen flow={flow} containerId={containerId} itemId={itemId} />,
   };
 }
 
@@ -416,7 +466,198 @@ function createSettingsScreen(): FlowScreen {
   };
 }
 
+function createRemindersScreen(): FlowScreen {
+  return {
+    id: "reminders",
+    headerHeight: 58,
+    header: (flow) => <ScreenHeader title="알림" flow={flow} />,
+    render: () => (
+      <MobileScroll className="app-screen">
+        <main className="sub-screen reminder-screen">
+          <section className="empty-inventory">
+            <BellIcon />
+            <strong>예약된 알림이 없어요</strong>
+            <small>의약품 상세에서 사용기한 알림을 추가할 수 있어요.</small>
+          </section>
+        </main>
+      </MobileScroll>
+    ),
+  };
+}
+
+function HomeBottomNavigation({ flow }: { flow: FlowControls }) {
+  return (
+    <nav className="home-bottom-navigation" aria-label="주요 메뉴">
+      <button className="is-active" type="button" aria-current="page">
+        <ArchiveIcon />
+        <span>홈</span>
+      </button>
+      <button type="button" onClick={() => flow.push(createRemindersScreen())}>
+        <BellIcon />
+        <span>알림</span>
+      </button>
+      <button type="button" onClick={() => flow.push(createSettingsScreen())}>
+        <GearIcon />
+        <span>설정</span>
+      </button>
+    </nav>
+  );
+}
+
 function HomeScreen({ flow }: { flow: FlowControls }) {
+  const { addMember, members, removeMember, renameMember, sharedItems } = useKit();
+  const [activeContainerId, setActiveContainerId] = useState<ContainerId>("shared");
+  const [memberSheet, setMemberSheet] = useState<"add" | string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [kitOpen, setKitOpen] = useState(false);
+  const activeMember = members.find((member) => member.id === activeContainerId);
+  const sheetMember =
+    memberSheet && memberSheet !== "add"
+      ? members.find((member) => member.id === memberSheet)
+      : undefined;
+  const activeItems = activeMember?.items ?? sharedItems;
+  const attentionCount = activeItems.filter((item) => item.state === "soon").length;
+  const activeContainerName = activeMember ? `${activeMember.name} 개인 파우치` : "공용 구급상자";
+
+  const openAddMember = () => {
+    setDraftName("");
+    setConfirmingDelete(false);
+    setMemberSheet("add");
+  };
+
+  const openEditMember = (member: FamilyMember) => {
+    setDraftName(member.name);
+    setConfirmingDelete(false);
+    setMemberSheet(member.id);
+  };
+
+  const closeMemberSheet = () => {
+    setMemberSheet(null);
+    setDraftName("");
+    setConfirmingDelete(false);
+  };
+
+  const saveMember = () => {
+    const name = draftName.trim();
+    if (!name) return;
+    if (sheetMember) renameMember(sheetMember.id, name);
+    else addMember(name);
+    closeMemberSheet();
+  };
+
+  return (
+    <MobileScroll className="app-screen">
+      <main className="home-screen home-screen--storage-surface" data-testid="home-screen">
+        <section className="home-heading">
+          <h1>우리집 구급상자</h1>
+        </section>
+
+        <MedicineChestUI
+          open={kitOpen}
+          name={activeContainerName}
+          items={activeItems}
+          reviewCount={attentionCount}
+          showReadinessGuide={activeContainerId === "shared"}
+          onToggle={() => setKitOpen((current) => !current)}
+          onItemSelect={(itemId) =>
+            flow.push(createItemDetailScreen(activeContainerId, itemId))
+          }
+          onAdd={(suggestedCategory, suggestedKind) =>
+            flow.push(
+              createItemEditorScreen(
+                activeContainerId,
+                undefined,
+                suggestedCategory,
+                suggestedKind,
+              ),
+            )
+          }
+          tabs={
+            <div className="cabinet-scope-rail" role="tablist" aria-label="보관함 선택">
+              <button
+                className={activeContainerId === "shared" ? "is-active" : ""}
+                role="tab"
+                aria-selected={activeContainerId === "shared"}
+                onClick={() => setActiveContainerId("shared")}
+              >
+                공용
+              </button>
+              {members.map((member) => (
+                <button
+                  className={activeContainerId === member.id ? "is-active" : ""}
+                  role="tab"
+                  aria-selected={activeContainerId === member.id}
+                  onClick={() => setActiveContainerId(member.id)}
+                  key={member.id}
+                >
+                  {member.name}
+                </button>
+              ))}
+              <button
+                className="cabinet-scope-manage"
+                onClick={() => (activeMember ? openEditMember(activeMember) : openAddMember())}
+                aria-label={activeMember ? `${activeMember.name} 구성원 편집` : "가족 구성원 추가"}
+              >
+                <PersonIcon />
+                <PlusIcon />
+              </button>
+            </div>
+          }
+        />
+      </main>
+
+      <BottomSheet
+        open={memberSheet !== null}
+        onOpenChange={(open) => {
+          if (!open) closeMemberSheet();
+        }}
+        title={sheetMember ? "가족 구성원 편집" : "가족 구성원 추가"}
+        description="이름과 파우치 내용은 이 기기 안에만 저장돼요."
+        snap={0.54}
+      >
+        <div className="member-sheet">
+          <label>
+            <span>이름</span>
+            <KeyboardInput
+              value={draftName}
+              onChange={(event) => setDraftName(event.target.value)}
+              placeholder="예: 엄마"
+              aria-label="가족 구성원 이름"
+            />
+          </label>
+          <button className="primary-cta primary-cta--compact" disabled={!draftName.trim()} onClick={saveMember}>
+            {sheetMember ? "이름 저장" : "파우치 만들기"}
+          </button>
+          {sheetMember ? (
+            <>
+              {confirmingDelete ? (
+                <p className="delete-warning">파우치 안의 의약품도 이 기기에서 함께 삭제돼요.</p>
+              ) : null}
+              <button
+                className={`danger-cta ${confirmingDelete ? "danger-cta--armed" : ""}`}
+                onClick={() => {
+                  if (!confirmingDelete) {
+                    setConfirmingDelete(true);
+                    return;
+                  }
+                  removeMember(sheetMember.id);
+                  setActiveContainerId("shared");
+                  closeMemberSheet();
+                }}
+              >
+                <TrashIcon />
+                {confirmingDelete ? "정말 삭제" : "구성원과 파우치 삭제"}
+              </button>
+            </>
+          ) : null}
+        </div>
+      </BottomSheet>
+    </MobileScroll>
+  );
+}
+
+function LegacyHomeScreen({ flow }: { flow: FlowControls }) {
   const { addMember, members, removeMember, renameMember, sharedItems } = useKit();
   const [activeContainerId, setActiveContainerId] = useState<ContainerId>("shared");
   const [memberSheet, setMemberSheet] = useState<"add" | string | null>(null);
@@ -1125,8 +1366,8 @@ function InventoryScreen({ flow }: { flow: FlowControls }) {
           {sharedItems.map((item) => (
             <button
               className="inventory-row inventory-row--open"
-              onClick={() => flow.push(createItemEditorScreen("shared", item.id))}
-              aria-label={`${item.name} 편집`}
+              onClick={() => flow.push(createItemDetailScreen("shared", item.id))}
+              aria-label={`${item.name} 상세 보기`}
               key={item.id}
             >
               <span className="inventory-copy">
@@ -1156,14 +1397,82 @@ function InventoryScreen({ flow }: { flow: FlowControls }) {
   );
 }
 
-function ItemEditorScreen({
+function ItemDetailScreen({
   flow,
   containerId,
   itemId,
 }: {
   flow: FlowControls;
   containerId: ContainerId;
+  itemId: string;
+}) {
+  const { members, sharedItems } = useKit();
+  const items =
+    containerId === "shared"
+      ? sharedItems
+      : members.find((member) => member.id === containerId)?.items ?? [];
+  const item = items.find((candidate) => candidate.id === itemId);
+
+  if (!item) {
+    return (
+      <MobileScroll className="app-screen">
+        <main className="sub-screen item-detail-screen">
+          <section className="empty-inventory">
+            <strong>의약품을 찾을 수 없어요</strong>
+            <small>이미 삭제되었거나 다른 보관함으로 이동했을 수 있어요.</small>
+          </section>
+        </main>
+      </MobileScroll>
+    );
+  }
+
+  return (
+    <MobileScroll className="app-screen">
+      <main className="sub-screen item-detail-screen" data-testid="item-detail-screen">
+        <section className="item-detail-hero">
+          <small>{item.category}</small>
+          <h1>{item.name}</h1>
+          <span className={`state-pill state-pill--${item.state}`}>{item.meta || "상태 미입력"}</span>
+        </section>
+
+        <section className="item-detail-section">
+          <div>
+            <small>보관 메모</small>
+            <p>{item.note || "등록한 메모가 없어요."}</p>
+          </div>
+          {item.official ? (
+            <div>
+              <small>공식 정보</small>
+              <p>{item.official.appearance}</p>
+              <p>{item.official.source} · 갱신 {item.official.updatedAt}</p>
+            </div>
+          ) : null}
+        </section>
+
+        <button
+          className="secondary-cta"
+          onClick={() => flow.push(createItemEditorScreen(containerId, item.id))}
+        >
+          <Pencil2Icon />
+          수정
+        </button>
+      </main>
+    </MobileScroll>
+  );
+}
+
+function ItemEditorScreen({
+  flow,
+  containerId,
+  itemId,
+  initialCategory,
+  initialKind,
+}: {
+  flow: FlowControls;
+  containerId: ContainerId;
   itemId?: string;
+  initialCategory?: string;
+  initialKind?: InventoryKind;
 }) {
   const { deleteItem, members, saveItem, sharedItems } = useKit();
   const items =
@@ -1171,8 +1480,13 @@ function ItemEditorScreen({
       ? sharedItems
       : members.find((member) => member.id === containerId)?.items ?? [];
   const existing = itemId ? items.find((item) => item.id === itemId) : undefined;
+  const [kind, setKind] = useState<InventoryKind>(
+    existing?.kind ?? initialKind ?? "medicine",
+  );
   const [name, setName] = useState(existing?.name ?? "");
-  const [category, setCategory] = useState(existing?.category ?? "상처 관리");
+  const [category, setCategory] = useState(
+    existing?.category ?? initialCategory ?? "기타",
+  );
   const [meta, setMeta] = useState(existing?.meta ?? "");
   const [note, setNote] = useState(existing?.note ?? "");
   const [searchQuery, setSearchQuery] = useState("");
@@ -1180,6 +1494,9 @@ function ItemEditorScreen({
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanComplete, setScanComplete] = useState(false);
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false);
+  const categoryChoices =
+    kind === "medicine" ? medicineReadinessAreas : firstAidReadinessAreas;
   const knownItems = [...sharedItems, ...members.flatMap((member) => member.items)];
   const normalizedQuery = searchQuery.trim().toLocaleLowerCase("ko");
   const searchResults =
@@ -1197,6 +1514,7 @@ function ItemEditorScreen({
       id: existing?.id ?? `item-${Date.now()}`,
       name: trimmedName,
       category,
+      kind,
       meta: meta.trim(),
       state: existing?.state ?? "ok",
       note: note.trim(),
@@ -1290,28 +1608,56 @@ function ItemEditorScreen({
         ) : null}
 
         <section className="form-section">
+          <div>
+            <span className="form-label">물품 유형</span>
+            <div className="choice-row">
+              {[
+                { value: "medicine" as const, label: "의약품" },
+                { value: "firstAid" as const, label: "구급용품" },
+              ].map((choice) => (
+                <button
+                  className={kind === choice.value ? "selected" : ""}
+                  key={choice.value}
+                  onClick={() => {
+                    setKind(choice.value);
+                    setCategory(
+                      choice.value === "medicine" ? "열·통증" : "상처 관리",
+                    );
+                  }}
+                >
+                  {choice.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <label>
             <span>이름</span>
             <KeyboardInput
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="예: 멸균거즈 5×5cm"
-              aria-label="의약품 이름"
+              placeholder={
+                kind === "medicine"
+                  ? "예: 타이레놀정500밀리그램"
+                  : "예: 멸균거즈 5×5cm"
+              }
+              aria-label={kind === "medicine" ? "의약품 이름" : "구급용품 이름"}
             />
           </label>
           <div>
-            <span className="form-label">보관 분류</span>
-            <div className="choice-row">
-              {["소화", "상처 관리", "기타"].map((choice) => (
-                <button
-                  className={category === choice ? "selected" : ""}
-                  key={choice}
-                  onClick={() => setCategory(choice)}
-                >
-                  {choice}
-                </button>
-              ))}
-            </div>
+            <span className="form-label">준비 영역</span>
+            <button
+              type="button"
+              className="readiness-area-trigger"
+              aria-haspopup="dialog"
+              aria-expanded={categorySheetOpen}
+              onClick={() => setCategorySheetOpen(true)}
+            >
+              <strong>{category}</strong>
+              <ChevronRightIcon />
+            </button>
+            <small className="readiness-area-help">
+              제품에 맞는 대표 영역을 제안해요. 필요하면 바꿀 수 있어요.
+            </small>
           </div>
           <label>
             <span>사용기한·상태</span>
@@ -1338,7 +1684,9 @@ function ItemEditorScreen({
           disabled={!name.trim()}
           onClick={save}
         >
-          {existing ? "변경사항 저장" : "의약품 추가"}
+          {existing
+            ? "변경사항 저장"
+            : `${kind === "medicine" ? "의약품" : "구급용품"} 추가`}
         </button>
         {existing ? (
           <>
@@ -1362,6 +1710,35 @@ function ItemEditorScreen({
           </>
         ) : null}
       </main>
+      <BottomSheet
+        open={categorySheetOpen}
+        onOpenChange={setCategorySheetOpen}
+        title="준비 영역 선택"
+        description="구급상자에서 찾기 쉬운 대표 영역 하나를 선택하세요."
+        snap={kind === "medicine" ? 0.72 : 0.48}
+      >
+        <div className="readiness-area-grid" role="listbox" aria-label="준비 영역">
+          {categoryChoices.map((choice) => {
+            const selected = category === choice;
+            return (
+              <button
+                type="button"
+                className={selected ? "selected" : ""}
+                role="option"
+                aria-selected={selected}
+                key={choice}
+                onClick={() => {
+                  setCategory(choice);
+                  setCategorySheetOpen(false);
+                }}
+              >
+                <span>{choice}</span>
+                {selected ? <CheckCircledIcon /> : null}
+              </button>
+            );
+          })}
+        </div>
+      </BottomSheet>
       <BottomSheet
         open={scannerOpen}
         onOpenChange={setScannerOpen}
@@ -1558,8 +1935,8 @@ function PouchScreen({ flow, memberId }: { flow: FlowControls; memberId: string 
           {member.items.map((item) => (
             <button
               className="pouch-item-open"
-              onClick={() => flow.push(createItemEditorScreen(member.id, item.id))}
-              aria-label={`${item.name} 편집`}
+              onClick={() => flow.push(createItemDetailScreen(member.id, item.id))}
+              aria-label={`${item.name} 상세 보기`}
               key={item.id}
             >
               <div>

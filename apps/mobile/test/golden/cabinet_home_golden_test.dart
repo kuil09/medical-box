@@ -94,7 +94,7 @@ void main() {
         productName: '후시딘연고',
         manufacturer: '동화약품',
         itemKind: 'medicine',
-        cabinetSection: 'wound_care',
+        cabinetSection: 'skin_and_bites',
         quantity: 1,
         unit: '개',
         storageNote: '상처',
@@ -160,6 +160,9 @@ void main() {
 
     await tester.tap(find.text('열기'));
     await tester.pumpAndSettle();
+
+    final homeList = tester.widget<ListView>(find.byType(ListView).first);
+    expect(homeList.controller?.offset, 0);
 
     await expectLater(
       find.byType(AppShell),

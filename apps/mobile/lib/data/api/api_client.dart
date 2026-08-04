@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../services/catalog_cache_service.dart';
+
 const productionApiBaseUrl = String.fromEnvironment(
   'MEDICAL_BOX_API_BASE_URL',
   defaultValue: 'https://medicalbox.outoftokens.ai/api',
@@ -490,17 +492,41 @@ class DrugDetail extends DrugSummary {
   final List<DrugSourceAttribution> sources;
 }
 
+class CatalogAccessScope {
+  const CatalogAccessScope({
+    required this.accountId,
+    required this.canReadCatalog,
+  });
+
+  final String accountId;
+  final bool canReadCatalog;
+}
+
 class CatalogRepository {
   CatalogRepository(
     this._api, {
     required Future<String?> Function() accessTokenProvider,
     required Future<String?> Function() refreshAccessTokenProvider,
+    CatalogCacheService? cache,
+    CatalogAccessScope? Function()? accessScopeProvider,
+    DateTime Function()? clock,
   }) : _accessTokenProvider = accessTokenProvider,
-       _refreshAccessTokenProvider = refreshAccessTokenProvider;
+       _refreshAccessTokenProvider = refreshAccessTokenProvider,
+       _cache = cache,
+       _accessScopeProvider = accessScopeProvider,
+       _clock = clock ?? DateTime.now;
 
   final ApiClient _api;
   final Future<String?> Function() _accessTokenProvider;
   final Future<String?> Function() _refreshAccessTokenProvider;
+  final CatalogCacheService? _cache;
+  final CatalogAccessScope? Function()? _accessScopeProvider;
+  final DateTime Function() _clock;
+  _CatalogCacheContext? _cacheContext;
+
+  static const _cacheContextLifetime = Duration(minutes: 10);
+  static const _detailTimeToLive = Duration(days: 7);
+  static const _safetyTimeToLive = Duration(hours: 24);
 
   Future<Map<String, dynamic>> _authorizedGet(
     String path, {
@@ -535,10 +561,36 @@ class CatalogRepository {
   }
 
   Future<DrugDetail> detail(String itemSeq) async {
+    final cacheContext = await _resolveCacheContext();
+    if (cacheContext != null) {
+      final cached = await _readCache(
+        cacheContext,
+        'detail:${Uri.encodeComponent(itemSeq)}',
+      );
+      if (cached != null) {
+        try {
+          return DrugDetail.fromJson(cached);
+        } on FormatException {
+          // Fetch a validated replacement when a prior schema is incompatible.
+        } on TypeError {
+          // Fetch a validated replacement when a prior schema is incompatible.
+        }
+      }
+    }
+
     final json = await _authorizedGet(
       '/v1/drugs/${Uri.encodeComponent(itemSeq)}',
     );
-    return DrugDetail.fromJson(json);
+    final detail = DrugDetail.fromJson(json);
+    if (cacheContext != null) {
+      await _writeCache(
+        cacheContext,
+        'detail:${Uri.encodeComponent(itemSeq)}',
+        json,
+        _detailTimeToLive,
+      );
+    }
+    return detail;
   }
 
   Future<DrugSafetyRulePage> safetyRules(
@@ -547,11 +599,35 @@ class CatalogRepository {
     String? cursor,
     int limit = 20,
   }) async {
+    final cacheContext = await _resolveCacheContext();
+    final cacheKey = _safetyCacheKey(
+      itemSeq: itemSeq,
+      ruleType: ruleType,
+      cursor: cursor,
+      limit: limit,
+    );
+    if (cacheContext != null) {
+      final cached = await _readCache(cacheContext, cacheKey);
+      if (cached != null) {
+        try {
+          return DrugSafetyRulePage.fromJson(cached);
+        } on FormatException {
+          // Fetch a validated replacement when a prior schema is incompatible.
+        } on TypeError {
+          // Fetch a validated replacement when a prior schema is incompatible.
+        }
+      }
+    }
+
     final json = await _authorizedGet(
       '/v1/drugs/${Uri.encodeComponent(itemSeq)}/dur-rules',
       query: {'ruleType': ?ruleType, 'cursor': ?cursor, 'limit': '$limit'},
     );
-    return DrugSafetyRulePage.fromJson(json);
+    final page = DrugSafetyRulePage.fromJson(json);
+    if (cacheContext != null) {
+      await _writeCache(cacheContext, cacheKey, json, _safetyTimeToLive);
+    }
+    return page;
   }
 
   Future<List<DrugSafetyRule>> concomitantRules(String itemSeq) async {
@@ -580,4 +656,105 @@ class CatalogRepository {
 
     return List.unmodifiable(rules);
   }
+
+  Future<_CatalogCacheContext?> _resolveCacheContext() async {
+    if (_cache == null) return null;
+
+    final scope = _accessScopeProvider?.call();
+    if (scope == null) {
+      throw const ApiException(401, 'Authentication required.');
+    }
+    if (!scope.canReadCatalog) {
+      throw const ApiException(403, 'Catalog permission required.');
+    }
+
+    final now = _clock().toUtc();
+    final current = _cacheContext;
+    if (current != null &&
+        current.accountId == scope.accountId &&
+        current.validatedAt.add(_cacheContextLifetime).isAfter(now)) {
+      return current;
+    }
+
+    try {
+      final meta = await _authorizedGet('/v1/catalog/meta');
+      final syncVersion = meta['lastSuccessfulSync']?.toString() ?? 'none';
+      final productCount = meta['productCount']?.toString() ?? 'unknown';
+      final context = _CatalogCacheContext(
+        accountId: scope.accountId,
+        cacheNamespace:
+            'catalog-v${CatalogCacheService.formatVersion}:'
+            '$syncVersion:$productCount',
+        validatedAt: now,
+      );
+      _cacheContext = context;
+      return context;
+    } on ApiException catch (error) {
+      if (error.statusCode == 401 || error.statusCode == 403) rethrow;
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> _readCache(
+    _CatalogCacheContext context,
+    String cacheKey,
+  ) async {
+    try {
+      return await _cache!.read(
+        accountId: context.accountId,
+        cacheNamespace: context.cacheNamespace,
+        cacheKey: cacheKey,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _writeCache(
+    _CatalogCacheContext context,
+    String cacheKey,
+    Map<String, dynamic> payload,
+    Duration timeToLive,
+  ) async {
+    try {
+      await _cache!.write(
+        accountId: context.accountId,
+        cacheNamespace: context.cacheNamespace,
+        cacheKey: cacheKey,
+        payload: payload,
+        timeToLive: timeToLive,
+      );
+    } catch (_) {
+      // Cache persistence must never block official catalog access.
+    }
+  }
+
+  String _safetyCacheKey({
+    required String itemSeq,
+    required String? ruleType,
+    required String? cursor,
+    required int limit,
+  }) {
+    return [
+      'dur',
+      Uri.encodeComponent(itemSeq),
+      Uri.encodeComponent(ruleType ?? ''),
+      Uri.encodeComponent(cursor ?? ''),
+      '$limit',
+    ].join(':');
+  }
+}
+
+class _CatalogCacheContext {
+  const _CatalogCacheContext({
+    required this.accountId,
+    required this.cacheNamespace,
+    required this.validatedAt,
+  });
+
+  final String accountId;
+  final String cacheNamespace;
+  final DateTime validatedAt;
 }

@@ -39,7 +39,7 @@ class AppShell extends StatelessWidget {
                 PhosphorIconsRegular.firstAidKit,
                 color: MedicalBoxColors.accent,
               ),
-              label: '약장',
+              label: '홈',
             ),
             NavigationDestination(
               icon: Icon(PhosphorIconsRegular.bell),

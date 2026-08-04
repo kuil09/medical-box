@@ -39,13 +39,13 @@ void main() {
     expect(find.text('보관품 등록'), findsOneWidget);
     expect(find.text('제품명 촬영'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('약장에 등록'),
+      find.text('구급상자에 등록'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('약장에 등록'), findsOneWidget);
-    expect(find.text('보관 대상'), findsOneWidget);
-    expect(find.text('약장 칸'), findsOneWidget);
+    expect(find.text('구급상자에 등록'), findsOneWidget);
+    expect(find.text('보관 대상', skipOffstage: false), findsOneWidget);
+    expect(find.text('준비 영역', skipOffstage: false), findsOneWidget);
     await _disposeWidget(tester);
   });
 
@@ -74,7 +74,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('변경사항 저장'), findsOneWidget);
-    expect(find.text('약장에 등록'), findsNothing);
+    expect(find.text('구급상자에 등록'), findsNothing);
     await _disposeWidget(tester);
   });
 
@@ -92,7 +92,7 @@ void main() {
           InventoryContainersCompanion.insert(
             id: 'shared-1',
             householdId: 'household-1',
-            name: '공용 약장',
+            name: '공용 구급상자',
             kind: 'shared',
           ),
         );
@@ -114,8 +114,7 @@ void main() {
       routes: [
         GoRoute(
           path: '/',
-          builder: (context, state) =>
-              const Scaffold(body: Text('Inventory')),
+          builder: (context, state) => const Scaffold(body: Text('Inventory')),
         ),
         GoRoute(
           path: '/new',
@@ -149,11 +148,11 @@ void main() {
     expect(find.text('상처 관리'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-      find.text('약장에 등록'),
+      find.text('구급상자에 등록'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.text('약장에 등록'));
+    await tester.tap(find.text('구급상자에 등록'));
     await tester.pumpAndSettle();
 
     final item = await database.select(database.inventoryItems).getSingle();
@@ -162,6 +161,68 @@ void main() {
     expect(item.cabinetSection, 'wound_care');
     expect(item.capturedImageBytes, photoBytes);
     expect(item.itemSeq, isNull);
+    await _disposeWidget(tester);
+  });
+
+  testWidgets('readiness entry prefills the selected readiness area', (
+    tester,
+  ) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: const MaterialApp(
+          home: EditInventoryItemScreen(
+            initialCabinetSection: 'cleaning_and_disinfection',
+            initialItemKind: 'first_aid_supply',
+          ),
+        ),
+      ),
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('소독·세정'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('소독·세정'), findsOneWidget);
+    final kindSelector = tester.widget<SegmentedButton<String>>(
+      find.byType(SegmentedButton<String>),
+    );
+    expect(kindSelector.selected, {'first_aid_supply'});
+    await _disposeWidget(tester);
+  });
+
+  testWidgets('readiness area uses a compact picker instead of a chip rail', (
+    tester,
+  ) async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: const MaterialApp(home: EditInventoryItemScreen()),
+      ),
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('준비 영역'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.byType(ChoiceChip), findsNothing);
+    await tester.tap(find.text('기타').first);
+    await tester.pumpAndSettle();
+    expect(find.text('준비 영역 선택'), findsOneWidget);
+    expect(find.text('눈·코 관리'), findsOneWidget);
+
+    await tester.tap(find.text('눈·코 관리'));
+    await tester.pumpAndSettle();
+    expect(find.text('준비 영역 선택'), findsNothing);
+    expect(find.text('눈·코 관리'), findsOneWidget);
     await _disposeWidget(tester);
   });
 

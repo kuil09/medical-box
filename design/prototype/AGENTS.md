@@ -19,9 +19,14 @@ information-disclosure state, not a decorative animation: the closed chest must
 conceal its contents, and the open chest must reveal the actual current
 inventory as category-grouped buttons with names and useful status metadata. Selecting an
 item must open that item's editor. An empty open chest must remain visibly empty
-rather than showing decorative or invented products. Keep keyboard-accessible
-open and close controls and honor reduced-motion preferences. Do not use a
-medicine-box photograph or a static illustration as the home-screen tray.
+rather than showing decorative or invented products. The shared chest may show
+clearly labeled empty reference slots for a broad household readiness map. Keep
+medicines separate from first-aid supplies, cover common real-life categories,
+and present every empty slot as an optional reference rather than a required
+item, product recommendation, or substitute for pharmacist advice. Keep
+keyboard-accessible open and close controls and honor reduced-motion
+preferences. Do not use a medicine-box photograph or a static illustration as
+the home-screen tray.
 
 Shared storage and each family member's personal pouch must be available as top-level tabs directly below the home heading. Do not render personal pouches as a separate card rail below the shared tray.
 
@@ -49,6 +54,19 @@ backup, or error flows. Do not imply that a live ad provider, price, or Family
 Plus synchronization design has been selected.
 
 When implementing from a selected generated mock, treat that image as the source of truth for layout, component anatomy, density, spacing, color, typography, visible content, and hierarchy.
+
+The selected home direction is the "storage surface" concept. The family scope
+rail belongs inside the cabinet lid, and the open cabinet uses readable
+horizontal compartment rows with category rails. Keep the home header centered,
+remove duplicate settings and full-list actions, and place the only add action
+inside the open cabinet. Selecting a stored item opens a read-only detail screen;
+editing starts only from an explicit edit action on that detail screen.
+Use the Korean product term `구급상자`, not `약장`, for user-facing labels. Use
+`홈` for the compact bottom-navigation label. Call the representative
+storage-category field `준비 영역`, not `보관 분류` or `보관 칸`. Keep the
+current selection compact in the form and present the full set in a
+keyboard-accessible bottom sheet; never squeeze the category set into one chip
+row.
 
 ## Editing Boundary
 

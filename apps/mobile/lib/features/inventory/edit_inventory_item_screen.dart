@@ -15,16 +15,25 @@ import '../../providers.dart';
 import '../../services/inventory_photo_service.dart';
 import '../../services/medicine_ocr_service.dart';
 import '../../theme.dart';
+import '../../widgets/official_cached_image.dart';
 import '../../widgets/official_medicine_thumbnail.dart';
 import 'drug_catalog_projection_sections.dart';
 import 'inventory_item_taxonomy.dart';
 import 'local_contraindication_section.dart';
 
 class EditInventoryItemScreen extends ConsumerStatefulWidget {
-  const EditInventoryItemScreen({this.itemId, this.containerId, super.key});
+  const EditInventoryItemScreen({
+    this.itemId,
+    this.containerId,
+    this.initialCabinetSection,
+    this.initialItemKind,
+    super.key,
+  });
 
   final String? itemId;
   final String? containerId;
+  final String? initialCabinetSection;
+  final String? initialItemKind;
 
   @override
   ConsumerState<EditInventoryItemScreen> createState() =>
@@ -62,6 +71,19 @@ class _EditInventoryItemScreenState
   void initState() {
     super.initState();
     _containerId = widget.containerId;
+    final initialItemKind = widget.initialItemKind;
+    if (widget.itemId == null &&
+        initialItemKind != null &&
+        InventoryItemKinds.values.contains(initialItemKind)) {
+      _itemKind = initialItemKind;
+    }
+    final initialSection = widget.initialCabinetSection;
+    if (widget.itemId == null &&
+        initialSection != null &&
+        CabinetSections.values.contains(initialSection)) {
+      _cabinetSection = initialSection;
+      _cabinetSectionSelectedByUser = true;
+    }
     if (widget.itemId != null) {
       Future<void>(_loadItem);
     }
@@ -112,12 +134,11 @@ class _EditInventoryItemScreenState
       _clearOfficialCatalogBinding();
       _results = const [];
       _searching = false;
-      if (!_cabinetSectionSelectedByUser) {
-        _cabinetSection = suggestCabinetSection(
-          itemKind: itemKind,
-          officialText: const [],
-        );
-      }
+      _cabinetSectionSelectedByUser = false;
+      _cabinetSection = suggestCabinetSection(
+        itemKind: itemKind,
+        officialText: const [],
+      );
     });
   }
 
@@ -678,10 +699,11 @@ class _EditInventoryItemScreenState
                   : (value) => setState(() => _containerId = value),
               onSaved: (value) => _containerId = value,
               validator: (value) =>
-                  value == null ? '공용 약장 또는 가족 파우치를 선택해 주세요.' : null,
+                  value == null ? '공용 구급상자 또는 가족 파우치를 선택해 주세요.' : null,
             ),
             const SizedBox(height: 14),
             _CabinetSectionPicker(
+              itemKind: _itemKind,
               value: _cabinetSection,
               onChanged: (value) {
                 setState(() {
@@ -737,7 +759,7 @@ class _EditInventoryItemScreenState
                   _saving
                       ? '저장 중…'
                       : widget.itemId == null
-                      ? '약장에 등록'
+                      ? '구급상자에 등록'
                       : '변경사항 저장',
                 ),
               ),
@@ -884,38 +906,192 @@ class _InventoryPhotoCard extends StatelessWidget {
 }
 
 class _CabinetSectionPicker extends StatelessWidget {
-  const _CabinetSectionPicker({required this.value, required this.onChanged});
+  const _CabinetSectionPicker({
+    required this.itemKind,
+    required this.value,
+    required this.onChanged,
+  });
 
+  final String itemKind;
   final String value;
   final ValueChanged<String> onChanged;
 
+  List<String> get _sections => itemKind == InventoryItemKinds.medicine
+      ? const [...CabinetSections.householdMedicineGuide, CabinetSections.other]
+      : const [
+          ...CabinetSections.householdFirstAidGuide,
+          CabinetSections.other,
+        ];
+
+  Future<void> _showPicker(BuildContext context) async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: MedicalBoxColors.surface,
+      builder: (context) =>
+          _CabinetSectionSheet(sections: _sections, selectedValue: value),
+    );
+    if (selected != null) onChanged(selected);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return InputDecorator(
-      decoration: const InputDecoration(labelText: '약장 칸'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '의약품 분류와 별개로 실제로 둘 칸을 선택하세요.',
-            style: TextStyle(
-              color: MedicalBoxColors.muted,
-              fontSize: 12,
-              height: 1.4,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('준비 영역', style: Theme.of(context).textTheme.labelMedium),
+        const SizedBox(height: 8),
+        Material(
+          color: MedicalBoxColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(MedicalBoxRadius.control),
+            side: const BorderSide(color: MedicalBoxColors.railStrong),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => _showPicker(context),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minHeight: MedicalBoxSpacing.touchTarget,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: MedicalBoxSpacing.x4,
+                  vertical: MedicalBoxSpacing.x3,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        CabinetSections.label(value),
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      PhosphorIconsRegular.caretDown,
+                      size: 18,
+                      color: MedicalBoxColors.muted,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 9),
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: [
-              for (final section in CabinetSections.values)
-                ChoiceChip(
-                  label: Text(CabinetSections.label(section)),
-                  selected: value == section,
-                  onSelected: (_) => onChanged(section),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          '제품에 맞는 대표 영역을 제안해요. 필요하면 바꿀 수 있어요.',
+          style: TextStyle(
+            color: MedicalBoxColors.muted,
+            fontSize: 12,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CabinetSectionSheet extends StatelessWidget {
+  const _CabinetSectionSheet({
+    required this.sections,
+    required this.selectedValue,
+  });
+
+  final List<String> sections;
+  final String selectedValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        MedicalBoxSpacing.screen,
+        MedicalBoxSpacing.x4,
+        MedicalBoxSpacing.screen,
+        MedicalBoxSpacing.x8,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('준비 영역 선택', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 6),
+          const Text(
+            '구급상자에서 찾기 쉬운 대표 영역 하나를 선택하세요.',
+            style: TextStyle(
+              color: MedicalBoxColors.muted,
+              fontSize: 13,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 18),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: sections.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              mainAxisExtent: 54,
+            ),
+            itemBuilder: (context, index) {
+              final section = sections[index];
+              final selected = section == selectedValue;
+              return Semantics(
+                selected: selected,
+                button: true,
+                child: Material(
+                  color: selected
+                      ? MedicalBoxColors.accentSoft
+                      : MedicalBoxColors.surfaceRaised,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      MedicalBoxRadius.control,
+                    ),
+                    side: BorderSide(
+                      color: selected
+                          ? MedicalBoxColors.accent
+                          : MedicalBoxColors.rail,
+                    ),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => Navigator.pop(context, section),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              CabinetSections.label(section),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: MedicalBoxColors.ink,
+                                fontSize: 14,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          if (selected)
+                            Icon(
+                              PhosphorIconsRegular.check,
+                              size: 17,
+                              color: MedicalBoxColors.accent,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-            ],
+              );
+            },
           ),
         ],
       ),
@@ -1195,10 +1371,10 @@ class _ConnectedCatalogCard extends StatelessWidget {
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: canLoadImage
-                    ? Image.network(
-                        imageUri.toString(),
+                    ? OfficialCachedImage(
+                        imageUrl: imageUri.toString(),
                         fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => PhosphorIcon(
+                        placeholderBuilder: (_) => PhosphorIcon(
                           PhosphorIconsRegular.scan,
                           color: MedicalBoxColors.official,
                         ),
@@ -1522,10 +1698,10 @@ class _OfficialAppearanceCard extends StatelessWidget {
                 aspectRatio: 16 / 7,
                 child: ColoredBox(
                   color: Colors.white.withValues(alpha: 0.78),
-                  child: Image.network(
-                    imageUri.toString(),
+                  child: OfficialCachedImage(
+                    imageUrl: imageUri.toString(),
                     fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) => const _ImageUnavailable(),
+                    placeholderBuilder: (_) => const _ImageUnavailable(),
                   ),
                 ),
               ),
@@ -1549,11 +1725,6 @@ class _OfficialAppearanceCard extends StatelessWidget {
               ],
             ),
           ],
-          const SizedBox(height: 8),
-          const Text(
-            '이미지는 공식 원본 URL에서 표시하며 앱 저장소에 복제하지 않아요.',
-            style: TextStyle(color: MedicalBoxColors.muted, fontSize: 11),
-          ),
         ],
       ),
     );

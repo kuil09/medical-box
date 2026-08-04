@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Storage Surface Design QA</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 32px;
+        background: #e8e8e4;
+        color: #17191c;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      main {
+        width: max-content;
+        display: grid;
+        grid-template-columns: repeat(2, 393px);
+        gap: 28px;
+        margin: 0 auto;
+      }
+
+      figure {
+        margin: 0;
+      }
+
+      figcaption {
+        margin-bottom: 10px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      img {
+        width: 393px;
+        height: 852px;
+        display: block;
+        object-fit: fill;
+        background: white;
+        box-shadow: 0 8px 24px rgba(23, 25, 28, 0.12);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <figure>
+        <figcaption>Selected visual target</figcaption>
+        <img
+          src="/assets/prototype/selected-storage-surface.png"
+          alt="Selected storage surface mockup"
+        />
+      </figure>
+      <figure>
+        <figcaption>Interactive implementation</figcaption>
+        <img
+          src="/qa/storage-surface-implementation.png"
+          alt="Interactive storage surface implementation"
+        />
+      </figure>
+    </main>
+  </body>
+</html>

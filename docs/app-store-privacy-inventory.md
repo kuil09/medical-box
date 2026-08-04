@@ -25,9 +25,13 @@ storage.
 ## Data transmitted but not retained by the application
 
 Authenticated catalog requests transmit the search query or public `itemSeq` to
-the Medical Box API. Application access logging is disabled and the application
+the Medical Box API. API access logging is disabled and the server application
 does not persist query strings, request bodies, response bodies, or analytics
 events. The query is used only to produce the requested catalog response.
+
+The mobile client does not persist search queries. It stores bounded,
+account-scoped copies of official detail and DUR responses, plus official image
+binaries, in the encrypted local database to reduce repeated downloads.
 
 The App Store definition of collection and the infrastructure provider's
 short-lived network/security logs must be checked together before declaring
@@ -41,11 +45,15 @@ services and is not synchronized to the Medical Box API:
 - household and member names;
 - containers, medicines, first-aid supplies, notes, and use-by dates;
 - user-captured photos and OCR input;
+- bounded official medicine detail, DUR, and image caches;
 - reminders, visit dates, and notification content;
 - encrypted export archives unless the user explicitly shares them.
 
-The camera/OCR flow deletes its temporary capture after processing. Sharing and
-export are explicit user actions to a destination selected by the user.
+The official caches are excluded from `.medicalbox` exports and are removed
+when device data is deleted. Account deletion removes entries scoped to that
+account. The camera/OCR flow deletes its temporary capture after processing.
+Sharing and export are explicit user actions to a destination selected by the
+user.
 
 ## SDK and processor review
 

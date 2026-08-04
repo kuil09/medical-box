@@ -1,9 +1,12 @@
 import 'dart:convert';
 
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:medical_box/data/api/api_client.dart';
+import 'package:medical_box/data/local/app_database.dart';
+import 'package:medical_box/services/catalog_cache_service.dart';
 
 void main() {
   test(
@@ -317,5 +320,99 @@ void main() {
     expect(requests, hasLength(2));
     expect(requests.first.headers['authorization'], 'Bearer expired-token');
     expect(requests.last.headers['authorization'], 'Bearer replacement-token');
+  });
+
+  test('catalog detail cache follows the validated catalog version', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    var now = DateTime.utc(2026, 7, 31, 3);
+    var catalogVersion = '2026-07-31T03:10:00Z';
+    var metaRequests = 0;
+    var detailRequests = 0;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/catalog/meta')) {
+        metaRequests += 1;
+        return http.Response(
+          jsonEncode({
+            'productCount': 100,
+            'lastSuccessfulSync': catalogVersion,
+            'failedSources': <String>[],
+            'sources': <Object?>[],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      if (request.url.path.endsWith('/drugs/123')) {
+        detailRequests += 1;
+        return http.Response(
+          jsonEncode({
+            'itemSeq': '123',
+            'itemName': 'Test medicine $detailRequests',
+            'ingredients': <String>[],
+            'sources': <Object?>[],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      return http.Response('Not found', 404);
+    });
+    final repository = CatalogRepository(
+      ApiClient(client: client, baseUrl: 'https://medicalbox.example/api'),
+      accessTokenProvider: () async => 'access-token',
+      refreshAccessTokenProvider: () async => null,
+      cache: CatalogCacheService(database, clock: () => now),
+      accessScopeProvider: () => const CatalogAccessScope(
+        accountId: 'account-a',
+        canReadCatalog: true,
+      ),
+      clock: () => now,
+    );
+
+    expect((await repository.detail('123')).itemName, 'Test medicine 1');
+    expect((await repository.detail('123')).itemName, 'Test medicine 1');
+    expect(metaRequests, 1);
+    expect(detailRequests, 1);
+
+    now = now.add(const Duration(minutes: 11));
+    catalogVersion = '2026-07-31T04:10:00Z';
+    expect((await repository.detail('123')).itemName, 'Test medicine 2');
+    expect(metaRequests, 2);
+    expect(detailRequests, 2);
+  });
+
+  test('catalog cache cannot bypass a missing catalog permission', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    var networkRequests = 0;
+    final repository = CatalogRepository(
+      ApiClient(
+        client: MockClient((_) async {
+          networkRequests += 1;
+          return http.Response('{}', 200);
+        }),
+        baseUrl: 'https://medicalbox.example/api',
+      ),
+      accessTokenProvider: () async => 'access-token',
+      refreshAccessTokenProvider: () async => null,
+      cache: CatalogCacheService(database),
+      accessScopeProvider: () => const CatalogAccessScope(
+        accountId: 'account-a',
+        canReadCatalog: false,
+      ),
+    );
+
+    await expectLater(
+      repository.detail('123'),
+      throwsA(
+        isA<ApiException>().having(
+          (error) => error.statusCode,
+          'statusCode',
+          403,
+        ),
+      ),
+    );
+    expect(networkRequests, 0);
   });
 }
